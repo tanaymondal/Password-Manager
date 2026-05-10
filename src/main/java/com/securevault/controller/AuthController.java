@@ -3,6 +3,7 @@ package com.securevault.controller;
 import com.securevault.dto.*;
 import com.securevault.service.AuditService;
 import com.securevault.service.AuthService;
+import com.securevault.util.UserUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -69,8 +70,8 @@ public class AuthController {
             @AuthenticationPrincipal UserDetails userDetails,
             HttpServletRequest httpRequest) {
         if (userDetails != null) {
-            UUID userId = UUID.fromString(userDetails.getUsername());
-            log.info("User logged out: {}", userDetails.getUsername());
+            UUID userId = UserUtils.getUserId(userDetails);
+            log.info("User logged out: {}", userId);
             auditService.logLogout(userId, httpRequest.getRemoteAddr(), httpRequest.getHeader("User-Agent"));
             authService.logout(userId);
         }
@@ -82,8 +83,8 @@ public class AuthController {
             @AuthenticationPrincipal UserDetails userDetails,
             @Valid @RequestBody ChangePasswordRequest request,
             HttpServletRequest httpRequest) {
-        UUID userId = UUID.fromString(userDetails.getUsername());
-        log.info("Password change request for user: {}", userDetails.getUsername());
+        UUID userId = UserUtils.getUserId(userDetails);
+        log.info("Password change request for user: {}", userId);
         authService.changePassword(userId, request.getCurrentPassword(), request.getNewPassword());
         auditService.logAction(
                 userId,

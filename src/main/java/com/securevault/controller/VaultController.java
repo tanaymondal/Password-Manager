@@ -6,6 +6,7 @@ import com.securevault.dto.VaultEntryRequest;
 import com.securevault.dto.VaultEntryResponse;
 import com.securevault.service.AuditService;
 import com.securevault.service.VaultService;
+import com.securevault.util.UserUtils;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -92,6 +93,6 @@ public class VaultController {
     }
 
     private UUID getUserId(UserDetails userDetails) {
-        return UUID.fromString(userDetails.getUsername());
+        return UserUtils.getUserId(userDetails);
     }
 }

@@ -3,6 +3,7 @@ package com.securevault.controller;
 import com.securevault.dto.ApiResponse;
 import com.securevault.entity.AuditLog;
 import com.securevault.repository.AuditLogRepository;
+import com.securevault.util.UserUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -50,6 +51,6 @@ public class AuditController {
     }
 
     private UUID getUserId(UserDetails userDetails) {
-        return UUID.fromString(userDetails.getUsername());
+        return UserUtils.getUserId(userDetails);
     }
 }

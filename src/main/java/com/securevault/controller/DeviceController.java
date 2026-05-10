@@ -5,6 +5,7 @@ import com.securevault.dto.DeviceRequest;
 import com.securevault.dto.DeviceResponse;
 import com.securevault.dto.DevicesResponse;
 import com.securevault.service.DeviceService;
+import com.securevault.util.UserUtils;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -54,6 +55,6 @@ public class DeviceController {
     }
 
     private UUID getUserId(UserDetails userDetails) {
-        return UUID.fromString(userDetails.getUsername());
+        return UserUtils.getUserId(userDetails);
     }
 }

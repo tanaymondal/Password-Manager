@@ -1,0 +1,44 @@
+package com.securevault.mobile
+
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.ui.Modifier
+import com.securevault.mobile.data.repository.SessionManager
+import com.securevault.mobile.di.appModule
+import com.securevault.mobile.ui.navigation.SecureVaultNavHost
+import com.securevault.mobile.ui.theme.SecureVaultTheme
+import org.koin.android.ext.koin.androidContext
+import org.koin.androidx.compose.KoinAndroidContext
+import org.koin.core.context.startKoin
+
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+        SessionManager.init(this)
+
+        if (org.koin.core.context.GlobalContext.getOrNull() == null) {
+            startKoin {
+                androidContext(this@MainActivity)
+                modules(appModule)
+            }
+        }
+
+        setContent {
+            KoinAndroidContext {
+                SecureVaultTheme {
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        color = MaterialTheme.colorScheme.background
+                    ) {
+                        SecureVaultNavHost()
+                    }
+                }
+            }
+        }
+    }
+}

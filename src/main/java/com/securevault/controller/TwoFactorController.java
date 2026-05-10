@@ -5,6 +5,7 @@ import com.securevault.dto.Enable2FARequest;
 import com.securevault.dto.TwoFactorSetupResponse;
 import com.securevault.service.AuditService;
 import com.securevault.service.TwoFactorAuthService;
+import com.securevault.util.UserUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -66,6 +67,6 @@ public class TwoFactorController {
     }
 
     private UUID getUserId(UserDetails userDetails) {
-        return UUID.fromString(userDetails.getUsername());
+        return UserUtils.getUserId(userDetails);
     }
 }

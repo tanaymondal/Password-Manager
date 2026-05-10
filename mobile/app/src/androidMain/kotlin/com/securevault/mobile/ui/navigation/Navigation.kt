@@ -1,0 +1,119 @@
+package com.securevault.mobile.ui.navigation
+
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.navigation.NavType
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
+import androidx.navigation.toRoute
+import com.securevault.mobile.domain.usecase.auth.AuthStateResult
+import com.securevault.mobile.domain.usecase.auth.GetAuthStateUseCase
+import com.securevault.mobile.ui.screens.auth.LoginScreen
+import com.securevault.mobile.ui.screens.auth.RegisterScreen
+import com.securevault.mobile.ui.screens.settings.SettingsScreen
+import com.securevault.mobile.ui.screens.vault.AddEditEntryScreen
+import com.securevault.mobile.ui.screens.vault.VaultScreen
+import kotlinx.serialization.Serializable
+
+sealed class Screen(val route: String) {
+    data object Login : Screen("login")
+    data object Register : Screen("register")
+    data object Vault : Screen("vault")
+    data object AddEntry : Screen("add_entry")
+    data object EditEntry : Screen("edit_entry/{entryId}") {
+        fun createRoute(entryId: Long) = "edit_entry/$entryId"
+    }
+    data object Settings : Screen("settings")
+}
+
+@Serializable
+data class EditEntryRoute(val entryId: Long)
+
+@Composable
+fun SecureVaultNavHost() {
+    val navController = rememberNavController()
+    val getAuthStateUseCase = getAuthStateUseCase()
+
+    var initialAuthState by remember { mutableStateOf<AuthStateResult?>(null) }
+
+    LaunchedEffect(Unit) {
+        initialAuthState = getAuthStateUseCase()
+    }
+
+    val startDestination = when (val state = initialAuthState) {
+        is AuthStateResult.Authenticated -> Screen.Vault.route
+        is AuthStateResult.Unauthenticated -> Screen.Login.route
+        else -> Screen.Login.route
+    }
+
+    NavHost(navController = navController, startDestination = startDestination) {
+        composable(Screen.Login.route) {
+            LoginScreen(
+                onLoginSuccess = {
+                    navController.navigate(Screen.Vault.route) {
+                        popUpTo(Screen.Login.route) { inclusive = true }
+                    }
+                },
+                onNavigateToRegister = { navController.navigate(Screen.Register.route) }
+            )
+        }
+
+        composable(Screen.Register.route) {
+            RegisterScreen(
+                onRegisterSuccess = {
+                    navController.navigate(Screen.Vault.route) {
+                        popUpTo(Screen.Login.route) { inclusive = true }
+                    }
+                },
+                onNavigateToLogin = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.Vault.route) {
+            VaultScreen(
+                onNavigateToAddEntry = { navController.navigate(Screen.AddEntry.route) },
+                onNavigateToEditEntry = { entryId -> navController.navigate(Screen.EditEntry.createRoute(entryId)) },
+                onNavigateToSettings = { navController.navigate(Screen.Settings.route) },
+                onLogout = { navController.navigate(Screen.Login.route) { popUpTo(Screen.Vault.route) { inclusive = true } } }
+            )
+        }
+
+        composable(Screen.AddEntry.route) {
+            AddEditEntryScreen(
+                entryId = null,
+                onNavigateBack = { navController.popBackStack() },
+                onSaveSuccess = { navController.popBackStack() }
+            )
+        }
+
+        composable(
+            route = Screen.EditEntry.route,
+            arguments = listOf(navArgument("entryId") { type = NavType.LongType })
+        ) { backStackEntry ->
+            val entryId = backStackEntry.arguments?.getLong("entryId") ?: 0L
+            AddEditEntryScreen(
+                entryId = entryId,
+                onNavigateBack = { navController.popBackStack() },
+                onSaveSuccess = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.Settings.route) {
+            SettingsScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onLogout = { navController.navigate(Screen.Login.route) { popUpTo(0) { inclusive = true } } }
+            )
+        }
+    }
+}
+
+@Composable
+private fun getAuthStateUseCase(): GetAuthStateUseCase {
+    return org.koin.compose.koinInject()
+}

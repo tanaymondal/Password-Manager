@@ -1,0 +1,9 @@
+[versions]
+ksp = "2.0.0-1.0.21"
+room = "2.6.1"
+
+[libraries]
+room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
+
+[plugins]
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
