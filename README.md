@@ -1,6 +1,6 @@
-# SecureVault - Password Manager Backend
+# SecureVault - Password Manager
 
-A production-ready, security-focused password manager backend built with Spring Boot.
+A production-ready, security-focused password manager with Spring Boot backend and Kotlin Multiplatform mobile app.
 
 ## Features
 
@@ -8,29 +8,53 @@ A production-ready, security-focused password manager backend built with Spring 
 - **Argon2id** password hashing for authentication
 - **Separate encryption key derivation** using unique salt per user
 - **End-to-end encryption** - server never sees plaintext passwords
+- **Client-side AES-256-GCM encryption** using PBKDF2
+- **EncryptedSharedPreferences** for secure session storage
 - **JWT authentication** with access/refresh tokens
 - **Two-factor authentication** (TOTP/Google Authenticator)
 - **Account lockout** after 5 failed login attempts (15 min lockout)
 - **Password history** - prevents password reuse (stores last 5)
-- **Rate limiting** - 60 requests/minute (30 in production)
-- **Login rate limiter** - blocks brute force attacks
-- **Security headers** - HSTS, X-Frame-Options, CSP
+- **Rate limiting** - 60 requests/minute
 
-### Architecture
-- **Client-side encryption** - AES-256-GCM encryption done on client
-- **Stateless API** - JWT based authentication
-- **PostgreSQL** database with Flyway migrations
-- **OpenAPI/Swagger** documentation
+### Mobile App (Android & iOS)
+- **Kotlin Multiplatform** - Shared code between Android and iOS
+- **Jetpack Compose** UI for Android
+- **Koin** for dependency injection
+- **Ktor** for networking
+- **Clean Architecture** with MVVM pattern
+- **Offline-capable** with local caching
+- **Encrypted local storage** via Android Keystore
+
+## Project Structure
+
+```
+Password-Manager/
+├── src/                    # Spring Boot Backend
+│   └── main/java/com/securevault/
+│       ├── controller/     # REST API endpoints
+│       ├── service/       # Business logic
+│       ├── repository/    # Data access
+│       ├── entity/        # JPA entities
+│       ├── dto/           # Request/Response DTOs
+│       ├── config/        # Security & app config
+│       └── util/          # Utilities
+├── mobile/                 # Kotlin Multiplatform Mobile App
+│   ├── app/
+│   │   ├── androidMain/   # Android-specific code
+│   │   ├── commonMain/    # Shared code
+│   │   └── iosMain/       # iOS-specific code
+│   └── gradle/            # Gradle wrapper
+├── docker-compose.yml     # Docker deployment
+└── README.md
+```
 
 ## Quick Start
 
 ### Prerequisites
-- Java 17+
-- Maven 3.9+
-- PostgreSQL 16+
-- (Optional) Redis for caching
+- **Backend:** Java 17+, Maven 3.9+, PostgreSQL 16+
+- **Mobile:** Android Studio / Xcode, Android SDK
 
-### Running Locally
+### Running Backend
 
 ```bash
 # Clone the repository
@@ -47,6 +71,15 @@ mvn spring-boot:run
 mvn clean package -DskipTests
 java -jar target/securevault-1.0.0.jar
 ```
+
+### Running Mobile App (Android)
+
+```bash
+cd mobile
+./gradlew installDebug
+```
+
+**Note:** For Android emulator, the app connects to `http://10.0.2.2:8080` (localhost).
 
 ### Using Docker Compose
 
@@ -66,7 +99,6 @@ docker-compose up -d
 | `JWT_SECRET` | Yes | - | JWT signing secret (min 32 chars) |
 | `SERVER_PORT` | No | 8080 | Server port |
 | `SWAGGER_ENABLED` | No | false | Enable Swagger UI |
-| `LOG_LEVEL` | No | INFO | Logging level |
 
 ## API Endpoints
 
@@ -83,9 +115,9 @@ docker-compose up -d
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/v1/vault` | Get all vault entries |
-| POST | `/api/v1/vault` | Create vault entry |
+| POST | `/api/v1/vault` | Create vault entry (encrypted) |
 | GET | `/api/v1/vault/{id}` | Get single entry |
-| PUT | `/api/v1/vault/{id}` | Update entry |
+| PUT | `/api/v1/vault/{id}` | Update entry (encrypted) |
 | DELETE | `/api/v1/vault/{id}` | Delete entry |
 | DELETE | `/api/v1/vault` | Delete all entries |
 
@@ -123,11 +155,33 @@ docker-compose up -d
 2. Server verifies: `Argon2id(password, stored_salt) == stored_hash`
 3. Server returns: JWT + `encryption_salt`
 
-### Encryption (Client-Side)
-1. Client derives: `encryption_key = Argon2id(master_password, encryption_salt)`
+### Client-Side Encryption
+1. Client derives: `encryption_key = PBKDF2(master_password, encryption_salt)`
 2. Client encrypts: `ciphertext = AES-256-GCM(plaintext, encryption_key)`
 3. Client sends: `ciphertext + iv` to server
 4. Server stores encrypted data (never sees plaintext)
+
+## Tech Stack
+
+### Backend
+- **Framework:** Spring Boot 3.2
+- **Language:** Java 17
+- **Database:** PostgreSQL 16
+- **ORM:** Spring Data JPA / Hibernate
+- **Authentication:** JWT (jjwt)
+- **Password Hashing:** BouncyCastle (Argon2id)
+- **2FA:** TOTP (samstevens/totp)
+- **API Docs:** SpringDoc OpenAPI
+
+### Mobile App
+- **Language:** Kotlin
+- **Platform:** Android & iOS (Multiplatform)
+- **UI Framework:** Jetpack Compose
+- **DI:** Koin
+- **Networking:** Ktor
+- **Architecture:** Clean Architecture + MVVM
+- **Encryption:** AES-256-GCM with PBKDF2
+- **Secure Storage:** Android EncryptedSharedPreferences
 
 ## Database Schema
 
@@ -145,38 +199,6 @@ docker-compose up -d
 
 ### Audit Logs Table
 - id, user_id, action, ip_address, user_agent, details
-
-## Production Deployment
-
-```bash
-# Generate JWT secret
-openssl rand -base64 32
-
-# Set environment variables
-export JWT_SECRET="your-generated-secret"
-export DB_PASSWORD="strong-db-password"
-export SWAGGER_ENABLED=false
-
-# Run with production profile
-java -jar target/securevault-1.0.0.jar --spring.profiles.active=prod
-```
-
-### Required Configuration
-- SSL/TLS termination (nginx)
-- Database encryption at rest
-- Strong JWT secret (min 32 chars)
-- Disable Swagger in production
-
-## Tech Stack
-
-- **Framework:** Spring Boot 3.2
-- **Language:** Java 17
-- **Database:** PostgreSQL 16
-- **ORM:** Spring Data JPA / Hibernate
-- **Authentication:** JWT (jjwt)
-- **Password Hashing:** BouncyCastle (Argon2id)
-- **2FA:** TOTP (samstevens/totp)
-- **API Docs:** SpringDoc OpenAPI
 
 ## License
 
