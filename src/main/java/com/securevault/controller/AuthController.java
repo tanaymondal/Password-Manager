@@ -79,13 +79,20 @@ public class AuthController {
     }
 
     @PostMapping("/change-password")
-    public ResponseEntity<ApiResponse<String>> changePassword(
+    public ResponseEntity<ApiResponse<ChangePasswordResponse>> changePassword(
             @AuthenticationPrincipal UserDetails userDetails,
             @Valid @RequestBody ChangePasswordRequest request,
             HttpServletRequest httpRequest) {
         UUID userId = UserUtils.getUserId(userDetails);
         log.info("Password change request for user: {}", userId);
-        authService.changePassword(userId, request.getCurrentPassword(), request.getNewPassword());
+        ChangePasswordResponse response = authService.changePassword(
+                userId,
+                request.getCurrentPassword(),
+                request.getNewPassword(),
+                request.getWrappedVaultKey(),
+                request.getEntries(),
+                request.getNewEncryptionSalt()
+        );
         auditService.logAction(
                 userId,
                 "PASSWORD_CHANGE",
@@ -93,6 +100,6 @@ public class AuthController {
                 httpRequest.getHeader("User-Agent"),
                 null
         );
-        return ResponseEntity.ok(ApiResponse.success("Password changed successfully. Please login again.", ""));
+        return ResponseEntity.ok(ApiResponse.success("Password changed successfully", response));
     }
 }

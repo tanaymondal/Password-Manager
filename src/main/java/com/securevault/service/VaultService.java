@@ -34,7 +34,7 @@ public class VaultService {
 
     @Transactional(readOnly = true)
     public VaultEntriesResponse getAllEntries(UUID userId) {
-        List<VaultEntry> entries = vaultEntryRepository.findByUserIdOrderByUpdatedAtDesc(userId);
+        List<VaultEntry> entries = vaultEntryRepository.findByUserIdOrderByCreatedAtAsc(userId);
         List<VaultEntryResponse> responses = entries.stream()
                 .map(this::toResponse)
                 .collect(Collectors.toList());

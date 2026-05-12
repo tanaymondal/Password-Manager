@@ -40,10 +40,13 @@ abstract class MviViewModel<I : MviIntent, S : MviState, E : MviEffect>(
         }
     }
 
-    protected fun <T> runInBackground(block: suspend () -> T, onResult: (Result<T>) -> Unit) {
+    protected fun <T> runInBackground(block: suspend () -> T, onResult: (kotlin.Result<T>) -> Unit) {
         viewModelScope.launch {
             val result = withContext(Dispatchers.IO) {
-                runCatching { block() }
+                runCatching { block() }.fold(
+                    onSuccess = { kotlin.Result.success(it) },
+                    onFailure = { kotlin.Result.failure(it) }
+                )
             }
             onResult(result)
         }

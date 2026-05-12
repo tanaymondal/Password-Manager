@@ -15,6 +15,8 @@ object SessionManager {
     private const val KEY_USER_EMAIL = "user_email"
     private const val KEY_MASTER_PASSWORD_HASH = "master_password_hash"
     private const val KEY_MASTER_PASSWORD = "master_password"
+    private const val KEY_ENCRYPTION_VERSION = "encryption_version"
+    private const val KEY_WRAPPED_VAULT_KEY = "wrapped_vault_key"
 
     private var encryptedPrefs: SharedPreferences? = null
 
@@ -73,6 +75,18 @@ object SessionManager {
 
     fun setMasterPassword(value: String) {
         encryptedPrefs?.edit()?.putString(KEY_MASTER_PASSWORD, value)?.apply()
+    }
+
+    fun getEncryptionVersion(): Int = encryptedPrefs?.getInt(KEY_ENCRYPTION_VERSION, 2) ?: 2
+
+    fun setEncryptionVersion(value: Int) {
+        encryptedPrefs?.edit()?.putInt(KEY_ENCRYPTION_VERSION, value)?.apply()
+    }
+
+    fun getWrappedVaultKey(): String = encryptedPrefs?.getString(KEY_WRAPPED_VAULT_KEY, "") ?: ""
+
+    fun setWrappedVaultKey(value: String) {
+        encryptedPrefs?.edit()?.putString(KEY_WRAPPED_VAULT_KEY, value)?.apply()
     }
 
     val isLoggedIn: Boolean

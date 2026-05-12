@@ -6,6 +6,8 @@ import lombok.Data;
 @Data
 public class VaultEntryRequest {
 
+    private String id;
+
     @NotBlank(message = "Encrypted data is required")
     private String encryptedData;
 

@@ -9,7 +9,9 @@ import java.util.UUID;
 @Repository
 public interface VaultEntryRepository extends JpaRepository<VaultEntry, UUID> {
 
-    List<VaultEntry> findByUserIdOrderByUpdatedAtDesc(UUID userId);
+    List<VaultEntry> findByUserIdOrderByCreatedAtAsc(UUID userId);
 
     void deleteByUserId(UUID userId);
+
+    List<VaultEntry> findByIdIn(List<UUID> ids);
 }

@@ -19,6 +19,7 @@ import com.securevault.mobile.domain.usecase.vault.*
 import com.securevault.mobile.domain.usecase.vault.impl.*
 import com.securevault.mobile.ui.screens.auth.LoginViewModel
 import com.securevault.mobile.ui.screens.auth.RegisterViewModel
+import com.securevault.mobile.ui.screens.settings.ChangePasswordViewModel
 import com.securevault.mobile.ui.screens.settings.SettingsViewModel
 import com.securevault.mobile.ui.screens.vault.AddEditEntryViewModel
 import com.securevault.mobile.ui.screens.vault.VaultViewModel
@@ -33,11 +34,13 @@ val appModule = module {
     // Cache - Android specific
     single { VaultCache(androidContext()) }
 
-    // Encryptor - Android specific
-    single<EntryEncryptor> { AndroidEntryEncryptor() }
+    // Encryptor - Android specific (single instance for both EntryEncryptor and VaultKeyManager)
+    single { AndroidEntryEncryptor() }
+    single<EntryEncryptor> { get<AndroidEntryEncryptor>() }
+    single<VaultKeyManager> { get<AndroidEntryEncryptor>() }
 
     // Repositories
-    single<AuthRepository> { AuthRepositoryImpl(get()) }
+    single<AuthRepository> { AuthRepositoryImpl(get(), get(), get()) }
     single<VaultRepository> { CachedVaultRepository(get(), VaultRepositoryImpl(get(), get())) }
     single<DeviceRepository> { DeviceRepositoryImpl(get()) }
     single<TwoFactorRepository> { TwoFactorRepositoryImpl(get()) }
@@ -75,4 +78,5 @@ val appModule = module {
     viewModel { VaultViewModel(get(), get(), get()) }
     viewModel { AddEditEntryViewModel(get(), get(), get()) }
     viewModel { SettingsViewModel(get(), get(), get()) }
+    viewModel { ChangePasswordViewModel(get()) }
 }

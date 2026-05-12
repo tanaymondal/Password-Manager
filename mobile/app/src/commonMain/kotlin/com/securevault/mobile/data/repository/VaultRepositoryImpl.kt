@@ -2,6 +2,7 @@ package com.securevault.mobile.data.repository
 
 import com.securevault.mobile.data.api.SecureVaultApi
 import com.securevault.mobile.data.model.VaultEntryRequest
+import com.securevault.mobile.data.model.VaultEntryResponse
 import com.securevault.mobile.domain.model.Result
 import com.securevault.mobile.domain.model.VaultEntry
 import com.securevault.mobile.domain.repository.VaultRepository
@@ -61,7 +62,7 @@ class VaultRepositoryImpl(
     override suspend fun updateEntry(id: Long, entry: VaultEntry): Result<VaultEntry> {
         return try {
             val token = getValidToken()
-            val encryptedRequest = encryptEntry(entry)
+            val encryptedRequest = encryptEntry(entry.copy(id = id))
             val response = api.updateVaultEntry(token, id.toString(), encryptedRequest)
             response.fold(
                 onSuccess = { updated ->
@@ -110,7 +111,7 @@ class VaultRepositoryImpl(
         return encryptor.encrypt(entry)
     }
 
-    private fun decryptEntry(entry: com.securevault.mobile.data.model.VaultEntryResponse): VaultEntry {
+    private fun decryptEntry(entry: VaultEntryResponse): VaultEntry {
         return encryptor.decrypt(entry)
     }
 }

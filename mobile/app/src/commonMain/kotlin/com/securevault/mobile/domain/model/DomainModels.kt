@@ -10,7 +10,8 @@ data class AuthState(
     val accessToken: String?,
     val refreshToken: String?,
     val encryptionSalt: String?,
-    val isAuthenticated: Boolean
+    val isAuthenticated: Boolean,
+    val encryptionVersion: Int = 2
 ) {
     companion object {
         fun unauthenticated() = AuthState(
@@ -18,7 +19,8 @@ data class AuthState(
             accessToken = null,
             refreshToken = null,
             encryptionSalt = null,
-            isAuthenticated = false
+            isAuthenticated = false,
+            encryptionVersion = 2
         )
     }
 }

@@ -54,9 +54,11 @@ class SecureVaultApi(
                 ?: throw Exception("Missing userId")
             val email = dataObj?.get("email")?.jsonPrimitive?.content 
                 ?: throw Exception("Missing email")
+            val wrappedVaultKey = dataObj?.get("wrappedVaultKey")?.jsonPrimitive?.content
+            val encryptionVersion = dataObj?.get("encryptionVersion")?.jsonPrimitive?.content?.toIntOrNull() ?: 1
             
             Log.d(tag, "Parsed AuthResponse successfully")
-            Result.success(AuthResponse(accessToken, refreshToken, encryptionSalt, userId, email))
+            Result.success(AuthResponse(accessToken, refreshToken, encryptionSalt, userId, email, wrappedVaultKey, encryptionVersion))
         } catch (e: Exception) {
             Log.e(tag, "Registration error: ${e.message}")
             Result.failure(e)
@@ -96,9 +98,11 @@ class SecureVaultApi(
                 ?: throw Exception("Missing userId")
             val email = dataObj?.get("email")?.jsonPrimitive?.content 
                 ?: throw Exception("Missing email")
+            val wrappedVaultKey = dataObj?.get("wrappedVaultKey")?.jsonPrimitive?.content
+            val encryptionVersion = dataObj?.get("encryptionVersion")?.jsonPrimitive?.content?.toIntOrNull() ?: 1
             
             Log.d(tag, "Parsed AuthResponse successfully")
-            Result.success(AuthResponse(accessToken, refreshToken, encryptionSalt, userId, email))
+            Result.success(AuthResponse(accessToken, refreshToken, encryptionSalt, userId, email, wrappedVaultKey, encryptionVersion))
         } catch (e: Exception) {
             Log.e(tag, "Login error: ${e.message}")
             Result.failure(e)
@@ -124,13 +128,17 @@ class SecureVaultApi(
         }
     }
 
-    suspend fun changePassword(accessToken: String, request: ChangePasswordRequest): Result<Unit> = runCatching {
-        Log.d(tag, "POST /api/v1/auth/change-password")
-        httpClient.post("$baseUrl/api/v1/auth/change-password") {
+    suspend fun changePassword(accessToken: String, request: ChangePasswordRequest): Result<ChangePasswordResponse> = runCatching {
+        Log.d(tag, "POST /api/v1/auth/change-password - newSalt=${request.newEncryptionSalt}")
+        val response: HttpResponse = httpClient.post("$baseUrl/api/v1/auth/change-password") {
             bearerAuth(accessToken)
             contentType(ContentType.Application.Json)
             setBody(request)
         }
+        val body = response.bodyAsText()
+        Log.d(tag, "Response body: $body")
+        val apiResponse: ApiResponse<ChangePasswordResponse> = Json.decodeFromString(body)
+        apiResponse.data ?: throw Exception(apiResponse.message ?: "Password change failed")
     }
 
     suspend fun getVaultEntries(accessToken: String): Result<List<VaultEntryResponse>> = runCatching {

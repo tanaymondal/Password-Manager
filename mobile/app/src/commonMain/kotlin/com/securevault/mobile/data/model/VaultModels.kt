@@ -5,6 +5,7 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class VaultEntryRequest(
+    val id: String? = null,
     val encryptedData: String,
     val iv: String
 )

@@ -16,10 +16,14 @@ import com.securevault.mobile.domain.usecase.auth.AuthStateResult
 import com.securevault.mobile.domain.usecase.auth.GetAuthStateUseCase
 import com.securevault.mobile.ui.screens.auth.LoginScreen
 import com.securevault.mobile.ui.screens.auth.RegisterScreen
+import com.securevault.mobile.ui.screens.settings.ChangePasswordScreen
+import com.securevault.mobile.ui.screens.settings.ChangePasswordViewModel
 import com.securevault.mobile.ui.screens.settings.SettingsScreen
+import com.securevault.mobile.ui.screens.settings.SettingsViewModel
 import com.securevault.mobile.ui.screens.vault.AddEditEntryScreen
 import com.securevault.mobile.ui.screens.vault.VaultScreen
 import kotlinx.serialization.Serializable
+import org.koin.androidx.compose.koinViewModel
 
 sealed class Screen(val route: String) {
     data object Login : Screen("login")
@@ -30,6 +34,7 @@ sealed class Screen(val route: String) {
         fun createRoute(entryId: Long) = "edit_entry/$entryId"
     }
     data object Settings : Screen("settings")
+    data object ChangePassword : Screen("change_password")
 }
 
 @Serializable
@@ -39,11 +44,22 @@ data class EditEntryRoute(val entryId: Long)
 fun SecureVaultNavHost() {
     val navController = rememberNavController()
     val getAuthStateUseCase = getAuthStateUseCase()
+    val vaultKeyManager: com.securevault.mobile.data.repository.VaultKeyManager = org.koin.compose.koinInject()
 
     var initialAuthState by remember { mutableStateOf<AuthStateResult?>(null) }
 
     LaunchedEffect(Unit) {
         initialAuthState = getAuthStateUseCase()
+        if (initialAuthState is AuthStateResult.Authenticated) {
+            val wrappedKey = com.securevault.mobile.data.repository.SessionManager.getWrappedVaultKey()
+            if (wrappedKey.isNotEmpty()) {
+                try {
+                    vaultKeyManager.unwrapVaultKey(wrappedKey)
+                } catch (e: Exception) {
+                    // vault key restore failed, user needs to re-login
+                }
+            }
+        }
     }
 
     val startDestination = when (val state = initialAuthState) {
@@ -105,9 +121,20 @@ fun SecureVaultNavHost() {
         }
 
         composable(Screen.Settings.route) {
+            val settingsViewModel: SettingsViewModel = koinViewModel()
             SettingsScreen(
                 onNavigateBack = { navController.popBackStack() },
-                onLogout = { navController.navigate(Screen.Login.route) { popUpTo(0) { inclusive = true } } }
+                onNavigateToChangePassword = { navController.navigate(Screen.ChangePassword.route) },
+                onLogout = { navController.navigate(Screen.Login.route) { popUpTo(0) { inclusive = true } } },
+                viewModel = settingsViewModel
+            )
+        }
+
+        composable(Screen.ChangePassword.route) {
+            val changePasswordViewModel: ChangePasswordViewModel = koinViewModel()
+            ChangePasswordScreen(
+                onNavigateBack = { navController.popBackStack() },
+                viewModel = changePasswordViewModel
             )
         }
     }

@@ -1,14 +1,18 @@
 package com.securevault.service;
 
 import com.securevault.dto.AuthResponse;
+import com.securevault.dto.ChangePasswordResponse;
 import com.securevault.dto.LoginRequest;
 import com.securevault.dto.RegisterRequest;
+import com.securevault.dto.VaultEntryRequest;
 import com.securevault.entity.PasswordHistory;
 import com.securevault.entity.RefreshToken;
 import com.securevault.entity.User;
+import com.securevault.entity.VaultEntry;
 import com.securevault.repository.PasswordHistoryRepository;
 import com.securevault.repository.RefreshTokenRepository;
 import com.securevault.repository.UserRepository;
+import com.securevault.repository.VaultEntryRepository;
 import com.securevault.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,6 +36,7 @@ public class AuthService {
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final PasswordHistoryRepository passwordHistoryRepository;
+    private final VaultEntryRepository vaultEntryRepository;
     private final PasswordService passwordService;
     private final JwtTokenProvider jwtTokenProvider;
 
@@ -50,6 +55,10 @@ public class AuthService {
         String encryptionSalt = passwordService.generateEncryptionSalt();
         String passwordHash = passwordService.hashPasswordForAuthentication(request.getPassword(), authSalt);
 
+        String vaultKey = passwordService.generateVaultKey();
+        String kek = passwordService.deriveKek(request.getPassword(), encryptionSalt);
+        String wrappedVaultKey = passwordService.wrapVaultKey(vaultKey, kek);
+
         User user = new User();
         user.setEmail(request.getEmail().toLowerCase().trim());
         user.setPasswordHash(passwordHash);
@@ -57,6 +66,8 @@ public class AuthService {
         user.setEncryptionSalt(encryptionSalt);
         user.setTwoFactorEnabled(false);
         user.setFailedLoginAttempts(0);
+        user.setWrappedVaultKey(wrappedVaultKey);
+        user.setEncryptionVersion(2);
 
         user = userRepository.save(user);
 
@@ -122,7 +133,7 @@ public class AuthService {
     }
 
     @Transactional
-    public void changePassword(UUID userId, String currentPassword, String newPassword) {
+    public ChangePasswordResponse changePassword(UUID userId, String currentPassword, String newPassword, String newWrappedVaultKey, List<VaultEntryRequest> newEntries, String newEncryptionSalt) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
 
@@ -136,30 +147,63 @@ public class AuthService {
         }
 
         List<PasswordHistory> recentPasswords = passwordHistoryRepository.findRecentPasswords(userId, PASSWORD_HISTORY_LIMIT);
-        String newPasswordHash = passwordService.hashPasswordForAuthentication(newPassword, user.getPasswordSalt());
+        String newAuthSalt = passwordService.generateAuthSalt();
+        String newPasswordHash = passwordService.hashPasswordForAuthentication(newPassword, newAuthSalt);
         for (PasswordHistory history : recentPasswords) {
-            if (passwordService.verifyPassword(newPassword, user.getPasswordSalt(), history.getPasswordHash())) {
+            if (passwordService.hashPasswordForAuthentication(newPassword, newAuthSalt).equals(history.getPasswordHash())) {
                 throw new IllegalArgumentException("Password was used recently. Please choose a different password.");
             }
         }
 
-        String newAuthSalt = passwordService.generateAuthSalt();
-        String newEncryptionSalt = passwordService.generateEncryptionSalt();
-        String hashedPassword = passwordService.hashPasswordForAuthentication(newPassword, newAuthSalt);
+        String oldEncryptionSalt = user.getEncryptionSalt();
+        log.info("CHANGE PWD: oldSalt={}, newSaltFromClient={}", oldEncryptionSalt, newEncryptionSalt);
+        String oldKek = passwordService.deriveMasterKey(currentPassword, oldEncryptionSalt);
+        String saltToUse = (newEncryptionSalt != null && !newEncryptionSalt.isEmpty())
+                ? newEncryptionSalt : passwordService.generateEncryptionSalt();
+        log.info("CHANGE PWD: saltToUse={}", saltToUse);
+        String newKek = passwordService.deriveMasterKey(newPassword, saltToUse);
 
-        user.setPasswordHash(hashedPassword);
+        String vaultKey = passwordService.unwrapVaultKey(newWrappedVaultKey, oldKek);
+        String rewrappedVaultKey = passwordService.wrapVaultKey(vaultKey, newKek);
+
+        if (newEntries != null && !newEntries.isEmpty()) {
+            for (VaultEntryRequest entryReq : newEntries) {
+                if (entryReq.getId() != null && !entryReq.getId().isEmpty()) {
+                    VaultEntry existing = vaultEntryRepository.findById(UUID.fromString(entryReq.getId()))
+                            .filter(e -> e.getUserId().equals(userId))
+                            .orElse(null);
+                    if (existing != null) {
+                        existing.setEncryptedData(entryReq.getEncryptedData());
+                        existing.setIv(entryReq.getIv());
+                        vaultEntryRepository.save(existing);
+                    }
+                } else {
+                    VaultEntry newEntry = new VaultEntry();
+                    newEntry.setUserId(userId);
+                    newEntry.setEncryptedData(entryReq.getEncryptedData());
+                    newEntry.setIv(entryReq.getIv());
+                    newEntry.setVersion(1);
+                    vaultEntryRepository.save(newEntry);
+                }
+            }
+        }
+
+        user.setPasswordHash(newPasswordHash);
         user.setPasswordSalt(newAuthSalt);
-        user.setEncryptionSalt(newEncryptionSalt);
+        user.setEncryptionSalt(saltToUse);
+        user.setWrappedVaultKey(rewrappedVaultKey);
+        user.setEncryptionVersion(2);
         user.setPasswordUpdatedAt(LocalDateTime.now());
         user.setFailedLoginAttempts(0);
         user.setLockedUntil(null);
 
         userRepository.save(user);
-        savePasswordHistory(userId, hashedPassword);
+        savePasswordHistory(userId, newPasswordHash);
 
         refreshTokenRepository.deleteByUserId(userId);
 
         log.info("Password changed for user: {}", user.getEmail());
+        return generateChangePasswordResponse(user);
     }
 
     private void handleFailedLogin(User user) {
@@ -203,7 +247,30 @@ public class AuthService {
                 refreshToken,
                 user.getId().toString(),
                 user.getEmail(),
-                user.getEncryptionSalt()
+                user.getEncryptionSalt(),
+                user.getWrappedVaultKey(),
+                user.getEncryptionVersion() != null ? user.getEncryptionVersion() : 2
+        );
+    }
+
+    private ChangePasswordResponse generateChangePasswordResponse(User user) {
+        String accessToken = jwtTokenProvider.generateAccessToken(user.getId(), user.getEmail());
+        String refreshToken = jwtTokenProvider.generateRefreshToken(user.getId());
+
+        RefreshToken token = new RefreshToken();
+        token.setUserId(user.getId());
+        token.setToken(refreshToken);
+        token.setExpiresAt(LocalDateTime.now().plusDays(1));
+        refreshTokenRepository.save(token);
+
+        return new ChangePasswordResponse(
+                accessToken,
+                refreshToken,
+                user.getEncryptionSalt(),
+                user.getId().toString(),
+                user.getEmail(),
+                user.getWrappedVaultKey(),
+                user.getEncryptionVersion() != null ? user.getEncryptionVersion() : 2
         );
     }
 }

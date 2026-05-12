@@ -4,6 +4,11 @@ import org.bouncycastle.crypto.generators.Argon2BytesGenerator;
 import org.bouncycastle.crypto.params.Argon2Parameters;
 import org.springframework.stereotype.Service;
 
+import javax.crypto.Cipher;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.GCMParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
+import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.util.Base64;
 
@@ -13,6 +18,9 @@ public class PasswordService {
     private static final int SALT_LENGTH = 32;
     private static final int AUTH_HASH_LENGTH = 32;
     private static final int KEY_LENGTH = 32;
+    private static final int VAULT_KEY_LENGTH = 32;
+    private static final int GCM_IV_LENGTH = 12;
+    private static final int GCM_TAG_LENGTH = 128;
 
     private static final int ITERATIONS = 3;
     private static final int MEMORY_KB = 65536;
@@ -38,6 +46,12 @@ public class PasswordService {
         return Base64.getEncoder().encodeToString(salt);
     }
 
+    public String generateVaultKey() {
+        byte[] key = new byte[VAULT_KEY_LENGTH];
+        secureRandom.nextBytes(key);
+        return Base64.getEncoder().encodeToString(key);
+    }
+
     public String hashPasswordForAuthentication(String password, String salt) {
         Argon2Parameters params = new Argon2Parameters.Builder(Argon2Parameters.ARGON2_id)
                 .withIterations(ITERATIONS)
@@ -50,7 +64,7 @@ public class PasswordService {
         generator.init(params);
 
         byte[] hash = new byte[AUTH_HASH_LENGTH];
-        byte[] passwordBytes = password.getBytes();
+        byte[] passwordBytes = password.getBytes(StandardCharsets.UTF_8);
         generator.generateBytes(passwordBytes, hash);
 
         return Base64.getEncoder().encodeToString(hash);
@@ -73,7 +87,7 @@ public class PasswordService {
         generator.init(params);
 
         byte[] key = new byte[KEY_LENGTH];
-        byte[] passwordBytes = masterPassword.getBytes();
+        byte[] passwordBytes = masterPassword.getBytes(StandardCharsets.UTF_8);
         generator.generateBytes(passwordBytes, key);
 
         return Base64.getEncoder().encodeToString(key);
@@ -84,12 +98,63 @@ public class PasswordService {
         return constantTimeEquals(derivedKey, storedKeyHash);
     }
 
+    public String wrapVaultKey(String vaultKey, String kek) {
+        try {
+            byte[] keyBytes = Base64.getDecoder().decode(vaultKey);
+            byte[] kekBytes = Base64.getDecoder().decode(kek);
+
+            byte[] iv = new byte[GCM_IV_LENGTH];
+            secureRandom.nextBytes(iv);
+
+            SecretKey secretKey = new SecretKeySpec(kekBytes, "AES");
+            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            GCMParameterSpec gcmSpec = new GCMParameterSpec(GCM_TAG_LENGTH, iv);
+            cipher.init(Cipher.ENCRYPT_MODE, secretKey, gcmSpec);
+
+            byte[] encrypted = cipher.doFinal(keyBytes);
+
+            byte[] combined = new byte[iv.length + encrypted.length];
+            System.arraycopy(iv, 0, combined, 0, iv.length);
+            System.arraycopy(encrypted, 0, combined, iv.length, encrypted.length);
+
+            return Base64.getEncoder().encodeToString(combined);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to wrap vault key", e);
+        }
+    }
+
+    public String unwrapVaultKey(String wrappedKey, String kek) {
+        try {
+            byte[] combined = Base64.getDecoder().decode(wrappedKey);
+            byte[] kekBytes = Base64.getDecoder().decode(kek);
+
+            byte[] iv = new byte[GCM_IV_LENGTH];
+            System.arraycopy(combined, 0, iv, 0, GCM_IV_LENGTH);
+            byte[] encrypted = new byte[combined.length - GCM_IV_LENGTH];
+            System.arraycopy(combined, GCM_IV_LENGTH, encrypted, 0, encrypted.length);
+
+            SecretKey secretKey = new SecretKeySpec(kekBytes, "AES");
+            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            GCMParameterSpec gcmSpec = new GCMParameterSpec(GCM_TAG_LENGTH, iv);
+            cipher.init(Cipher.DECRYPT_MODE, secretKey, gcmSpec);
+
+            byte[] decrypted = cipher.doFinal(encrypted);
+            return Base64.getEncoder().encodeToString(decrypted);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to unwrap vault key", e);
+        }
+    }
+
+    public String deriveKek(String password, String encryptionSalt) {
+        return deriveMasterKey(password, encryptionSalt);
+    }
+
     private boolean constantTimeEquals(String a, String b) {
         if (a == null || b == null) {
             return false;
         }
-        byte[] aBytes = a.getBytes();
-        byte[] bBytes = b.getBytes();
+        byte[] aBytes = a.getBytes(StandardCharsets.UTF_8);
+        byte[] bBytes = b.getBytes(StandardCharsets.UTF_8);
 
         if (aBytes.length != bBytes.length) {
             return false;

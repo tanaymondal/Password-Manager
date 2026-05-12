@@ -45,6 +45,15 @@ public class User {
     @Column(name = "password_updated_at")
     private LocalDateTime passwordUpdatedAt;
 
+    @Column(name = "wrapped_vault_key", columnDefinition = "TEXT")
+    private String wrappedVaultKey;
+
+    @Column(name = "vault_key_iv", length = 64)
+    private String vaultKeyIv;
+
+    @Column(name = "encryption_version")
+    private Integer encryptionVersion = 1;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
