@@ -161,10 +161,15 @@ public class AuthService {
         String saltToUse = (newEncryptionSalt != null && !newEncryptionSalt.isEmpty())
                 ? newEncryptionSalt : passwordService.generateEncryptionSalt();
         log.info("CHANGE PWD: saltToUse={}", saltToUse);
-        String newKek = passwordService.deriveMasterKey(newPassword, saltToUse);
 
-        String vaultKey = passwordService.unwrapVaultKey(newWrappedVaultKey, oldKek);
-        String rewrappedVaultKey = passwordService.wrapVaultKey(vaultKey, newKek);
+        String wrappedVaultKeyToSave;
+        if (newWrappedVaultKey != null && !newWrappedVaultKey.isEmpty()) {
+            wrappedVaultKeyToSave = newWrappedVaultKey;
+        } else {
+            String vaultKey = passwordService.unwrapVaultKey(user.getWrappedVaultKey(), oldKek);
+            String newKek = passwordService.deriveMasterKey(newPassword, saltToUse);
+            wrappedVaultKeyToSave = passwordService.wrapVaultKey(vaultKey, newKek);
+        }
 
         if (newEntries != null && !newEntries.isEmpty()) {
             for (VaultEntryRequest entryReq : newEntries) {
@@ -191,7 +196,7 @@ public class AuthService {
         user.setPasswordHash(newPasswordHash);
         user.setPasswordSalt(newAuthSalt);
         user.setEncryptionSalt(saltToUse);
-        user.setWrappedVaultKey(rewrappedVaultKey);
+        user.setWrappedVaultKey(wrappedVaultKeyToSave);
         user.setEncryptionVersion(2);
         user.setPasswordUpdatedAt(LocalDateTime.now());
         user.setFailedLoginAttempts(0);
@@ -233,6 +238,7 @@ public class AuthService {
     }
 
     private AuthResponse generateAuthResponse(User user) {
+        refreshTokenRepository.deleteByUserId(user.getId());
         String accessToken = jwtTokenProvider.generateAccessToken(user.getId(), user.getEmail());
         String refreshToken = jwtTokenProvider.generateRefreshToken(user.getId());
 
@@ -254,6 +260,7 @@ public class AuthService {
     }
 
     private ChangePasswordResponse generateChangePasswordResponse(User user) {
+        refreshTokenRepository.deleteByUserId(user.getId());
         String accessToken = jwtTokenProvider.generateAccessToken(user.getId(), user.getEmail());
         String refreshToken = jwtTokenProvider.generateRefreshToken(user.getId());
 
