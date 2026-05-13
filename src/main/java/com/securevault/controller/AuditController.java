@@ -17,6 +17,26 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
+/**
+ * REST controller for viewing audit logs.
+ *
+ * Provides users access to their security audit trail:
+ * - View login/logout history
+ * - Track account changes
+ * - Monitor vault access patterns
+ *
+ * SECURITY:
+ * - All endpoints require JWT authentication
+ * - Users can only view their own audit logs
+ * - Logs are read-only (no modification or deletion)
+ *
+ * PAGINATION:
+ * - Results are paginated for performance
+ * - Default: page 0, size 20
+ * - Supports custom page and size parameters
+ *
+ * @see AuditService for audit logging
+ */
 @Slf4j
 @RestController
 @RequestMapping("/api/v1/audit")
@@ -25,6 +45,20 @@ public class AuditController {
 
     private final AuditLogRepository auditLogRepository;
 
+    /**
+     * Retrieves paginated audit logs for the authenticated user.
+     *
+     * Returns a list of security events including:
+     * - Login/logout attempts (successful and failed)
+     * - Password changes
+     * - 2FA enable/disable events
+     * - Vault access (view, create, update, delete)
+     *
+     * @param userDetails Injected from JWT authentication
+     * @param page Page number (0-indexed, default 0)
+     * @param size Page size (default 20)
+     * @return Map containing logs array, totalPages, and totalElements
+     */
     @GetMapping
     public ResponseEntity<ApiResponse<Map<String, Object>>> getAuditLogs(
             @AuthenticationPrincipal UserDetails userDetails,

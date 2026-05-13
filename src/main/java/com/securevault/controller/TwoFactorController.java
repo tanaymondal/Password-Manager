@@ -18,6 +18,22 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Map;
 import java.util.UUID;
 
+/**
+ * REST controller for two-factor authentication (2FA) endpoints.
+ *
+ * Provides TOTP-based two-factor authentication:
+ * - Generate setup QR code for authenticator apps
+ * - Enable 2FA after verifying setup
+ * - Disable 2FA
+ * - Check 2FA status
+ *
+ * SECURITY:
+ * - All endpoints require JWT authentication
+ * - Enabling 2FA requires verification code
+ * - All 2FA changes are logged for audit
+ *
+ * @see TwoFactorAuthService for business logic
+ */
 @Slf4j
 @RestController
 @RequestMapping("/api/v1/2fa")
@@ -27,6 +43,15 @@ public class TwoFactorController {
     private final TwoFactorAuthService twoFactorAuthService;
     private final AuditService auditService;
 
+    /**
+     * Generates setup data for enabling two-factor authentication.
+     *
+     * Returns a TOTP secret and QR code URL that can be scanned
+     * with authenticator apps like Google Authenticator or Authy.
+     *
+     * @param userDetails Injected from JWT authentication
+     * @return TwoFactorSetupResponse with secret and QR code URL
+     */
     @GetMapping("/setup")
     public ResponseEntity<ApiResponse<TwoFactorSetupResponse>> setup2FA(
             @AuthenticationPrincipal UserDetails userDetails) {
@@ -36,6 +61,17 @@ public class TwoFactorController {
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
+    /**
+     * Enables two-factor authentication for the user.
+     *
+     * Verifies the TOTP code to ensure the authenticator app is
+     * correctly set up before enabling 2FA.
+     *
+     * @param userDetails Injected from JWT authentication
+     * @param request Contains the TOTP code for verification
+     * @param httpRequest HTTP request for audit logging
+     * @return Success response
+     */
     @PostMapping("/enable")
     public ResponseEntity<ApiResponse<String>> enable2FA(
             @AuthenticationPrincipal UserDetails userDetails,
@@ -48,6 +84,16 @@ public class TwoFactorController {
         return ResponseEntity.ok(ApiResponse.success("2FA enabled successfully", ""));
     }
 
+    /**
+     * Disables two-factor authentication for the user.
+     *
+     * Removes the TOTP secret and disables 2FA. The user will
+     * then only need their password to log in.
+     *
+     * @param userDetails Injected from JWT authentication
+     * @param httpRequest HTTP request for audit logging
+     * @return Success response
+     */
     @PostMapping("/disable")
     public ResponseEntity<ApiResponse<String>> disable2FA(
             @AuthenticationPrincipal UserDetails userDetails,
@@ -59,6 +105,12 @@ public class TwoFactorController {
         return ResponseEntity.ok(ApiResponse.success("2FA disabled successfully", ""));
     }
 
+    /**
+     * Checks whether two-factor authentication is enabled for the user.
+     *
+     * @param userDetails Injected from JWT authentication
+     * @return Map with "enabled" boolean
+     */
     @GetMapping("/status")
     public ResponseEntity<ApiResponse<Map<String, Boolean>>> get2FAStatus(
             @AuthenticationPrincipal UserDetails userDetails) {

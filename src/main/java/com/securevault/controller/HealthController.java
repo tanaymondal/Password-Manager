@@ -13,6 +13,22 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * REST controller for system health monitoring.
+ *
+ * Provides health check endpoints for:
+ * - Application uptime monitoring
+ * - Database connectivity verification
+ * - Load balancer health checks
+ *
+ * This endpoint is typically used by:
+ * - Kubernetes liveness/readiness probes
+ * - Load balancers for traffic routing
+ * - Monitoring systems for uptime tracking
+ *
+ * NOTE: This endpoint does not require authentication as it's
+ * intended for infrastructure-level health checks.
+ */
 @Slf4j
 @RestController
 @RequestMapping("/api/v1")
@@ -21,6 +37,16 @@ public class HealthController {
 
     private final DataSource dataSource;
 
+    /**
+     * Returns the health status of the application.
+     *
+     * Checks:
+     * - Application is running
+     * - Database connection is healthy
+     *
+     * @return Map with "status", "timestamp", and "database" fields
+     *         Returns 503 if database is unavailable
+     */
     @GetMapping("/health")
     public ResponseEntity<Map<String, Object>> health() {
         Map<String, Object> response = new HashMap<>();
@@ -38,6 +64,13 @@ public class HealthController {
         return ResponseEntity.ok(response);
     }
 
+    /**
+     * Verifies database connectivity by checking connection validity.
+     *
+     * Uses a 5-second timeout for connection validation.
+     *
+     * @return true if database is reachable, false otherwise
+     */
     private boolean checkDatabase() {
         try (Connection connection = dataSource.getConnection()) {
             return connection.isValid(5);

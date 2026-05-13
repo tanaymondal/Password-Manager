@@ -7,6 +7,23 @@ import lombok.AllArgsConstructor;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+/**
+ * Entity representing a JWT refresh token for session management.
+ *
+ * Refresh tokens provide long-lived authentication:
+ * - Access tokens expire quickly (e.g., 15 minutes)
+ * - Refresh tokens last longer (e.g., 1 day)
+ * - Client uses refresh token to get new access token
+ * - Tokens are invalidated on logout or password change
+ *
+ * SECURITY:
+ * - Tokens are stored hashed in production (simplified here)
+ * - Each token is unique per user session
+ * - Token rotation: old token deleted when refreshed
+ * - All tokens invalidated on password change
+ *
+ * @see com.securevault.service.AuthService for token management
+ */
 @Entity
 @Table(name = "refresh_tokens")
 @Data
@@ -18,15 +35,29 @@ public class RefreshToken {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
+    /**
+     * Owner user ID - tokens are isolated per user.
+     */
     @Column(name = "user_id", nullable = false)
     private UUID userId;
 
+    /**
+     * The refresh token value (JWT).
+     * Stored for validation when client requests token refresh.
+     */
     @Column(nullable = false, unique = true)
     private String token;
 
+    /**
+     * Token expiration timestamp.
+     * After this time, the token cannot be used for refresh.
+     */
     @Column(name = "expires_at", nullable = false)
     private LocalDateTime expiresAt;
 
+    /**
+     * Token creation timestamp.
+     */
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -35,6 +66,11 @@ public class RefreshToken {
         createdAt = LocalDateTime.now();
     }
 
+    /**
+     * Checks if the token has expired.
+     *
+     * @return true if current time is after expiration, false otherwise
+     */
     public boolean isExpired() {
         return LocalDateTime.now().isAfter(expiresAt);
     }
