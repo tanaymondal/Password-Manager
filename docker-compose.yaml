@@ -3,6 +3,10 @@ version: '3.8'
 services:
   app:
     build: .
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.app.rule=Host(`vault.tanay.pro`)"
+      - "traefik.http.services.app.loadbalancer.server.port=8080"
     environment:
       - DB_HOST=postgres
       - DB_PORT=5432
