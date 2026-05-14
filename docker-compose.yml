@@ -10,13 +10,18 @@ services:
       - DB_PORT=5432
       - DB_NAME=securevault
       - DB_USERNAME=postgres
-      - DB_PASSWORD=postgres
-      - JWT_SECRET=your-256-bit-secret-key-for-jwt-signing-min-32-chars
-      - SWAGGER_ENABLED=true
-      - LOG_LEVEL=DEBUG
+      - DB_PASSWORD=mg8Jn^#Cpe
+      - JWT_SECRET=AHGwDAAO4J/e0FrHjnh/9vHcrIJ1cOC785IhFM2FWIA=
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=mg8Jn^#Cpe
+      - SWAGGER_ENABLED=false
+      - LOG_LEVEL=INFO
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_started
     networks:
       - securevault
 
@@ -24,17 +29,21 @@ services:
     image: postgres:16-alpine
     environment:
       - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_PASSWORD=mg8Jn^#Cpe
       - POSTGRES_DB=securevault
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - securevault
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --requirepass mg8Jn^#Cpe
     networks:
       - securevault
 
