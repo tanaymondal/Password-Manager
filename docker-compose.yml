@@ -6,11 +6,11 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - DB_HOST=postgres
+      - DB_HOST=n113kzufdrnjnwt2vk322kf8
       - DB_PORT=5432
-      - DB_NAME=securevault
+      - DB_NAME=postgres
       - DB_USERNAME=postgres
-      - DB_PASSWORD=mg8Jn^#Cpe
+      - DB_PASSWORD=siL9tfxbuwcIWdB4SfpyvlVq0xKcOKnr4unitTNM449sCgHgF9ARZwmm5u13EypK
       - JWT_SECRET=AHGwDAAO4J/e0FrHjnh/9vHcrIJ1cOC785IhFM2FWIA=
       - REDIS_HOST=redis
       - REDIS_PORT=6379
@@ -18,26 +18,8 @@ services:
       - SWAGGER_ENABLED=false
       - LOG_LEVEL=INFO
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_started
-    networks:
-      - securevault
-
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=mg8Jn^#Cpe
-      - POSTGRES_DB=securevault
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
     networks:
       - securevault
 
@@ -46,9 +28,6 @@ services:
     command: redis-server --requirepass mg8Jn^#Cpe
     networks:
       - securevault
-
-volumes:
-  postgres_data:
 
 networks:
   securevault:
