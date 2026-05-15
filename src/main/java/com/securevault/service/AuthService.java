@@ -20,7 +20,10 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
 
@@ -105,7 +108,7 @@ public class AuthService {
 
         user = userRepository.save(user);
 
-        savePasswordHistory(user.getId(), passwordHash);
+        savePasswordHistory(user.getId(), passwordHash, authSalt);
 
         return generateAuthResponse(user);
     }
@@ -174,7 +177,7 @@ public class AuthService {
             throw new IllegalArgumentException("Invalid refresh token");
         }
 
-        RefreshToken storedToken = refreshTokenRepository.findByToken(refreshToken)
+        RefreshToken storedToken = refreshTokenRepository.findByTokenHash(hashToken(refreshToken))
                 .orElseThrow(() -> new IllegalArgumentException("Refresh token not found"));
 
         if (storedToken.isExpired()) {
@@ -257,8 +260,11 @@ public class AuthService {
         String newAuthSalt = passwordService.generateAuthSalt();
         String newPasswordHash = passwordService.hashPasswordForAuthentication(newPassword, newAuthSalt);
         for (PasswordHistory history : recentPasswords) {
-            if (passwordService.hashPasswordForAuthentication(newPassword, newAuthSalt).equals(history.getPasswordHash())) {
-                throw new IllegalArgumentException("Password was used recently. Please choose a different password.");
+            if (history.getPasswordSalt() != null) {
+                String hashWithOldSalt = passwordService.hashPasswordForAuthentication(newPassword, history.getPasswordSalt());
+                if (hashWithOldSalt.equals(history.getPasswordHash())) {
+                    throw new IllegalArgumentException("Password was used recently. Please choose a different password.");
+                }
             }
         }
 
@@ -310,7 +316,7 @@ public class AuthService {
         user.setLockedUntil(null);
 
         userRepository.save(user);
-        savePasswordHistory(userId, newPasswordHash);
+        savePasswordHistory(userId, newPasswordHash, newAuthSalt);
 
         refreshTokenRepository.deleteByUserId(userId);
 
@@ -349,7 +355,7 @@ public class AuthService {
      * @param userId UUID of the user
      * @param passwordHash New password hash to save
      */
-    private void savePasswordHistory(UUID userId, String passwordHash) {
+    private void savePasswordHistory(UUID userId, String passwordHash, String passwordSalt) {
         List<PasswordHistory> history = passwordHistoryRepository.findByUserIdOrderByCreatedAtDesc(userId);
         while (history.size() >= PASSWORD_HISTORY_LIMIT) {
             PasswordHistory oldest = history.get(history.size() - 1);
@@ -360,6 +366,7 @@ public class AuthService {
         PasswordHistory newEntry = new PasswordHistory();
         newEntry.setUserId(userId);
         newEntry.setPasswordHash(passwordHash);
+        newEntry.setPasswordSalt(passwordSalt);
         passwordHistoryRepository.save(newEntry);
     }
 
@@ -386,7 +393,7 @@ public class AuthService {
 
         RefreshToken token = new RefreshToken();
         token.setUserId(user.getId());
-        token.setToken(refreshToken);
+        token.setTokenHash(hashToken(refreshToken));
         token.setExpiresAt(LocalDateTime.now().plusDays(1));
         refreshTokenRepository.save(token);
 
@@ -418,7 +425,7 @@ public class AuthService {
 
         RefreshToken token = new RefreshToken();
         token.setUserId(user.getId());
-        token.setToken(refreshToken);
+        token.setTokenHash(hashToken(refreshToken));
         token.setExpiresAt(LocalDateTime.now().plusDays(1));
         refreshTokenRepository.save(token);
 
@@ -431,5 +438,15 @@ public class AuthService {
                 user.getWrappedVaultKey(),
                 user.getEncryptionVersion() != null ? user.getEncryptionVersion() : 2
         );
+    }
+
+    private String hashToken(String token) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] hash = md.digest(token.getBytes());
+            return HexFormat.of().formatHex(hash);
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException("SHA-256 not available", e);
+        }
     }
 }

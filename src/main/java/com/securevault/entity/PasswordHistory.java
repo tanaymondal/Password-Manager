@@ -50,6 +50,14 @@ public class PasswordHistory {
     private String passwordHash;
 
     /**
+     * Salt used when hashing this password.
+     * Stored alongside the hash so we can re-hash a candidate password
+     * with the same salt for comparison during password reuse checks.
+     */
+    @Column(name = "password_salt")
+    private String passwordSalt;
+
+    /**
      * When this password was used (for ordering and cleanup).
      */
     @Column(name = "created_at", nullable = false, updatable = false)

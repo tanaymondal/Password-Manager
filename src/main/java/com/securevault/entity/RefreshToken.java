@@ -42,11 +42,12 @@ public class RefreshToken {
     private UUID userId;
 
     /**
-     * The refresh token value (JWT).
-     * Stored for validation when client requests token refresh.
+     * SHA-256 hash of the refresh token JWT.
+     * Only the hash is stored — the raw JWT is never persisted.
+     * This prevents session hijacking if the database is compromised.
      */
-    @Column(nullable = false, unique = true)
-    private String token;
+    @Column(name = "token_hash", nullable = false, unique = true)
+    private String tokenHash;
 
     /**
      * Token expiration timestamp.
