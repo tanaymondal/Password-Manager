@@ -18,9 +18,10 @@ import org.koin.androidx.compose.koinViewModel
 @Composable
 fun SettingsScreen(
     onNavigateBack: () -> Unit,
-    onLogout: () -> Unit
+    onNavigateToChangePassword: () -> Unit,
+    onLogout: () -> Unit,
+    viewModel: SettingsViewModel
 ) {
-    val viewModel: SettingsViewModel = koinViewModel()
     val state by viewModel.state.collectAsState()
 
     LaunchedEffect(Unit) {
@@ -76,7 +77,7 @@ fun SettingsScreen(
                     icon = Icons.Default.Add,
                     title = "Change Password",
                     subtitle = "Update your master password",
-                    onClick = { /* TODO */ }
+                    onClick = onNavigateToChangePassword
                 )
             }
 
