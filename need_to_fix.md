@@ -128,13 +128,15 @@ Every `logVaultAccess()` call passes `null, null` for IP and User-Agent. All vau
 
 ---
 
-### 1.6 Weak JWT secret fallback
+### 1.6 Weak JWT secret fallback ✅
 
 **Files**: `.env:11`, `application.properties:20`, `application-prod.properties:20`
 
 Default secret `SecureVaultSecretKeyForJWTTokenGeneration2024` is not random. Falls back to this string if env var not set.
 
 **Fix**: Remove fallback defaults. Validate at startup that `JWT_SECRET` is ≥ 32 bytes. Generate using `openssl rand -base64 32`.
+
+**Status**: ✅ Fixed — fallback removed from both property files. `JwtTokenProvider` now throws `IllegalArgumentException` at startup if `JWT_SECRET` is null or shorter than 32 chars.
 
 ---
 
@@ -368,14 +370,15 @@ Semgrep/CodeQL in CI with security ruleset. Gitleaks as pre-commit hook + CI che
 | Phase | Total items | ✅ Fixed | ❌ Remaining |
 |-------|-------------|----------|--------------|
 | Phase 0 — Stop the bleeding | 5 | 1 | 4 |
-| Phase 1 — Critical hardening | 9 | 3 | 6 |
+| Phase 1 — Critical hardening | 9 | 4 | 5 |
 | Phase 2 — Important hardening | 12 | 0 | 12 |
 | Phase 3 — Defense in depth | 8 | 0 | 8 |
 | Phase 4 — Operational maturity | 10 | 0 | 10 |
-| **Total** | **44** | **4** | **40** |
+| **Total** | **44** | **5** | **39** |
 
 ### Already fixed ✅
 - 0.1 DEK/wrapped vault key model
 - 1.1 Refresh token hashing (SHA-256)
 - 1.2 Password reuse prevention (salt-aware comparison)
+- 1.6 JWT secret fallback removed (startup validation enforces ≥ 32 chars)
 - 1.7 Breach-corpus validation (HIBP k-anonymity + offline common-passwords set)

@@ -47,6 +47,9 @@ public class JwtTokenProvider {
             @Value("${app.jwt.secret}") String secret,
             @Value("${app.jwt.expiration}") long jwtExpiration,
             @Value("${app.jwt.refresh-expiration}") long refreshExpiration) {
+        if (secret == null || secret.length() < 32) {
+            throw new IllegalArgumentException("JWT secret must be at least 32 characters. Set the JWT_SECRET environment variable.");
+        }
         this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         this.jwtExpiration = jwtExpiration;
         this.refreshExpiration = refreshExpiration;
