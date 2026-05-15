@@ -366,13 +366,14 @@ Semgrep/CodeQL in CI with security ruleset. Gitleaks as pre-commit hook + CI che
 | Phase | Total items | ✅ Fixed | ❌ Remaining |
 |-------|-------------|----------|--------------|
 | Phase 0 — Stop the bleeding | 5 | 1 | 4 |
-| Phase 1 — Critical hardening | 9 | 2 | 7 |
+| Phase 1 — Critical hardening | 9 | 3 | 6 |
 | Phase 2 — Important hardening | 12 | 0 | 12 |
 | Phase 3 — Defense in depth | 8 | 0 | 8 |
 | Phase 4 — Operational maturity | 10 | 0 | 10 |
-| **Total** | **44** | **3** | **41** |
+| **Total** | **44** | **4** | **40** |
 
 ### Already fixed ✅
 - 0.1 DEK/wrapped vault key model
 - 1.1 Refresh token hashing (SHA-256)
 - 1.2 Password reuse prevention (salt-aware comparison)
+- 1.7 Breach-corpus validation (HIBP k-anonymity + offline common-passwords set)
