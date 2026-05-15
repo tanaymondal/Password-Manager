@@ -43,3 +43,11 @@ Thumbs.db
 # Secrets
 *.keystore
 *.jks
+.env
+
+# Build outputs
+target/
+
+# Logs
+logs/
+server.log
