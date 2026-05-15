@@ -56,6 +56,7 @@ public class AuthService {
     private final VaultEntryRepository vaultEntryRepository;
     private final PasswordService passwordService;
     private final JwtTokenProvider jwtTokenProvider;
+    private final BreachCheckService breachCheckService;
 
     /**
      * Registers a new user in the system.
@@ -86,6 +87,10 @@ public class AuthService {
         int strength = passwordService.calculatePasswordStrength(request.getPassword());
         if (strength < 4) {
             throw new IllegalArgumentException("Password is too weak. Use at least 8 characters with mixed case, numbers, and symbols.");
+        }
+
+        if (breachCheckService.isPasswordBreached(request.getPassword())) {
+            throw new IllegalArgumentException("Password found in known data breaches. Please choose a different password.");
         }
 
         String authSalt = passwordService.generateAuthSalt();
@@ -254,6 +259,10 @@ public class AuthService {
         int strength = passwordService.calculatePasswordStrength(newPassword);
         if (strength < 4) {
             throw new IllegalArgumentException("New password is too weak");
+        }
+
+        if (breachCheckService.isPasswordBreached(newPassword)) {
+            throw new IllegalArgumentException("Password found in known data breaches. Please choose a different password.");
         }
 
         List<PasswordHistory> recentPasswords = passwordHistoryRepository.findRecentPasswords(userId, PASSWORD_HISTORY_LIMIT);

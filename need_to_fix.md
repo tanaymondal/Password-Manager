@@ -136,13 +136,15 @@ Default secret `SecureVaultSecretKeyForJWTTokenGeneration2024` is not random. Fa
 
 ---
 
-### 1.7 Breach-corpus password validation
+### 1.7 Breach-corpus password validation ✅
 
 **File**: `PasswordService.java:336-356`
 
 `calculatePasswordStrength()` uses basic scoring (`Password1!` passes). NIST SP 800-63B requires breach-list checks.
 
 **Fix**: Integrate HaveIBeenPwned k-anonymity API. Reject any password in breach corpus regardless of score. Optionally supplement with zxcvbn for entropy estimation.
+
+**Status**: ✅ Fixed — `BreachCheckService` with HIBP k-anonymity API + offline common-passwords set (~200 entries). Wired into `register()` and `changePassword()`.
 
 ---
 
