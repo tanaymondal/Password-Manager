@@ -338,7 +338,7 @@ class SecureVaultApi(
         val encryptionVersion = dataObj?.get("encryptionVersion")?.jsonPrimitive?.content?.toIntOrNull() ?: 1
 
         Log.d(tag, "Parsed AuthResponse successfully")
-        Result.success(AuthResponse(accessToken, refreshToken, encryptionSalt, userId, email, wrappedVaultKey, encryptionVersion))
+        AuthResponse(accessToken, refreshToken, encryptionSalt, userId, email, wrappedVaultKey, encryptionVersion)
     }
 
     companion object {
