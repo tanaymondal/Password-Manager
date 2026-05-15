@@ -14,8 +14,7 @@ class VaultRepositoryImpl(
 
     override suspend fun getEntries(): Result<List<VaultEntry>> {
         return try {
-            val token = getValidToken()
-            val response = api.getVaultEntries(token)
+            val response = api.getVaultEntries()
             response.fold(
                 onSuccess = { entries ->
                     val decryptedEntries = entries.map { decryptEntry(it) }
@@ -30,8 +29,7 @@ class VaultRepositoryImpl(
 
     override suspend fun getEntry(id: Long): Result<VaultEntry> {
         return try {
-            val token = getValidToken()
-            val response = api.getVaultEntry(token, id.toString())
+            val response = api.getVaultEntry(id.toString())
             response.fold(
                 onSuccess = { entry ->
                     Result.Success(decryptEntry(entry))
@@ -45,9 +43,8 @@ class VaultRepositoryImpl(
 
     override suspend fun createEntry(entry: VaultEntry): Result<VaultEntry> {
         return try {
-            val token = getValidToken()
             val encryptedRequest = encryptEntry(entry)
-            val response = api.createVaultEntry(token, encryptedRequest)
+            val response = api.createVaultEntry(encryptedRequest)
             response.fold(
                 onSuccess = { created ->
                     Result.Success(decryptEntry(created))
@@ -61,9 +58,8 @@ class VaultRepositoryImpl(
 
     override suspend fun updateEntry(id: Long, entry: VaultEntry): Result<VaultEntry> {
         return try {
-            val token = getValidToken()
             val encryptedRequest = encryptEntry(entry.copy(id = id))
-            val response = api.updateVaultEntry(token, id.toString(), encryptedRequest)
+            val response = api.updateVaultEntry(id.toString(), encryptedRequest)
             response.fold(
                 onSuccess = { updated ->
                     Result.Success(decryptEntry(updated))
@@ -77,8 +73,7 @@ class VaultRepositoryImpl(
 
     override suspend fun deleteEntry(id: Long): Result<Unit> {
         return try {
-            val token = getValidToken()
-            val response = api.deleteVaultEntry(token, id.toString())
+            val response = api.deleteVaultEntry(id.toString())
             response.fold(
                 onSuccess = { Result.Success(Unit) },
                 onFailure = { Result.Error(it.message ?: "Failed to delete entry", it) }
@@ -90,8 +85,7 @@ class VaultRepositoryImpl(
 
     override suspend fun deleteAllEntries(): Result<Unit> {
         return try {
-            val token = getValidToken()
-            val response = api.deleteAllVaultEntries(token)
+            val response = api.deleteAllVaultEntries()
             response.fold(
                 onSuccess = { Result.Success(Unit) },
                 onFailure = { Result.Error(it.message ?: "Failed to delete entries", it) }
@@ -99,12 +93,6 @@ class VaultRepositoryImpl(
         } catch (e: Exception) {
             Result.Error(e.message ?: "Failed to delete entries", e)
         }
-    }
-
-    private fun getValidToken(): String {
-        val token = SessionManager.getAccessToken()
-        if (token.isEmpty()) throw IllegalStateException("Not authenticated")
-        return token
     }
 
     private fun encryptEntry(entry: VaultEntry): VaultEntryRequest {

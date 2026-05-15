@@ -12,8 +12,7 @@ class DeviceRepositoryImpl(
 
     override suspend fun getDevices(): Result<List<Device>> {
         return try {
-            val token = getValidToken()
-            val response = api.getDevices(token)
+            val response = api.getDevices()
             response.fold(
                 onSuccess = { devices ->
                     val result = devices.map { device ->
@@ -36,8 +35,7 @@ class DeviceRepositoryImpl(
 
     override suspend fun registerDevice(deviceName: String, deviceId: String): Result<Device> {
         return try {
-            val token = getValidToken()
-            val response = api.registerDevice(token, com.securevault.mobile.data.model.DeviceRequest(deviceName, deviceId))
+            val response = api.registerDevice(com.securevault.mobile.data.model.DeviceRequest(deviceName, deviceId))
             response.fold(
                 onSuccess = { device ->
                     Result.Success(
@@ -59,8 +57,7 @@ class DeviceRepositoryImpl(
 
     override suspend fun removeDevice(id: Long): Result<Unit> {
         return try {
-            val token = getValidToken()
-            val response = api.removeDevice(token, id)
+            val response = api.removeDevice(id)
             response.fold(
                 onSuccess = { Result.Success(Unit) },
                 onFailure = { Result.Error(it.message ?: "Failed to remove device", it) }
@@ -70,11 +67,6 @@ class DeviceRepositoryImpl(
         }
     }
 
-    private fun getValidToken(): String {
-        val token = SessionManager.getAccessToken()
-        if (token.isEmpty()) throw IllegalStateException("Not authenticated")
-        return token
-    }
 }
 
 class TwoFactorRepositoryImpl(
@@ -83,8 +75,7 @@ class TwoFactorRepositoryImpl(
 
     override suspend fun setupTwoFactor(): Result<Pair<String, String>> {
         return try {
-            val token = getValidToken()
-            val response = api.setupTwoFactor(token)
+            val response = api.setupTwoFactor()
             response.fold(
                 onSuccess = { setup ->
                     Result.Success(Pair(setup.secret, setup.qrCodeUrl))
@@ -98,8 +89,7 @@ class TwoFactorRepositoryImpl(
 
     override suspend fun enableTwoFactor(code: String): Result<Unit> {
         return try {
-            val token = getValidToken()
-            val response = api.enableTwoFactor(token, com.securevault.mobile.data.model.EnableTwoFactorRequest(code))
+            val response = api.enableTwoFactor(com.securevault.mobile.data.model.EnableTwoFactorRequest(code))
             response.fold(
                 onSuccess = { Result.Success(Unit) },
                 onFailure = { Result.Error(it.message ?: "Failed to enable 2FA", it) }
@@ -111,8 +101,7 @@ class TwoFactorRepositoryImpl(
 
     override suspend fun disableTwoFactor(code: String): Result<Unit> {
         return try {
-            val token = getValidToken()
-            val response = api.disableTwoFactor(token, code)
+            val response = api.disableTwoFactor(code)
             response.fold(
                 onSuccess = { Result.Success(Unit) },
                 onFailure = { Result.Error(it.message ?: "Failed to disable 2FA", it) }
@@ -124,8 +113,7 @@ class TwoFactorRepositoryImpl(
 
     override suspend fun getStatus(): Result<Boolean> {
         return try {
-            val token = getValidToken()
-            val response = api.getTwoFactorStatus(token)
+            val response = api.getTwoFactorStatus()
             response.fold(
                 onSuccess = { Result.Success(it.enabled) },
                 onFailure = { Result.Error(it.message ?: "Failed to get 2FA status", it) }
@@ -135,9 +123,4 @@ class TwoFactorRepositoryImpl(
         }
     }
 
-    private fun getValidToken(): String {
-        val token = SessionManager.getAccessToken()
-        if (token.isEmpty()) throw IllegalStateException("Not authenticated")
-        return token
-    }
 }

@@ -86,10 +86,7 @@ class AuthRepositoryImpl(
 
     override suspend fun logout(): Result<Unit> {
         return try {
-            val token = SessionManager.getAccessToken()
-            if (token.isNotEmpty()) {
-                api.logout(token)
-            }
+            api.logout()
             vaultKeyManager.clearCachedVaultKey()
             SessionManager.clearSession()
             _authState.value = AuthState.unauthenticated()
@@ -147,12 +144,7 @@ class AuthRepositoryImpl(
 
     override suspend fun changePassword(currentPassword: String, newPassword: String): Result<Unit> {
         return try {
-            val token = SessionManager.getAccessToken()
-            if (token.isEmpty()) {
-                return Result.Error("Not authenticated")
-            }
-
-            val entriesResult = api.getVaultEntries(token)
+            val entriesResult = api.getVaultEntries()
             val entries = entriesResult.getOrNull()
                 ?: return Result.Error(entriesResult.exceptionOrNull()?.message ?: "Failed to fetch vault entries")
 
@@ -182,7 +174,6 @@ class AuthRepositoryImpl(
             println("CP: wrapVaultKey done")
 
             val changeResponse = api.changePassword(
-                token,
                 ChangePasswordRequest(
                     currentPassword = currentPassword,
                     newPassword = newPassword,
