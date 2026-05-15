@@ -54,11 +54,13 @@ These cause **data loss, false security claims, or trivial compromise**. Nothing
 
 ### 0.5 Upgrade client-side KDF (mobile)
 
-**File**: `mobile/app/src/androidMain/.../AndroidEntryEncryptor.kt:25`
+**File**: `IosEntryEncryptor.kt` (throws `NotImplementedError`), `AndroidEntryEncryptor.kt:24-49`
 
-Mobile uses PBKDF2-SHA256 with 65,536 iterations — below OWASP 2023 minimum (600k). Competitors use Argon2id.
+Android already uses **Argon2id** (`t=3, m=64MB, p=4`) matching the backend. iOS is not implemented at all — throws `NotImplementedError`. No per-user KDF params stored for future upgrades.
 
-**Fix**: Switch to Argon2id (`m=64MB, t=3, p=4`) matching the backend. If iOS Argon2 isn't viable, bump PBKDF2 to **600,000 iterations** as stopgap. Store KDF params per-user (`kdf_type`, `kdf_iterations`, `kdf_memory`) for future upgrades.
+**Fix**:
+- Implement iOS KDF — use `argon2kt` (KMP) or iOS `CommonCrypto` PBKDF2 (600k iterations) as stopgap
+- Store `kdf_type`, `kdf_iterations`, `kdf_memory_kb` in `User` entity, return in login response so client uses stored params instead of hardcoded ones
 
 ---
 
