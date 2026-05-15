@@ -10,7 +10,7 @@ import com.securevault.mobile.domain.repository.VaultRepository
 import org.koin.dsl.module
 
 val appModule = module {
-    single<SecureVaultApi> { SecureVaultApi.create("http://password-manager-compose-tsyrns-8069af-173-249-209-81.sslip.io") }
+    single<SecureVaultApi> { SecureVaultApi.create("https://vault.tanay.pro") }
 
     single<EntryEncryptor> { IosEntryEncryptor() }
 
