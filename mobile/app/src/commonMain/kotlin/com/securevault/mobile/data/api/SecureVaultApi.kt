@@ -24,6 +24,8 @@ class SecureVaultApi(
     private val tag = "SecureVaultApi"
     private val refreshMutex = Mutex()
 
+    class TokenExpiredException : Exception("Token expired or invalid")
+
     suspend fun register(request: RegisterRequest): Result<AuthResponse> {
         return try {
             Log.d(tag, "POST /api/v1/auth/register - Request: $request")
@@ -302,9 +304,12 @@ class SecureVaultApi(
     }
 
     private fun isUnauthorized(e: Exception): Boolean {
+        if (e is TokenExpiredException) return true
         val message = e.message ?: ""
-        return message.contains("401") || message.contains("Unauthorized") ||
-                message.contains("unauthorized") || message.contains("expired")
+        return message.contains("401") || message.contains("403") ||
+                message.contains("Unauthorized") || message.contains("unauthorized") ||
+                message.contains("Forbidden") || message.contains("forbidden") ||
+                message.contains("expired")
     }
 
     private suspend fun parseAuthResponse(response: HttpResponse): Result<AuthResponse> = runCatching {
@@ -354,6 +359,13 @@ class SecureVaultApi(
                 install(HttpTimeout) {
                     requestTimeoutMillis = 30000
                     connectTimeoutMillis = 15000
+                }
+                HttpResponseValidator {
+                    validateResponse { response ->
+                        if (response.status == HttpStatusCode.Unauthorized || response.status == HttpStatusCode.Forbidden) {
+                            throw TokenExpiredException()
+                        }
+                    }
                 }
                 defaultRequest {
                     contentType(ContentType.Application.Json)
