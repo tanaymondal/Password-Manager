@@ -25,6 +25,10 @@ val commonMain by kotlin.sourceSets.getting
 val androidMain by kotlin.sourceSets.getting
 val commonTest by kotlin.sourceSets.getting
 
+dependencies {
+    add("ksp", "androidx.room:room-compiler:2.6.1")
+}
+
 commonMain.dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2")
