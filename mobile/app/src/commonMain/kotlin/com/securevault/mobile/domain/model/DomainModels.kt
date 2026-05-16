@@ -1,5 +1,8 @@
 package com.securevault.mobile.domain.model
 
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+
 data class User(
     val id: Long,
     val email: String
@@ -25,9 +28,10 @@ data class AuthState(
     }
 }
 
+@Serializable
 data class VaultEntry(
     val id: Long,
-    val title: String,
+    @SerialName("name") val title: String,
     val username: String,
     val password: String,
     val url: String?,

@@ -9,6 +9,7 @@ import com.securevault.mobile.data.repository.EntryEncryptor
 import com.securevault.mobile.data.repository.SessionManager
 import com.securevault.mobile.data.repository.VaultKeyManager
 import com.securevault.mobile.domain.model.VaultEntry
+import kotlinx.serialization.json.Json
 import javax.crypto.Cipher
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
@@ -145,7 +146,7 @@ class AndroidEntryEncryptor : EntryEncryptor, VaultKeyManager {
         cipher.init(Cipher.ENCRYPT_MODE, key)
 
         val iv = cipher.iv
-        val plaintext = "${entry.title}|${entry.username}|${entry.password}|${entry.url ?: ""}|${entry.notes ?: ""}|${entry.folder ?: ""}"
+        val plaintext = Json.encodeToString(VaultEntry.serializer(), entry)
         val plaintextBytes = plaintext.toByteArray(Charsets.UTF_8)
         val encryptedBytes = cipher.doFinal(plaintextBytes)
 
@@ -171,16 +172,20 @@ class AndroidEntryEncryptor : EntryEncryptor, VaultKeyManager {
 
         val decryptedBytes = cipher.doFinal(encryptedBytes)
         val plaintext = String(decryptedBytes, Charsets.UTF_8)
-        val parts = plaintext.split("|")
 
-        return VaultEntry(
-            id = response.id.hashCode().toLong(),
-            title = parts.getOrElse(0) { "" },
-            username = parts.getOrElse(1) { "" },
-            password = parts.getOrElse(2) { "" },
-            url = parts.getOrElse(3) { "" }.ifEmpty { null },
-            notes = parts.getOrElse(4) { "" }.ifEmpty { null },
-            folder = parts.getOrElse(5) { "" }.ifEmpty { null }
-        )
+        return try {
+            Json.decodeFromString(VaultEntry.serializer(), plaintext)
+        } catch (e: Exception) {
+            val parts = plaintext.split("|")
+            VaultEntry(
+                id = response.id.hashCode().toLong(),
+                title = parts.getOrElse(0) { "" },
+                username = parts.getOrElse(1) { "" },
+                password = parts.getOrElse(2) { "" },
+                url = parts.getOrElse(3) { "" }.ifEmpty { null },
+                notes = parts.getOrElse(4) { "" }.ifEmpty { null },
+                folder = parts.getOrElse(5) { "" }.ifEmpty { null }
+            )
+        }
     }
 }

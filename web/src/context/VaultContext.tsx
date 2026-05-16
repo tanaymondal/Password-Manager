@@ -157,8 +157,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 
       setEntryError(null)
       try {
-        const plaintext = `${data.name}|${data.username}|${data.password}|${data.url}|${data.notes}|`
-        const encrypted = await encryptEntry(key, plaintext)
+        const encrypted = await encryptEntry(key, JSON.stringify(data))
         const created = await createVaultEntry({
           encryptedData: encrypted.encryptedData,
           iv: encrypted.iv,
@@ -182,8 +181,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 
       setEntryError(null)
       try {
-        const plaintext = `${data.name}|${data.username}|${data.password}|${data.url}|${data.notes}|`
-        const encrypted = await encryptEntry(key, plaintext)
+        const encrypted = await encryptEntry(key, JSON.stringify(data))
         const updated = await updateVaultEntry(id, {
           encryptedData: encrypted.encryptedData,
           iv: encrypted.iv,

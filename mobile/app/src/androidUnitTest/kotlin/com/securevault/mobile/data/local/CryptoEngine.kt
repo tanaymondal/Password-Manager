@@ -128,14 +128,23 @@ class CryptoEngine(
         val cipher = Cipher.getInstance(algorithm)
         cipher.init(Cipher.ENCRYPT_MODE, secretKey)
         val iv = cipher.iv
-        val plaintext = "$id|$title|$username|$password|${url ?: ""}|${notes ?: ""}|${folder ?: ""}"
-        val plaintextBytes = plaintext.toByteArray(Charsets.UTF_8)
+        val json = """{"id":$id,"name":"${escapeJson(title)}","username":"${escapeJson(username)}","password":"${escapeJson(password)}","url":${jsonValue(url)},"notes":${jsonValue(notes)},"folder":${jsonValue(folder)}}"""
+        val plaintextBytes = json.toByteArray(Charsets.UTF_8)
         val encryptedBytes = cipher.doFinal(plaintextBytes)
         return Pair(
             Base64.getEncoder().encodeToString(encryptedBytes),
             Base64.getEncoder().encodeToString(iv)
         )
     }
+
+    private fun escapeJson(s: String): String = s
+        .replace("\\", "\\\\")
+        .replace("\"", "\\\"")
+        .replace("\n", "\\n")
+        .replace("\r", "\\r")
+        .replace("\t", "\\t")
+
+    private fun jsonValue(s: String?): String = if (s.isNullOrEmpty()) "null" else "\"${escapeJson(s)}\""
 
     fun decryptEntry(encryptedData: String, iv: String): Map<String, String?> {
         val vaultKey = getVaultKeyForEncryption()
@@ -149,14 +158,30 @@ class CryptoEngine(
         val decryptedBytes = cipher.doFinal(encryptedBytes)
         val plaintext = String(decryptedBytes, Charsets.UTF_8)
         val parts = plaintext.split("|")
-        return mapOf(
-            "id" to parts.getOrElse(0) { "0" },
-            "title" to parts.getOrElse(1) { "" },
-            "username" to parts.getOrElse(2) { "" },
-            "password" to parts.getOrElse(3) { "" },
-            "url" to parts.getOrElse(4) { "" }.ifEmpty { null },
-            "notes" to parts.getOrElse(5) { "" }.ifEmpty { null },
-            "folder" to parts.getOrElse(6) { "" }.ifEmpty { null }
-        )
+        if (parts.size < 2 || !plaintext.startsWith("{")) {
+            return mapOf(
+                "id" to parts.getOrElse(0) { "0" },
+                "title" to parts.getOrElse(1) { "" },
+                "username" to parts.getOrElse(2) { "" },
+                "password" to parts.getOrElse(3) { "" },
+                "url" to parts.getOrElse(4) { "" }.ifEmpty { null },
+                "notes" to parts.getOrElse(5) { "" }.ifEmpty { null },
+                "folder" to parts.getOrElse(6) { "" }.ifEmpty { null }
+            )
+        }
+        return try {
+            val json = Json.parseToJsonElement(plaintext).jsonObject
+            mapOf(
+                "id" to (json["id"]?.toString() ?: "0"),
+                "title" to (json["name"]?.toString()?.removeSurrounding("\"") ?: ""),
+                "username" to (json["username"]?.toString()?.removeSurrounding("\"") ?: ""),
+                "password" to (json["password"]?.toString()?.removeSurrounding("\"") ?: ""),
+                "url" to json["url"]?.let { if (it.toString() == "null") null else it.toString().removeSurrounding("\"") },
+                "notes" to json["notes"]?.let { if (it.toString() == "null") null else it.toString().removeSurrounding("\"") },
+                "folder" to json["folder"]?.let { if (it.toString() == "null") null else it.toString().removeSurrounding("\"") }
+            )
+        } catch (e: Exception) {
+            mapOf("error" to e.message)
+        }
     }
 }
