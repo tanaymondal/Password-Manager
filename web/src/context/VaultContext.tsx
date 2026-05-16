@@ -243,8 +243,25 @@ export function VaultProvider({ children }: { children: ReactNode }) {
     if (authData) {
       setEntries([])
       setDecrypted({})
+      const pw = consumeMasterPassword()
+      if (pw) {
+        ;(async () => {
+          try {
+            const salt = localStorage.getItem('encryptionSalt')
+            const wrapped = localStorage.getItem('wrappedVaultKey')
+            if (salt && wrapped) {
+              const kek = await deriveKek(pw, salt)
+              const vaultKey = await unwrapVaultKey(kek, wrapped)
+              vaultKeyRef.current = vaultKey
+              setIsUnlocked(true)
+            }
+          } catch {
+            // auto-unlock failed, user will need to unlock manually
+          }
+        })()
+      }
     }
-  }, [authData])
+  }, [authData, consumeMasterPassword])
 
   return (
     <VaultContext.Provider

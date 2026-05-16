@@ -1,16 +1,11 @@
 import { useState } from 'react'
 import { Outlet, NavLink } from 'react-router-dom'
-import { useVault } from '../context/VaultContext'
 import { useAuth } from '../context/AuthContext'
-import { useAutoLock } from '../hooks/useAutoLock'
 import { ErrorBoundary } from './ErrorBoundary'
 
 export function Layout() {
-  const { isUnlocked, lock } = useVault()
   const { logout, user } = useAuth()
   const [sidebarOpen, setSidebarOpen] = useState(false)
-
-  useAutoLock(isUnlocked, lock, 5)
 
   const linkClass = ({ isActive }: { isActive: boolean }) =>
     `block rounded-lg px-3 py-2 text-sm ${
@@ -38,12 +33,6 @@ export function Layout() {
         <div className="px-3 py-1 text-xs text-gray-500 truncate">
           {user?.email}
         </div>
-        <button
-          onClick={() => { lock(); setSidebarOpen(false) }}
-          className="w-full rounded-lg px-3 py-2 text-left text-sm text-gray-400 hover:bg-gray-800 hover:text-gray-200"
-        >
-          Lock vault
-        </button>
         <button
           onClick={() => { logout(); setSidebarOpen(false) }}
           className="w-full rounded-lg px-3 py-2 text-left text-sm text-red-400 hover:bg-gray-800"

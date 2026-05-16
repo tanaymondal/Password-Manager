@@ -5,7 +5,6 @@ import { ProtectedRoute } from './components/ProtectedRoute'
 import { Layout } from './components/Layout'
 import { LoginPage } from './pages/LoginPage'
 import { RegisterPage } from './pages/RegisterPage'
-import { UnlockPage } from './pages/UnlockPage'
 import { VaultPage } from './pages/VaultPage'
 import { VaultEntryPage } from './pages/VaultEntryPage'
 import { VaultEntryForm } from './pages/VaultEntryForm'
@@ -24,14 +23,13 @@ export default function App() {
               <ProtectedRoute>
                 <VaultProvider>
                   <Routes>
-                    <Route path="/unlock" element={<UnlockPage />} />
                     <Route element={<Layout />}>
                       <Route path="/vault" element={<VaultPage />} />
                       <Route path="/vault/new" element={<VaultEntryForm />} />
                       <Route path="/vault/:id" element={<VaultEntryPage />} />
                       <Route path="/settings" element={<SettingsPage />} />
                     </Route>
-                    <Route path="*" element={<Navigate to="/unlock" replace />} />
+                    <Route path="*" element={<Navigate to="/vault" replace />} />
                   </Routes>
                 </VaultProvider>
               </ProtectedRoute>

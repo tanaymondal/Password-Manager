@@ -26,7 +26,7 @@ export function LoginPage() {
   })
 
   if (isAuthenticated) {
-    return <Navigate to="/unlock" replace />
+    return <Navigate to="/vault" replace />
   }
 
   const onSubmit = async (data: FormData) => {

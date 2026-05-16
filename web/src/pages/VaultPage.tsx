@@ -1,13 +1,15 @@
 import { useEffect, useState, useMemo } from 'react'
-import { Link, useNavigate, Navigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useVault } from '../context/VaultContext'
 import { EmptyState } from '../components/EmptyState'
 import { LoadingSpinner } from '../components/LoadingSpinner'
 
 export function VaultPage() {
-  const { isUnlocked, loadEntries, entries, decrypted, isLoadingEntries, entryError } = useVault()
+  const { isUnlocked, unlock, loadEntries, entries, decrypted, isLoadingEntries, entryError } = useVault()
   const navigate = useNavigate()
   const [search, setSearch] = useState('')
+  const [unlockPw, setUnlockPw] = useState('')
+  const [unlockErr, setUnlockErr] = useState('')
 
   useEffect(() => {
     if (isUnlocked) loadEntries()
@@ -28,7 +30,26 @@ export function VaultPage() {
   }, [entries, decrypted, search])
 
   if (!isUnlocked) {
-    return <Navigate to="/unlock" replace />
+    return (
+      <div className="flex min-h-full items-center justify-center px-4">
+        <div className="w-full max-w-sm text-center">
+          <h1 className="text-2xl font-bold mb-2">Unlock Vault</h1>
+          <p className="mb-6 text-sm text-gray-400">Enter your master password</p>
+          <form onSubmit={async (e) => { e.preventDefault(); setUnlockErr(''); try { await unlock(unlockPw) } catch { setUnlockErr('Wrong password') } }} className="space-y-4">
+            <input
+              type="password"
+              value={unlockPw}
+              onChange={(e) => setUnlockPw(e.target.value)}
+              autoFocus
+              placeholder="Master password"
+              className="block w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+            />
+            {unlockErr && <div className="text-sm text-red-400">{unlockErr}</div>}
+            <button type="submit" className="w-full rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500">Unlock</button>
+          </form>
+        </div>
+      </div>
+    )
   }
 
   if (isLoadingEntries) {
