@@ -1,14 +1,25 @@
 version: '3.8'
 
 services:
-  app:
-    build: .
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
     ports:
-      - "8080:8080"
+      - "3000:80"
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.app.rule=Host(`vault.tanay.pro`)"
-      - "traefik.http.services.app.loadbalancer.server.port=8080"
+      - "traefik.http.routers.web.rule=Host(`vault.tanay.pro`)"
+      - "traefik.http.services.web.loadbalancer.server.port=80"
+    depends_on:
+      - app
+    networks:
+      - securevault
+
+  app:
+    build: .
+    expose:
+      - "8080"
     environment:
       - DB_HOST=postgres
       - DB_PORT=5432
@@ -52,7 +63,7 @@ services:
       - securevault
 
 volumes:
-  postgres_data:     
+  postgres_data:
 
 networks:
   securevault:
