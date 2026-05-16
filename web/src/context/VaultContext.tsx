@@ -117,7 +117,18 @@ export function VaultProvider({ children }: { children: ReactNode }) {
               entry.encryptedData,
               entry.iv,
             )
-            cache[entry.id] = JSON.parse(plain)
+            try {
+              cache[entry.id] = JSON.parse(plain)
+            } catch {
+              const parts = plain.split('|')
+              cache[entry.id] = {
+                name: parts[0] || '',
+                username: parts[1] || '',
+                password: parts[2] || '',
+                url: parts[3] || '',
+                notes: parts[4] || '',
+              }
+            }
           } catch {
             cache[entry.id] = {
               name: 'Decryption failed',
