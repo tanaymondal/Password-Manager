@@ -157,18 +157,6 @@ class CryptoEngine(
         cipher.init(Cipher.DECRYPT_MODE, secretKey, spec)
         val decryptedBytes = cipher.doFinal(encryptedBytes)
         val plaintext = String(decryptedBytes, Charsets.UTF_8)
-        val parts = plaintext.split("|")
-        if (parts.size < 2 || !plaintext.startsWith("{")) {
-            return mapOf(
-                "id" to parts.getOrElse(0) { "0" },
-                "title" to parts.getOrElse(1) { "" },
-                "username" to parts.getOrElse(2) { "" },
-                "password" to parts.getOrElse(3) { "" },
-                "url" to parts.getOrElse(4) { "" }.ifEmpty { null },
-                "notes" to parts.getOrElse(5) { "" }.ifEmpty { null },
-                "folder" to parts.getOrElse(6) { "" }.ifEmpty { null }
-            )
-        }
         return try {
             val json = Json.parseToJsonElement(plaintext).jsonObject
             mapOf(

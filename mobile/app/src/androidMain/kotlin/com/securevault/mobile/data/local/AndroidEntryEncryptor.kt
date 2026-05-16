@@ -173,19 +173,6 @@ class AndroidEntryEncryptor : EntryEncryptor, VaultKeyManager {
         val decryptedBytes = cipher.doFinal(encryptedBytes)
         val plaintext = String(decryptedBytes, Charsets.UTF_8)
 
-        return try {
-            Json.decodeFromString(VaultEntry.serializer(), plaintext).copy(id = response.id.hashCode().toLong())
-        } catch (e: Exception) {
-            val parts = plaintext.split("|")
-            VaultEntry(
-                id = response.id.hashCode().toLong(),
-                title = parts.getOrElse(0) { "" },
-                username = parts.getOrElse(1) { "" },
-                password = parts.getOrElse(2) { "" },
-                url = parts.getOrElse(3) { "" }.ifEmpty { null },
-                notes = parts.getOrElse(4) { "" }.ifEmpty { null },
-                folder = parts.getOrElse(5) { "" }.ifEmpty { null }
-            )
-        }
+        return Json.decodeFromString(VaultEntry.serializer(), plaintext).copy(id = response.id.hashCode().toLong())
     }
 }
