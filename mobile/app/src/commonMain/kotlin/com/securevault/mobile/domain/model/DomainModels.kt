@@ -30,7 +30,7 @@ data class AuthState(
 
 @Serializable
 data class VaultEntry(
-    val id: Long,
+    val id: Long = 0L,
     @SerialName("name") val title: String,
     val username: String,
     val password: String,

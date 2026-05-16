@@ -174,7 +174,7 @@ class AndroidEntryEncryptor : EntryEncryptor, VaultKeyManager {
         val plaintext = String(decryptedBytes, Charsets.UTF_8)
 
         return try {
-            Json.decodeFromString(VaultEntry.serializer(), plaintext)
+            Json.decodeFromString(VaultEntry.serializer(), plaintext).copy(id = response.id.hashCode().toLong())
         } catch (e: Exception) {
             val parts = plaintext.split("|")
             VaultEntry(
