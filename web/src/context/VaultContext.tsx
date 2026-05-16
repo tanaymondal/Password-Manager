@@ -53,7 +53,7 @@ interface VaultContextType {
 const VaultContext = createContext<VaultContextType | null>(null)
 
 export function VaultProvider({ children }: { children: ReactNode }) {
-  const { authData } = useAuth()
+  const { authData, consumeMasterPassword } = useAuth()
   const vaultKeyRef = useRef<CryptoKey | null>(null)
   const [isUnlocked, setIsUnlocked] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
