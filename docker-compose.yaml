@@ -3,8 +3,6 @@ services:
     build:
       context: ./web
       dockerfile: Dockerfile
-      args:
-        VITE_API_URL: https://vault.tanay.pro/api/v1
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.web.rule=Host(`vault.tanay.pro`)"
