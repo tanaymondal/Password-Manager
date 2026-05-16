@@ -17,5 +17,5 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, UUID
     @Query("DELETE FROM RefreshToken r WHERE r.userId = :userId")
     void deleteByUserId(UUID userId);
 
-    boolean existsByToken(String token);
+    boolean existsByTokenHash(String tokenHash);
 }
