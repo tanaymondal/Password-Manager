@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, Navigate } from 'react-router-dom'
 import { useVault } from '../context/VaultContext'
 import { EmptyState } from '../components/EmptyState'
 import { LoadingSpinner } from '../components/LoadingSpinner'
@@ -26,6 +26,10 @@ export function VaultPage() {
       )
     })
   }, [entries, decrypted, search])
+
+  if (!isUnlocked) {
+    return <Navigate to="/unlock" replace />
+  }
 
   if (isLoadingEntries) {
     return <LoadingSpinner className="h-full" size="lg" />

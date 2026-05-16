@@ -31,7 +31,7 @@ export default function App() {
                       <Route path="/vault/:id" element={<VaultEntryPage />} />
                       <Route path="/settings" element={<SettingsPage />} />
                     </Route>
-                    <Route path="*" element={<Navigate to="/vault" replace />} />
+                    <Route path="*" element={<Navigate to="/unlock" replace />} />
                   </Routes>
                 </VaultProvider>
               </ProtectedRoute>
