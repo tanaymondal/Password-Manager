@@ -34,9 +34,9 @@ data class VaultEntry(
     @SerialName("name") val title: String,
     val username: String,
     val password: String,
-    val url: String?,
-    val notes: String?,
-    val folder: String?,
+    val url: String? = null,
+    val notes: String? = null,
+    val folder: String? = null,
     val createdAt: String? = null,
     val updatedAt: String? = null
 )
