@@ -5,8 +5,6 @@ services:
     build:
       context: ./web
       dockerfile: Dockerfile
-    ports:
-      - "3000:80"
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.web.rule=Host(`vault.tanay.pro`)"
