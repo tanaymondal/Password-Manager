@@ -28,6 +28,13 @@ data class AuthState(
     }
 }
 
+data class TwoFactorInfo(
+    val userId: String,
+    val email: String,
+    val encryptionSalt: String,
+    val wrappedVaultKey: String?
+)
+
 @Serializable
 data class VaultEntry(
     val id: Long = 0L,

@@ -11,7 +11,9 @@ import {
   login as apiLogin,
   register as apiRegister,
   logout as apiLogout,
+  verifyTwoFactor as apiVerifyTwoFactor,
   type AuthResponse,
+  type TwoFactorLoginResponse,
 } from '../api/auth'
 import { setTokens, clearTokens, loadTokens } from '../api/client'
 
@@ -37,10 +39,10 @@ interface AuthState {
 }
 
 interface AuthContextType extends AuthState {
-  login: (email: string, password: string) => Promise<void>
+  login: (email: string, password: string) => Promise<TwoFactorLoginResponse>
+  verifyTwoFactor: (email: string, code: string) => Promise<void>
   register: (email: string, password: string) => Promise<void>
   logout: () => Promise<void>
-  consumeMasterPassword: () => string | null
 }
 
 const AuthContext = createContext<AuthContextType | null>(null)
@@ -58,8 +60,6 @@ function clearCryptoMaterial() {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const masterPasswordRef = useRef<string | null>(null)
-
   const [state, setState] = useState<AuthState>(() => {
     const tokens = loadTokens()
     if (tokens.accessToken) {
@@ -102,16 +102,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const login = useCallback(async (email: string, password: string) => {
+  const login = useCallback(async (email: string, password: string): Promise<TwoFactorLoginResponse> => {
     const res = await apiLogin({
       email,
       password,
       deviceName: 'Web Browser',
       deviceId: getDeviceId(),
     })
+    if (!res.twoFactorRequired && res.accessToken && res.refreshToken) {
+      setTokens(res.accessToken, res.refreshToken)
+      persistCryptoMaterial(res)
+      setState({
+        user: { id: res.userId, email: res.email },
+        isAuthenticated: true,
+        isLoading: false,
+        authData: {
+          accessToken: res.accessToken,
+          refreshToken: res.refreshToken,
+          userId: res.userId,
+          email: res.email,
+          encryptionSalt: res.encryptionSalt,
+          wrappedVaultKey: res.wrappedVaultKey,
+          encryptionVersion: res.encryptionVersion,
+        },
+      })
+    }
+    return res
+  }, [])
+
+  const verifyTwoFactor = useCallback(async (email: string, code: string) => {
+    const res = await apiVerifyTwoFactor({ email, code })
     setTokens(res.accessToken, res.refreshToken)
     persistCryptoMaterial(res)
-    masterPasswordRef.current = password
     setState({
       user: { id: res.userId, email: res.email },
       isAuthenticated: true,
@@ -129,7 +151,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
     setTokens(res.accessToken, res.refreshToken)
     persistCryptoMaterial(res)
-    masterPasswordRef.current = password
     setState({
       user: { id: res.userId, email: res.email },
       isAuthenticated: true,
@@ -146,7 +167,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     clearTokens()
     clearCryptoMaterial()
-    masterPasswordRef.current = null
     setState({
       user: null,
       isAuthenticated: false,
@@ -155,15 +175,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
   }, [])
 
-  const consumeMasterPassword = useCallback(() => {
-    const pw = masterPasswordRef.current
-    masterPasswordRef.current = null
-    return pw
-  }, [])
-
   return (
     <AuthContext.Provider
-      value={{ ...state, login, register, logout, consumeMasterPassword }}
+      value={{ ...state, login, verifyTwoFactor, register, logout }}
     >
       {children}
     </AuthContext.Provider>

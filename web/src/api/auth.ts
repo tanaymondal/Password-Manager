@@ -10,6 +10,17 @@ export interface AuthResponse {
   encryptionVersion: number
 }
 
+export interface TwoFactorLoginResponse {
+  twoFactorRequired: boolean
+  userId: string
+  email: string
+  encryptionSalt: string
+  wrappedVaultKey: string
+  encryptionVersion: number
+  accessToken: string | null
+  refreshToken: string | null
+}
+
 export interface LoginRequest {
   email: string
   password: string
@@ -25,7 +36,19 @@ export interface RegisterRequest {
 }
 
 export function login(data: LoginRequest) {
-  return apiClient<AuthResponse>('/auth/login', {
+  return apiClient<TwoFactorLoginResponse>('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+}
+
+export interface TwoFactorVerifyRequest {
+  email: string
+  code: string
+}
+
+export function verifyTwoFactor(data: TwoFactorVerifyRequest) {
+  return apiClient<AuthResponse>('/auth/verify-2fa', {
     method: 'POST',
     body: JSON.stringify(data),
   })

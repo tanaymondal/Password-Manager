@@ -5,40 +5,140 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useAuth } from '../context/AuthContext'
 
-const schema = z.object({
+const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
   password: z.string().min(1, 'Password is required'),
 })
 
-type FormData = z.infer<typeof schema>
+const twoFactorSchema = z.object({
+  code: z.string().length(6, 'Code must be 6 digits'),
+})
+
+type LoginFormData = z.infer<typeof loginSchema>
+type TwoFactorFormData = z.infer<typeof twoFactorSchema>
 
 export function LoginPage() {
-  const { login, isAuthenticated } = useAuth()
+  const { login, verifyTwoFactor, isAuthenticated } = useAuth()
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [twoFactorRequired, setTwoFactorRequired] = useState(false)
+  const [pendingEmail, setPendingEmail] = useState('')
 
   const {
-    register: registerField,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<FormData>({
-    resolver: zodResolver(schema),
+    register: registerLogin,
+    handleSubmit: handleLoginSubmit,
+    formState: { errors: loginErrors },
+  } = useForm<LoginFormData>({
+    resolver: zodResolver(loginSchema),
+  })
+
+  const {
+    register: registerTwoFactor,
+    handleSubmit: handleTwoFactorSubmit,
+    formState: { errors: twoFactorErrors },
+  } = useForm<TwoFactorFormData>({
+    resolver: zodResolver(twoFactorSchema),
   })
 
   if (isAuthenticated) {
     return <Navigate to="/vault" replace />
   }
 
-  const onSubmit = async (data: FormData) => {
+  const onLoginSubmit = async (data: LoginFormData) => {
     setError('')
     setSubmitting(true)
     try {
-      await login(data.email, data.password)
+      const res = await login(data.email, data.password)
+      if (res.twoFactorRequired) {
+        setTwoFactorRequired(true)
+        setPendingEmail(data.email)
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Login failed')
     } finally {
       setSubmitting(false)
     }
+  }
+
+  const onTwoFactorSubmit = async (data: TwoFactorFormData) => {
+    setError('')
+    setSubmitting(true)
+    try {
+      await verifyTwoFactor(pendingEmail, data.code)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '2FA verification failed')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  if (twoFactorRequired) {
+    return (
+      <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-4">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(5,150,105,0.08),transparent_50%)]" />
+        <div className="w-full max-w-sm">
+          <div className="mb-8 text-center">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/10 shadow-lg shadow-emerald-500/5">
+              <svg className="h-6 w-6 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+            </div>
+            <h1 className="text-2xl font-bold tracking-tight">Two-Factor Authentication</h1>
+            <p className="mt-1.5 text-sm text-gray-500">Enter the 6-digit code from your authenticator app</p>
+          </div>
+
+          <div className="rounded-2xl border border-gray-800/50 bg-gray-900/60 backdrop-blur-xl p-6 shadow-xl shadow-black/20">
+            <form onSubmit={handleTwoFactorSubmit(onTwoFactorSubmit)} className="space-y-5">
+              <div>
+                <label htmlFor="code" className="block text-sm font-medium text-gray-300">
+                  Authentication Code
+                </label>
+                <input
+                  id="code"
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  autoComplete="one-time-code"
+                  {...registerTwoFactor('code')}
+                  className="mt-1.5 block w-full rounded-xl border border-gray-700/50 bg-gray-950/50 px-3.5 py-2.5 text-center text-2xl font-mono tracking-widest text-gray-100 placeholder-gray-500 transition-all duration-200 focus:border-emerald-500/50 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                  placeholder="000000"
+                />
+                {twoFactorErrors.code && (
+                  <p className="mt-1.5 text-xs text-red-400">{twoFactorErrors.code.message}</p>
+                )}
+              </div>
+
+              {error && (
+                <div className="rounded-xl border border-red-900/30 bg-red-950/30 px-4 py-2.5 text-sm text-red-400">
+                  {error}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={submitting}
+                className="w-full rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-600/20 transition-all duration-200 hover:bg-emerald-500 hover:shadow-emerald-500/30 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
+              >
+                {submitting ? 'Verifying...' : 'Verify'}
+              </button>
+            </form>
+          </div>
+
+          <p className="mt-6 text-center text-sm text-gray-500">
+            <button
+              onClick={() => {
+                setTwoFactorRequired(false)
+                setPendingEmail('')
+                setError('')
+              }}
+              className="font-medium text-emerald-400 transition-colors hover:text-emerald-300"
+            >
+              Back to login
+            </button>
+          </p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -56,7 +156,7 @@ export function LoginPage() {
         </div>
 
         <div className="rounded-2xl border border-gray-800/50 bg-gray-900/60 backdrop-blur-xl p-6 shadow-xl shadow-black/20">
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+          <form onSubmit={handleLoginSubmit(onLoginSubmit)} className="space-y-5">
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-300">
                 Email
@@ -65,12 +165,12 @@ export function LoginPage() {
                 id="email"
                 type="email"
                 autoComplete="email"
-                {...registerField('email')}
+                {...registerLogin('email')}
                 className="mt-1.5 block w-full rounded-xl border border-gray-700/50 bg-gray-950/50 px-3.5 py-2.5 text-sm text-gray-100 placeholder-gray-500 transition-all duration-200 focus:border-emerald-500/50 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
                 placeholder="you@example.com"
               />
-              {errors.email && (
-                <p className="mt-1.5 text-xs text-red-400">{errors.email.message}</p>
+              {loginErrors.email && (
+                <p className="mt-1.5 text-xs text-red-400">{loginErrors.email.message}</p>
               )}
             </div>
 
@@ -82,12 +182,12 @@ export function LoginPage() {
                 id="password"
                 type="password"
                 autoComplete="current-password"
-                {...registerField('password')}
+                {...registerLogin('password')}
                 className="mt-1.5 block w-full rounded-xl border border-gray-700/50 bg-gray-950/50 px-3.5 py-2.5 text-sm text-gray-100 placeholder-gray-500 transition-all duration-200 focus:border-emerald-500/50 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
                 placeholder="Enter your password"
               />
-              {errors.password && (
-                <p className="mt-1.5 text-xs text-red-400">{errors.password.message}</p>
+              {loginErrors.password && (
+                <p className="mt-1.5 text-xs text-red-400">{loginErrors.password.message}</p>
               )}
             </div>
 

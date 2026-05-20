@@ -67,6 +67,9 @@ public class TwoFactorAuthService {
 
         String secret = secretGenerator.generate();
 
+        user.setTwoFactorSecret(secret);
+        userRepository.save(user);
+
         String qrCodeUrl = "otpauth://totp/SecureVault:" + user.getEmail() +
                 "?secret=" + secret +
                 "&issuer=SecureVault";
@@ -108,15 +111,18 @@ public class TwoFactorAuthService {
      * @param code Verification code from authenticator app
      * @throws IllegalArgumentException if code is invalid
      */
-    public void enable2FA(UUID userId, String secret, String code) {
-        if (!verifyCode(userId, code)) {
-            throw new IllegalArgumentException("Invalid verification code");
-        }
-
+    public void enable2FA(UUID userId, String code) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
 
-        user.setTwoFactorSecret(secret);
+        if (user.getTwoFactorSecret() == null) {
+            throw new IllegalArgumentException("2FA secret not generated. Call generateSetupSecret first.");
+        }
+
+        if (!codeVerifier.isValidCode(user.getTwoFactorSecret(), code)) {
+            throw new IllegalArgumentException("Invalid verification code");
+        }
+
         user.setTwoFactorEnabled(true);
         userRepository.save(user);
     }

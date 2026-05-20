@@ -42,7 +42,10 @@ public class SecurityConfig {
                         .frameOptions(frame -> frame.deny())
                         .httpStrictTransportSecurity(hsts -> hsts
                                 .includeSubDomains(true)
-                                .maxAgeInSeconds(31536000))
+                                .maxAgeInSeconds(31536000)
+                                .preload(true))
+                        .contentTypeOptions(contentType -> {})
+                        .cacheControl(cache -> {})
                 );
 
         return http.build();

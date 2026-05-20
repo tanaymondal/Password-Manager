@@ -37,6 +37,7 @@ data class AddEditEntryState(
 
 sealed class AddEditEntryEffect : MviEffect {
     data object NavigateBack : AddEditEntryEffect()
+    data object ReloadVault : AddEditEntryEffect()
 }
 
 class AddEditEntryViewModel(
@@ -119,8 +120,14 @@ class AddEditEntryViewModel(
             onResult = { result ->
                 setState { copy(isLoading = false) }
                 when (val r = result.getOrNull()) {
-                    is com.securevault.mobile.domain.usecase.vault.CreateVaultEntryResult.Success -> setEffect(AddEditEntryEffect.NavigateBack)
-                    is com.securevault.mobile.domain.usecase.vault.UpdateVaultEntryResult.Success -> setEffect(AddEditEntryEffect.NavigateBack)
+                    is com.securevault.mobile.domain.usecase.vault.CreateVaultEntryResult.Success -> {
+                        setEffect(AddEditEntryEffect.ReloadVault)
+                        setEffect(AddEditEntryEffect.NavigateBack)
+                    }
+                    is com.securevault.mobile.domain.usecase.vault.UpdateVaultEntryResult.Success -> {
+                        setEffect(AddEditEntryEffect.ReloadVault)
+                        setEffect(AddEditEntryEffect.NavigateBack)
+                    }
                     is com.securevault.mobile.domain.usecase.vault.CreateVaultEntryResult.Error -> setState { copy(error = r.message) }
                     is com.securevault.mobile.domain.usecase.vault.UpdateVaultEntryResult.Error -> setState { copy(error = r.message) }
                     null -> setState { copy(error = result.exceptionOrNull()?.message) }

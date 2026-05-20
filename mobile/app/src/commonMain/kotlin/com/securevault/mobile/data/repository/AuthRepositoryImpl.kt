@@ -8,8 +8,10 @@ import com.securevault.mobile.data.model.RegisterRequest
 import com.securevault.mobile.data.model.VaultEntryRequest
 import com.securevault.mobile.domain.model.AuthState
 import com.securevault.mobile.domain.model.Result
+import com.securevault.mobile.domain.model.TwoFactorInfo
 import com.securevault.mobile.domain.model.User
 import com.securevault.mobile.domain.repository.AuthRepository
+import com.securevault.mobile.domain.repository.LoginResponse
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -28,18 +30,21 @@ class AuthRepositoryImpl(
             response.fold(
                 onSuccess = { authResponse ->
                     saveSession(
-                        authResponse.accessToken,
-                        authResponse.refreshToken,
-                        authResponse.encryptionSalt,
-                        authResponse.userId,
+                        authResponse.accessToken!!,
+                        authResponse.refreshToken!!,
+                        authResponse.encryptionSalt!!,
+                        authResponse.userId!!,
                         email,
-                        password,
                         authResponse.encryptionVersion,
                         authResponse.wrappedVaultKey
                     )
                     if (authResponse.wrappedVaultKey != null) {
                         try {
-                            vaultKeyManager.unwrapVaultKey(authResponse.wrappedVaultKey)
+                            vaultKeyManager.unlockVault(
+                                password,
+                                authResponse.encryptionSalt!!,
+                                authResponse.wrappedVaultKey
+                            )
                         } catch (e: Exception) {
                             return Result.Error("Failed to initialize vault encryption: ${e.message}")
                         }
@@ -53,34 +58,81 @@ class AuthRepositoryImpl(
         }
     }
 
-    override suspend fun login(email: String, password: String): Result<AuthState> {
+    override suspend fun login(email: String, password: String): Result<LoginResponse> {
         return try {
             val response = api.login(LoginRequest(email, password))
             response.fold(
                 onSuccess = { authResponse ->
+                    if (authResponse.twoFactorRequired) {
+                        val info = TwoFactorInfo(
+                            userId = authResponse.userId!!,
+                            email = authResponse.email!!,
+                            encryptionSalt = authResponse.encryptionSalt!!,
+                            wrappedVaultKey = authResponse.wrappedVaultKey
+                        )
+                        Result.Success(LoginResponse.TwoFactorRequired(info))
+                    } else {
+                        saveSession(
+                            authResponse.accessToken!!,
+                            authResponse.refreshToken!!,
+                            authResponse.encryptionSalt!!,
+                            authResponse.userId!!,
+                            email,
+                            authResponse.encryptionVersion,
+                            authResponse.wrappedVaultKey
+                        )
+                        if (authResponse.wrappedVaultKey != null) {
+                            try {
+                                vaultKeyManager.unlockVault(
+                                    password,
+                                    authResponse.encryptionSalt!!,
+                                    authResponse.wrappedVaultKey
+                                )
+                            } catch (e: Exception) {
+                                return Result.Error("Failed to initialize vault encryption: ${e.message}")
+                            }
+                        }
+                        Result.Success(LoginResponse.Success(getCurrentAuthState()))
+                    }
+                },
+                onFailure = { Result.Error(it.message ?: "Login failed", it) }
+            )
+        } catch (e: Exception) {
+            Result.Error(e.message ?: "Login failed", e)
+        }
+    }
+
+    override suspend fun verifyTwoFactor(email: String, code: String, password: String): Result<AuthState> {
+        return try {
+            val response = api.verifyTwoFactor(email, code)
+            response.fold(
+                onSuccess = { authResponse ->
                     saveSession(
-                        authResponse.accessToken,
-                        authResponse.refreshToken,
-                        authResponse.encryptionSalt,
-                        authResponse.userId,
+                        authResponse.accessToken!!,
+                        authResponse.refreshToken!!,
+                        authResponse.encryptionSalt!!,
+                        authResponse.userId!!,
                         email,
-                        password,
                         authResponse.encryptionVersion,
                         authResponse.wrappedVaultKey
                     )
                     if (authResponse.wrappedVaultKey != null) {
                         try {
-                            vaultKeyManager.unwrapVaultKey(authResponse.wrappedVaultKey)
+                            vaultKeyManager.unlockVault(
+                                password,
+                                authResponse.encryptionSalt!!,
+                                authResponse.wrappedVaultKey
+                            )
                         } catch (e: Exception) {
                             return Result.Error("Failed to initialize vault encryption: ${e.message}")
                         }
                     }
                     Result.Success(getCurrentAuthState())
                 },
-                onFailure = { Result.Error(it.message ?: "Login failed", it) }
+                onFailure = { Result.Error(it.message ?: "2FA verification failed", it) }
             )
         } catch (e: Exception) {
-            Result.Error(e.message ?: "Login failed", e)
+            Result.Error(e.message ?: "2FA verification failed", e)
         }
     }
 
@@ -109,24 +161,12 @@ class AuthRepositoryImpl(
             val response = api.refreshToken(RefreshTokenRequest(currentRefreshToken))
             response.fold(
                 onSuccess = { authResponse ->
-                    if (authResponse.wrappedVaultKey != null) {
-                        try {
-                            val existingPassword = SessionManager.getMasterPassword()
-                            SessionManager.setMasterPassword(existingPassword)
-                            vaultKeyManager.unwrapVaultKey(authResponse.wrappedVaultKey)
-                        } catch (e: Exception) {
-                            SessionManager.clearSession()
-                            _authState.value = AuthState.unauthenticated()
-                            return Result.Error("Failed to re-initialize vault: ${e.message}")
-                        }
-                    }
                     saveSession(
-                        authResponse.accessToken,
-                        authResponse.refreshToken,
-                        authResponse.encryptionSalt,
-                        authResponse.userId,
-                        authResponse.email,
-                        SessionManager.getMasterPassword(),
+                        authResponse.accessToken!!,
+                        authResponse.refreshToken!!,
+                        authResponse.encryptionSalt!!,
+                        authResponse.userId!!,
+                        authResponse.email!!,
                         authResponse.encryptionVersion
                     )
                     Result.Success(getCurrentAuthState())
@@ -139,6 +179,22 @@ class AuthRepositoryImpl(
             )
         } catch (e: Exception) {
             Result.Error(e.message ?: "Token refresh failed", e)
+        }
+    }
+
+    override suspend fun unlockVault(password: String): Result<Unit> {
+        return try {
+            val encryptionSalt = SessionManager.getEncryptionSalt()
+            val wrappedVaultKey = SessionManager.getWrappedVaultKey()
+
+            if (encryptionSalt.isEmpty() || wrappedVaultKey.isEmpty()) {
+                return Result.Error("Vault key material not available. Please login again.")
+            }
+
+            vaultKeyManager.unlockVault(password, encryptionSalt, wrappedVaultKey)
+            Result.Success(Unit)
+        } catch (e: Exception) {
+            Result.Error("Failed to unlock vault: ${e.message}")
         }
     }
 
@@ -167,11 +223,13 @@ class AuthRepositoryImpl(
                 )
             }
 
+            val newWrappedVaultKey = vaultKeyManager.wrapVaultKey(
+                newVaultKey,
+                newPassword,
+                newEncryptionSalt
+            )
+
             SessionManager.setEncryptionSalt(newEncryptionSalt)
-            SessionManager.setMasterPassword(newPassword)
-            println("CP: newEncryptionSalt=$newEncryptionSalt, newPassword=$newPassword")
-            val newWrappedVaultKey = vaultKeyManager.wrapVaultKey(newVaultKey)
-            println("CP: wrapVaultKey done")
 
             val changeResponse = api.changePassword(
                 ChangePasswordRequest(
@@ -191,13 +249,16 @@ class AuthRepositoryImpl(
                         result.encryptionSalt,
                         result.userId,
                         result.email,
-                        newPassword,
                         result.encryptionVersion,
                         result.wrappedVaultKey
                     )
                     if (result.wrappedVaultKey != null) {
                         try {
-                            vaultKeyManager.unwrapVaultKey(result.wrappedVaultKey)
+                            vaultKeyManager.unlockVault(
+                                newPassword,
+                                result.encryptionSalt,
+                                result.wrappedVaultKey
+                            )
                         } catch (e: Exception) {
                             vaultKeyManager.clearCachedVaultKey()
                             return Result.Error("Password changed but vault re-sync failed: ${e.message}")
@@ -206,7 +267,6 @@ class AuthRepositoryImpl(
                     Result.Success(Unit)
                 },
                 onFailure = {
-                    SessionManager.setMasterPassword(currentPassword)
                     vaultKeyManager.clearCachedVaultKey()
                     Result.Error(it.message ?: "Password change failed")
                 }
@@ -249,7 +309,6 @@ class AuthRepositoryImpl(
         encryptionSalt: String,
         userId: String,
         email: String,
-        masterPassword: String,
         encryptionVersion: Int,
         wrappedVaultKey: String? = null
     ) {
@@ -258,7 +317,6 @@ class AuthRepositoryImpl(
         SessionManager.setEncryptionSalt(encryptionSalt)
         SessionManager.setUserId(userId)
         SessionManager.setUserEmail(email)
-        SessionManager.setMasterPassword(masterPassword)
         SessionManager.setEncryptionVersion(encryptionVersion)
         if (wrappedVaultKey != null) {
             SessionManager.setWrappedVaultKey(wrappedVaultKey)

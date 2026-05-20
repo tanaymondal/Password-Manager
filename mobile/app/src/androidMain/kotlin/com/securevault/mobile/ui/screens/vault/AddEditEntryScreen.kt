@@ -24,7 +24,8 @@ import org.koin.androidx.compose.koinViewModel
 fun AddEditEntryScreen(
     entryId: Long?,
     onNavigateBack: () -> Unit,
-    onSaveSuccess: () -> Unit
+    onSaveSuccess: () -> Unit,
+    onReload: () -> Unit = {}
 ) {
     val viewModel: AddEditEntryViewModel = koinViewModel()
     val state by viewModel.state.collectAsState()
@@ -40,6 +41,7 @@ fun AddEditEntryScreen(
         viewModel.effect.collectLatest { effect ->
             when (effect) {
                 is AddEditEntryEffect.NavigateBack -> onSaveSuccess()
+                is AddEditEntryEffect.ReloadVault -> onReload()
             }
         }
     }

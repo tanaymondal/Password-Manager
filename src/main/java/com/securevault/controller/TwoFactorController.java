@@ -79,7 +79,7 @@ public class TwoFactorController {
             HttpServletRequest httpRequest) {
         UUID userId = getUserId(userDetails);
         log.info("Enabling 2FA for user: {}", userId);
-        twoFactorAuthService.enable2FA(userId, null, request.getCode());
+        twoFactorAuthService.enable2FA(userId, request.getCode());
         auditService.log2FAEnabled(userId, httpRequest.getRemoteAddr(), httpRequest.getHeader("User-Agent"));
         return ResponseEntity.ok(ApiResponse.success("2FA enabled successfully", ""));
     }

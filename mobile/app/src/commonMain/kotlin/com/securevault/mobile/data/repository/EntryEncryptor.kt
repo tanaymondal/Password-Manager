@@ -9,8 +9,8 @@ interface EntryEncryptor {
 }
 
 interface VaultKeyManager {
-    fun unwrapVaultKey(wrappedVaultKey: String): String
-    fun wrapVaultKey(vaultKey: String): String
+    fun unlockVault(password: String, encryptionSalt: String, wrappedVaultKey: String)
+    fun wrapVaultKey(vaultKey: String, password: String, encryptionSalt: String): String
     fun generateVaultKey(): String
     fun generateEncryptionSalt(): String
     fun getCachedVaultKey(): String?

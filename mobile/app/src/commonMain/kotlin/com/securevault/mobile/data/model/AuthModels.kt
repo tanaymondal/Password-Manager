@@ -17,13 +17,14 @@ data class RegisterRequest(
 
 @Serializable
 data class AuthResponse(
-    val accessToken: String,
-    val refreshToken: String,
-    @SerialName("encryptionSalt") val encryptionSalt: String,
-    val userId: String,
-    val email: String,
+    val accessToken: String? = null,
+    val refreshToken: String? = null,
+    @SerialName("encryptionSalt") val encryptionSalt: String? = null,
+    val userId: String? = null,
+    val email: String? = null,
     @SerialName("wrappedVaultKey") val wrappedVaultKey: String? = null,
-    @SerialName("encryptionVersion") val encryptionVersion: Int = 2
+    @SerialName("encryptionVersion") val encryptionVersion: Int = 2,
+    @SerialName("twoFactorRequired") val twoFactorRequired: Boolean = false
 )
 
 @Serializable
@@ -65,4 +66,10 @@ data class AuthApiResponse(
 @Serializable
 data class RefreshTokenRequest(
     @SerialName("refresh_token") val refreshToken: String
+)
+
+@Serializable
+data class TwoFactorVerifyRequest(
+    val email: String,
+    val code: String
 )

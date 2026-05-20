@@ -2,11 +2,11 @@ package com.securevault.mobile.domain.usecase.auth.impl
 
 import com.securevault.mobile.data.model.LoginRequest
 import com.securevault.mobile.data.model.RegisterRequest
-import com.securevault.mobile.data.repository.SessionManager
 import com.securevault.mobile.domain.entity.AuthTokens
 import com.securevault.mobile.domain.entity.User
 import com.securevault.mobile.domain.model.Result
 import com.securevault.mobile.domain.repository.AuthRepository
+import com.securevault.mobile.domain.repository.LoginResponse
 import com.securevault.mobile.domain.usecase.auth.*
 
 class LoginUseCaseImpl(
@@ -15,8 +15,39 @@ class LoginUseCaseImpl(
     override suspend operator fun invoke(email: String, password: String): LoginResult {
         return when (val result = authRepository.login(email, password)) {
             is Result.Success -> {
+                when (val response = result.data) {
+                    is LoginResponse.Success -> {
+                        val authState = response.authState
+                        LoginResult.Success(
+                            tokens = AuthTokens(
+                                accessToken = authState.accessToken!!,
+                                refreshToken = authState.refreshToken!!,
+                                encryptionSalt = authState.encryptionSalt!!,
+                                userId = authState.user!!.id,
+                                email = authState.user.email
+                            ),
+                            user = User(authState.user.id, authState.user.email)
+                        )
+                    }
+                    is LoginResponse.TwoFactorRequired -> {
+                        LoginResult.TwoFactorRequired(response.info)
+                    }
+                }
+            }
+            is Result.Error -> LoginResult.Error(result.message)
+            is Result.Loading -> LoginResult.Error("Loading...")
+        }
+    }
+}
+
+class VerifyTwoFactorUseCaseImpl(
+    private val authRepository: AuthRepository
+) : VerifyTwoFactorUseCase {
+    override suspend operator fun invoke(email: String, code: String, password: String): VerifyTwoFactorResult {
+        return when (val result = authRepository.verifyTwoFactor(email, code, password)) {
+            is Result.Success -> {
                 val authState = result.data
-                LoginResult.Success(
+                VerifyTwoFactorResult.Success(
                     tokens = AuthTokens(
                         accessToken = authState.accessToken!!,
                         refreshToken = authState.refreshToken!!,
@@ -27,8 +58,8 @@ class LoginUseCaseImpl(
                     user = User(authState.user.id, authState.user.email)
                 )
             }
-            is Result.Error -> LoginResult.Error(result.message)
-            is Result.Loading -> LoginResult.Error("Loading...")
+            is Result.Error -> VerifyTwoFactorResult.Error(result.message)
+            is Result.Loading -> VerifyTwoFactorResult.Error("Loading...")
         }
     }
 }

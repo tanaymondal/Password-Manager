@@ -4,6 +4,7 @@ import com.securevault.dto.AuthResponse;
 import com.securevault.dto.ChangePasswordResponse;
 import com.securevault.dto.LoginRequest;
 import com.securevault.dto.RegisterRequest;
+import com.securevault.dto.TwoFactorLoginResponse;
 import com.securevault.dto.VaultEntryRequest;
 import com.securevault.entity.PasswordHistory;
 import com.securevault.entity.RefreshToken;
@@ -14,6 +15,7 @@ import com.securevault.repository.RefreshTokenRepository;
 import com.securevault.repository.UserRepository;
 import com.securevault.repository.VaultEntryRepository;
 import com.securevault.security.JwtTokenProvider;
+import com.securevault.security.LoginRateLimiter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -57,6 +59,8 @@ public class AuthService {
     private final PasswordService passwordService;
     private final JwtTokenProvider jwtTokenProvider;
     private final BreachCheckService breachCheckService;
+    private final LoginRateLimiter loginRateLimiter;
+    private final TwoFactorAuthService twoFactorAuthService;
 
     /**
      * Registers a new user in the system.
@@ -137,7 +141,12 @@ public class AuthService {
      * @throws BadCredentialsException if credentials are invalid or account is locked
      */
     @Transactional
-    public AuthResponse login(LoginRequest request) {
+    public TwoFactorLoginResponse login(LoginRequest request, String clientIp) {
+        if (loginRateLimiter.isBlocked(clientIp)) {
+            log.warn("Login blocked due to rate limit for IP: {}", clientIp);
+            throw new BadCredentialsException("Too many login attempts. Please try again later.");
+        }
+
         User user = userRepository.findByEmail(request.getEmail().toLowerCase().trim())
                 .orElseThrow(() -> new BadCredentialsException("Invalid email or password"));
 
@@ -147,18 +156,57 @@ public class AuthService {
         }
 
         if (!passwordService.verifyPassword(request.getPassword(), user.getPasswordSalt(), user.getPasswordHash())) {
+            loginRateLimiter.recordFailure(clientIp);
             handleFailedLogin(user);
             throw new BadCredentialsException("Invalid email or password");
         }
 
+        loginRateLimiter.recordSuccess(clientIp);
+
         if (user.getTwoFactorEnabled()) {
             log.info("2FA required for user: {}", user.getEmail());
+            return TwoFactorLoginResponse.requireTwoFactor(
+                    user.getId().toString(),
+                    user.getEmail(),
+                    user.getEncryptionSalt(),
+                    user.getWrappedVaultKey(),
+                    user.getEncryptionVersion() != null ? user.getEncryptionVersion() : 2
+            );
         }
 
         user.resetFailedAttempts();
         userRepository.save(user);
 
         log.info("User logged in successfully: {}", user.getEmail());
+        AuthResponse authResponse = generateAuthResponse(user);
+        return TwoFactorLoginResponse.loginSuccess(
+                authResponse.getAccessToken(),
+                authResponse.getRefreshToken(),
+                authResponse.getUserId(),
+                authResponse.getEmail(),
+                authResponse.getEncryptionSalt(),
+                authResponse.getWrappedVaultKey(),
+                authResponse.getEncryptionVersion()
+        );
+    }
+
+    @Transactional
+    public AuthResponse verifyTwoFactorLogin(String email, String code) {
+        User user = userRepository.findByEmail(email.toLowerCase().trim())
+                .orElseThrow(() -> new BadCredentialsException("Invalid email or password"));
+
+        if (!user.getTwoFactorEnabled()) {
+            throw new BadCredentialsException("2FA is not enabled for this account");
+        }
+
+        if (!twoFactorAuthService.verifyCode(user.getId(), code)) {
+            throw new BadCredentialsException("Invalid 2FA code");
+        }
+
+        user.resetFailedAttempts();
+        userRepository.save(user);
+
+        log.info("User logged in with 2FA: {}", user.getEmail());
         return generateAuthResponse(user);
     }
 

@@ -13,8 +13,6 @@ object SessionManager {
     private const val KEY_ENCRYPTION_SALT = "encryption_salt"
     private const val KEY_USER_ID = "user_id"
     private const val KEY_USER_EMAIL = "user_email"
-    private const val KEY_MASTER_PASSWORD_HASH = "master_password_hash"
-    private const val KEY_MASTER_PASSWORD = "master_password"
     private const val KEY_ENCRYPTION_VERSION = "encryption_version"
     private const val KEY_WRAPPED_VAULT_KEY = "wrapped_vault_key"
 
@@ -22,16 +20,34 @@ object SessionManager {
 
     fun init(context: Context) {
         if (encryptedPrefs == null) {
-            val masterKey = MasterKey.Builder(context)
-                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-                .build()
-            encryptedPrefs = EncryptedSharedPreferences.create(
-                context,
-                PREFS_ENCRYPTED_NAME,
-                masterKey,
-                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-            )
+            try {
+                val masterKey = MasterKey.Builder(context)
+                    .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                    .build()
+                encryptedPrefs = EncryptedSharedPreferences.create(
+                    context,
+                    PREFS_ENCRYPTED_NAME,
+                    masterKey,
+                    EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                    EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+                )
+            } catch (e: Exception) {
+                context.getSharedPreferences(PREFS_ENCRYPTED_NAME, Context.MODE_PRIVATE)
+                    .edit()
+                    .clear()
+                    .apply()
+                context.deleteSharedPreferences(PREFS_ENCRYPTED_NAME)
+                val masterKey = MasterKey.Builder(context)
+                    .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                    .build()
+                encryptedPrefs = EncryptedSharedPreferences.create(
+                    context,
+                    PREFS_ENCRYPTED_NAME,
+                    masterKey,
+                    EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                    EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+                )
+            }
         }
     }
 
@@ -63,18 +79,6 @@ object SessionManager {
 
     fun setUserEmail(value: String) {
         encryptedPrefs?.edit()?.putString(KEY_USER_EMAIL, value)?.apply()
-    }
-
-    fun getMasterPasswordHash(): String = encryptedPrefs?.getString(KEY_MASTER_PASSWORD_HASH, "") ?: ""
-
-    fun setMasterPasswordHash(value: String) {
-        encryptedPrefs?.edit()?.putString(KEY_MASTER_PASSWORD_HASH, value)?.apply()
-    }
-
-    fun getMasterPassword(): String = encryptedPrefs?.getString(KEY_MASTER_PASSWORD, "") ?: ""
-
-    fun setMasterPassword(value: String) {
-        encryptedPrefs?.edit()?.putString(KEY_MASTER_PASSWORD, value)?.apply()
     }
 
     fun getEncryptionVersion(): Int = encryptedPrefs?.getInt(KEY_ENCRYPTION_VERSION, 2) ?: 2

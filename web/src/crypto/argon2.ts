@@ -11,7 +11,7 @@ export async function deriveKek(
     password,
     salt,
     parallelism: 4,
-    iterations: 3,
+    iterations: 4,
     memorySize: 65536,
     hashLength: 32,
     outputType: 'binary',

@@ -4,7 +4,6 @@ import {
   useState,
   useCallback,
   useRef,
-  useEffect,
   type ReactNode,
 } from 'react'
 import { deriveKek } from '../crypto/argon2'
@@ -53,7 +52,6 @@ interface VaultContextType {
 const VaultContext = createContext<VaultContextType | null>(null)
 
 export function VaultProvider({ children }: { children: ReactNode }) {
-  const { authData, consumeMasterPassword } = useAuth()
   const vaultKeyRef = useRef<CryptoKey | null>(null)
   const [isUnlocked, setIsUnlocked] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
@@ -238,30 +236,6 @@ export function VaultProvider({ children }: { children: ReactNode }) {
     },
     [],
   )
-
-  useEffect(() => {
-    if (authData) {
-      setEntries([])
-      setDecrypted({})
-      const pw = consumeMasterPassword()
-      if (pw) {
-        ;(async () => {
-          try {
-            const salt = localStorage.getItem('encryptionSalt')
-            const wrapped = localStorage.getItem('wrappedVaultKey')
-            if (salt && wrapped) {
-              const kek = await deriveKek(pw, salt)
-              const vaultKey = await unwrapVaultKey(kek, wrapped)
-              vaultKeyRef.current = vaultKey
-              setIsUnlocked(true)
-            }
-          } catch {
-            // auto-unlock failed, user will need to unlock manually
-          }
-        })()
-      }
-    }
-  }, [authData, consumeMasterPassword])
 
   return (
     <VaultContext.Provider

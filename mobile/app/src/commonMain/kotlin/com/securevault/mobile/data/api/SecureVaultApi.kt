@@ -15,59 +15,62 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import android.util.Log
 
 class SecureVaultApi(
     private val baseUrl: String,
     private val httpClient: HttpClient
 ) {
-    private val tag = "SecureVaultApi"
     private val refreshMutex = Mutex()
 
     class TokenExpiredException : Exception("Token expired or invalid")
 
     suspend fun register(request: RegisterRequest): Result<AuthResponse> {
         return try {
-            Log.d(tag, "POST /api/v1/auth/register - Request: $request")
             val response: HttpResponse = httpClient.post("$baseUrl/api/v1/auth/register") {
                 contentType(ContentType.Application.Json)
                 setBody(request)
             }
             parseAuthResponse(response)
         } catch (e: Exception) {
-            Log.e(tag, "Registration error: ${e.message}")
             Result.failure(e)
         }
     }
 
     suspend fun login(request: LoginRequest): Result<AuthResponse> {
         return try {
-            Log.d(tag, "POST /api/v1/auth/login - Request: $request")
             val response: HttpResponse = httpClient.post("$baseUrl/api/v1/auth/login") {
                 contentType(ContentType.Application.Json)
                 setBody(request)
             }
             parseAuthResponse(response)
         } catch (e: Exception) {
-            Log.e(tag, "Login error: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    suspend fun verifyTwoFactor(email: String, code: String): Result<AuthResponse> {
+        return try {
+            val response: HttpResponse = httpClient.post("$baseUrl/api/v1/auth/verify-2fa") {
+                contentType(ContentType.Application.Json)
+                setBody(TwoFactorVerifyRequest(email, code))
+            }
+            parseAuthResponse(response)
+        } catch (e: Exception) {
             Result.failure(e)
         }
     }
 
     suspend fun refreshToken(request: RefreshTokenRequest): Result<AuthResponse> = runCatching {
-        Log.d(tag, "POST /api/v1/auth/refresh")
         val response: HttpResponse = httpClient.post("$baseUrl/api/v1/auth/refresh") {
             contentType(ContentType.Application.Json)
             setBody(request)
         }
         val body = response.bodyAsText()
-        Log.d(tag, "Response body: $body")
         val apiResponse: AuthApiResponse = Json.decodeFromString(body)
         apiResponse.data ?: throw Exception(apiResponse.message ?: "Token refresh failed")
     }
 
     suspend fun logout(): Result<Unit> = runCatching {
-        Log.d(tag, "POST /api/v1/auth/logout")
         httpClient.post("$baseUrl/api/v1/auth/logout") {
             bearerAuth(getAccessToken())
         }
@@ -75,73 +78,62 @@ class SecureVaultApi(
 
     suspend fun changePassword(request: ChangePasswordRequest): Result<ChangePasswordResponse> =
         authCall { token ->
-            Log.d(tag, "POST /api/v1/auth/change-password - newSalt=${request.newEncryptionSalt}")
             val response: HttpResponse = httpClient.post("$baseUrl/api/v1/auth/change-password") {
                 bearerAuth(token)
                 contentType(ContentType.Application.Json)
                 setBody(request)
             }
             val body = response.bodyAsText()
-            Log.d(tag, "Response body: $body")
             val apiResponse: ApiResponse<ChangePasswordResponse> = Json.decodeFromString(body)
             apiResponse.data ?: throw Exception(apiResponse.message ?: "Password change failed")
         }
 
     suspend fun getVaultEntries(): Result<List<VaultEntryResponse>> =
         authCall { token ->
-            Log.d(tag, "GET /api/v1/vault")
             val response: HttpResponse = httpClient.get("$baseUrl/api/v1/vault") {
                 bearerAuth(token)
             }
             val body = response.bodyAsText()
-            Log.d(tag, "Response body: $body")
             val apiResponse: VaultEntriesApiResponse = Json.decodeFromString(body)
             apiResponse.data?.entries ?: throw Exception(apiResponse.message ?: "Failed to get entries")
         }
 
     suspend fun getVaultEntry(id: String): Result<VaultEntryResponse> =
         authCall { token ->
-            Log.d(tag, "GET /api/v1/vault/$id")
             val response: HttpResponse = httpClient.get("$baseUrl/api/v1/vault/$id") {
                 bearerAuth(token)
             }
             val body = response.bodyAsText()
-            Log.d(tag, "Response body: $body")
             val apiResponse: VaultEntryApiResponse = Json.decodeFromString(body)
             apiResponse.data ?: throw Exception(apiResponse.message ?: "Failed to get entry")
         }
 
     suspend fun createVaultEntry(request: VaultEntryRequest): Result<VaultEntryResponse> =
         authCall { token ->
-            Log.d(tag, "POST /api/v1/vault - Request: $request")
             val response: HttpResponse = httpClient.post("$baseUrl/api/v1/vault") {
                 bearerAuth(token)
                 contentType(ContentType.Application.Json)
                 setBody(request)
             }
             val body = response.bodyAsText()
-            Log.d(tag, "Response body: $body")
             val apiResponse: VaultEntryApiResponse = Json.decodeFromString(body)
             apiResponse.data ?: throw Exception(apiResponse.message ?: "Failed to create entry")
         }
 
     suspend fun updateVaultEntry(id: String, request: VaultEntryRequest): Result<VaultEntryResponse> =
         authCall { token ->
-            Log.d(tag, "PUT /api/v1/vault/$id - Request: $request")
             val response: HttpResponse = httpClient.put("$baseUrl/api/v1/vault/$id") {
                 bearerAuth(token)
                 contentType(ContentType.Application.Json)
                 setBody(request)
             }
             val body = response.bodyAsText()
-            Log.d(tag, "Response body: $body")
             val apiResponse: VaultEntryApiResponse = Json.decodeFromString(body)
             apiResponse.data ?: throw Exception(apiResponse.message ?: "Failed to update entry")
         }
 
     suspend fun deleteVaultEntry(id: String): Result<Unit> =
         authCallVoid { token ->
-            Log.d(tag, "DELETE /api/v1/vault/$id")
             httpClient.delete("$baseUrl/api/v1/vault/$id") {
                 bearerAuth(token)
             }
@@ -149,7 +141,6 @@ class SecureVaultApi(
 
     suspend fun deleteAllVaultEntries(): Result<Unit> =
         authCallVoid { token ->
-            Log.d(tag, "DELETE /api/v1/vault")
             httpClient.delete("$baseUrl/api/v1/vault") {
                 bearerAuth(token)
             }
@@ -157,33 +148,28 @@ class SecureVaultApi(
 
     suspend fun getDevices(): Result<List<DeviceResponse>> =
         authCall { token ->
-            Log.d(tag, "GET /api/v1/devices")
             val response: HttpResponse = httpClient.get("$baseUrl/api/v1/devices") {
                 bearerAuth(token)
             }
             val body = response.bodyAsText()
-            Log.d(tag, "Response body: $body")
             val apiResponse: DevicesApiResponse = Json.decodeFromString(body)
             apiResponse.data?.devices ?: throw Exception(apiResponse.message ?: "Failed to get devices")
         }
 
     suspend fun registerDevice(request: DeviceRequest): Result<DeviceResponse> =
         authCall { token ->
-            Log.d(tag, "POST /api/v1/devices")
             val response: HttpResponse = httpClient.post("$baseUrl/api/v1/devices") {
                 bearerAuth(token)
                 contentType(ContentType.Application.Json)
                 setBody(request)
             }
             val body = response.bodyAsText()
-            Log.d(tag, "Response body: $body")
             val apiResponse: DeviceApiResponse = Json.decodeFromString(body)
             apiResponse.data ?: throw Exception(apiResponse.message ?: "Failed to register device")
         }
 
     suspend fun removeDevice(id: Long): Result<Unit> =
         authCallVoid { token ->
-            Log.d(tag, "DELETE /api/v1/devices/$id")
             httpClient.delete("$baseUrl/api/v1/devices/$id") {
                 bearerAuth(token)
             }
@@ -191,19 +177,16 @@ class SecureVaultApi(
 
     suspend fun setupTwoFactor(): Result<TwoFactorSetupResponse> =
         authCall { token ->
-            Log.d(tag, "GET /api/v1/2fa/setup")
             val response: HttpResponse = httpClient.get("$baseUrl/api/v1/2fa/setup") {
                 bearerAuth(token)
             }
             val body = response.bodyAsText()
-            Log.d(tag, "Response body: $body")
             val apiResponse: ApiResponse<TwoFactorSetupResponse> = Json.decodeFromString(body)
             apiResponse.data ?: throw Exception(apiResponse.message ?: "Failed to setup 2FA")
         }
 
     suspend fun enableTwoFactor(request: EnableTwoFactorRequest): Result<Unit> =
         authCallVoid { token ->
-            Log.d(tag, "POST /api/v1/2fa/enable")
             httpClient.post("$baseUrl/api/v1/2fa/enable") {
                 bearerAuth(token)
                 contentType(ContentType.Application.Json)
@@ -213,7 +196,6 @@ class SecureVaultApi(
 
     suspend fun disableTwoFactor(code: String): Result<Unit> =
         authCallVoid { token ->
-            Log.d(tag, "POST /api/v1/2fa/disable")
             httpClient.post("$baseUrl/api/v1/2fa/disable") {
                 bearerAuth(token)
                 contentType(ContentType.Application.Json)
@@ -223,21 +205,17 @@ class SecureVaultApi(
 
     suspend fun getTwoFactorStatus(): Result<TwoFactorStatusResponse> =
         authCall { token ->
-            Log.d(tag, "GET /api/v1/2fa/status")
             val response: HttpResponse = httpClient.get("$baseUrl/api/v1/2fa/status") {
                 bearerAuth(token)
             }
             val body = response.bodyAsText()
-            Log.d(tag, "Response body: $body")
             val apiResponse: ApiResponse<TwoFactorStatusResponse> = Json.decodeFromString(body)
             apiResponse.data ?: throw Exception(apiResponse.message ?: "Failed to get 2FA status")
         }
 
     suspend fun getHealth(): Result<HealthResponse> = runCatching {
-        Log.d(tag, "GET /api/v1/health")
         val response: HttpResponse = httpClient.get("$baseUrl/api/v1/health")
         val body = response.bodyAsText()
-        Log.d(tag, "Response body: $body")
         Json.decodeFromString(body)
     }
 
@@ -278,7 +256,6 @@ class SecureVaultApi(
     private suspend fun refreshAccessToken(): Boolean = refreshMutex.withLock {
         val currentRefreshToken = SessionManager.getRefreshToken()
         if (currentRefreshToken.isEmpty()) {
-            Log.e(tag, "No refresh token available")
             SessionManager.clearSession()
             return false
         }
@@ -292,12 +269,10 @@ class SecureVaultApi(
             val apiResponse: AuthApiResponse = Json.decodeFromString(body)
             val authData = apiResponse.data ?: return false
 
-            SessionManager.setAccessToken(authData.accessToken)
+            SessionManager.setAccessToken(authData.accessToken ?: return false)
             SessionManager.setRefreshToken(authData.refreshToken ?: currentRefreshToken)
-            Log.d(tag, "Token refreshed successfully")
             true
         } catch (e: Exception) {
-            Log.e(tag, "Token refresh failed: ${e.message}")
             SessionManager.clearSession()
             false
         }
@@ -314,7 +289,6 @@ class SecureVaultApi(
 
     private suspend fun parseAuthResponse(response: HttpResponse): Result<AuthResponse> = runCatching {
         val body = response.bodyAsText()
-        Log.d(tag, "Response body: $body")
 
         val json = Json.parseToJsonElement(body)
         val success = json.jsonObject["success"]?.jsonPrimitive?.content?.toBoolean() ?: false
@@ -325,25 +299,42 @@ class SecureVaultApi(
             val errorMessage = if (dataObj != null) {
                 dataObj.entries.joinToString(", ") { "${it.key}: ${it.value.jsonPrimitive.content}" }
             } else message
-            Log.e(tag, "Request failed: $errorMessage")
             throw Exception(errorMessage ?: "Request failed")
         }
 
         val accessToken = dataObj?.get("accessToken")?.jsonPrimitive?.content
-            ?: throw Exception("Missing accessToken")
         val refreshToken = dataObj?.get("refreshToken")?.jsonPrimitive?.content
-            ?: throw Exception("Missing refreshToken")
         val encryptionSalt = dataObj?.get("encryptionSalt")?.jsonPrimitive?.content
-            ?: throw Exception("Missing encryptionSalt")
         val userId = dataObj?.get("userId")?.jsonPrimitive?.content
-            ?: throw Exception("Missing userId")
         val email = dataObj?.get("email")?.jsonPrimitive?.content
-            ?: throw Exception("Missing email")
         val wrappedVaultKey = dataObj?.get("wrappedVaultKey")?.jsonPrimitive?.content
-        val encryptionVersion = dataObj?.get("encryptionVersion")?.jsonPrimitive?.content?.toIntOrNull() ?: 1
+        val encryptionVersion = dataObj?.get("encryptionVersion")?.jsonPrimitive?.content?.toIntOrNull() ?: 2
+        val twoFactorRequired = dataObj?.get("twoFactorRequired")?.jsonPrimitive?.content?.toBoolean() ?: false
 
-        Log.d(tag, "Parsed AuthResponse successfully")
-        AuthResponse(accessToken, refreshToken, encryptionSalt, userId, email, wrappedVaultKey, encryptionVersion)
+        if (twoFactorRequired) {
+            if (userId == null || email == null || encryptionSalt == null) {
+                throw Exception("Missing required fields for 2FA verification")
+            }
+            AuthResponse(
+                userId = userId,
+                email = email,
+                encryptionSalt = encryptionSalt,
+                wrappedVaultKey = wrappedVaultKey,
+                encryptionVersion = encryptionVersion,
+                twoFactorRequired = true
+            )
+        } else {
+            AuthResponse(
+            accessToken = accessToken ?: throw Exception("Missing accessToken"),
+            refreshToken = refreshToken ?: throw Exception("Missing refreshToken"),
+            encryptionSalt = encryptionSalt ?: throw Exception("Missing encryptionSalt"),
+            userId = userId ?: throw Exception("Missing userId"),
+            email = email ?: throw Exception("Missing email"),
+            wrappedVaultKey = wrappedVaultKey,
+            encryptionVersion = encryptionVersion,
+            twoFactorRequired = false
+            )
+        }
     }
 
     companion object {

@@ -21,7 +21,9 @@ import com.securevault.mobile.ui.screens.settings.ChangePasswordViewModel
 import com.securevault.mobile.ui.screens.settings.SettingsScreen
 import com.securevault.mobile.ui.screens.settings.SettingsViewModel
 import com.securevault.mobile.ui.screens.vault.AddEditEntryScreen
+import com.securevault.mobile.ui.screens.vault.AddEditEntryViewModel
 import com.securevault.mobile.ui.screens.vault.VaultScreen
+import com.securevault.mobile.ui.screens.vault.VaultViewModel
 import kotlinx.serialization.Serializable
 import org.koin.androidx.compose.koinViewModel
 
@@ -44,22 +46,11 @@ data class EditEntryRoute(val entryId: Long)
 fun SecureVaultNavHost() {
     val navController = rememberNavController()
     val getAuthStateUseCase = getAuthStateUseCase()
-    val vaultKeyManager: com.securevault.mobile.data.repository.VaultKeyManager = org.koin.compose.koinInject()
 
     var initialAuthState by remember { mutableStateOf<AuthStateResult?>(null) }
 
     LaunchedEffect(Unit) {
         initialAuthState = getAuthStateUseCase()
-        if (initialAuthState is AuthStateResult.Authenticated) {
-            val wrappedKey = com.securevault.mobile.data.repository.SessionManager.getWrappedVaultKey()
-            if (wrappedKey.isNotEmpty()) {
-                try {
-                    vaultKeyManager.unwrapVaultKey(wrappedKey)
-                } catch (e: Exception) {
-                    // vault key restore failed, user needs to re-login
-                }
-            }
-        }
     }
 
     val startDestination = when (val state = initialAuthState) {
@@ -101,10 +92,12 @@ fun SecureVaultNavHost() {
         }
 
         composable(Screen.AddEntry.route) {
+            val vaultViewModel: VaultViewModel = koinViewModel()
             AddEditEntryScreen(
                 entryId = null,
                 onNavigateBack = { navController.popBackStack() },
-                onSaveSuccess = { navController.popBackStack() }
+                onSaveSuccess = { navController.popBackStack() },
+                onReload = { vaultViewModel.handleIntent(com.securevault.mobile.ui.screens.vault.VaultIntent.TriggerReload) }
             )
         }
 
@@ -113,10 +106,12 @@ fun SecureVaultNavHost() {
             arguments = listOf(navArgument("entryId") { type = NavType.LongType })
         ) { backStackEntry ->
             val entryId = backStackEntry.arguments?.getLong("entryId") ?: 0L
+            val vaultViewModel: VaultViewModel = koinViewModel()
             AddEditEntryScreen(
                 entryId = entryId,
                 onNavigateBack = { navController.popBackStack() },
-                onSaveSuccess = { navController.popBackStack() }
+                onSaveSuccess = { navController.popBackStack() },
+                onReload = { vaultViewModel.handleIntent(com.securevault.mobile.ui.screens.vault.VaultIntent.TriggerReload) }
             )
         }
 

@@ -86,12 +86,32 @@ public class AuthController {
      * @return AuthResponse with tokens and cryptographic material
      */
     @PostMapping("/login")
-    public ResponseEntity<ApiResponse<AuthResponse>> login(
+    public ResponseEntity<ApiResponse<TwoFactorLoginResponse>> login(
             @Valid @RequestBody LoginRequest request,
             HttpServletRequest httpRequest) {
         log.info("Login attempt for email: {}", request.getEmail());
-        AuthResponse response = authService.login(request);
+        String clientIp = getClientIp(httpRequest);
+        TwoFactorLoginResponse response = authService.login(request, clientIp);
+        if (response.isTwoFactorRequired()) {
+            log.info("2FA required for user: {}", request.getEmail());
+            return ResponseEntity.ok(ApiResponse.success("2FA verification required", response));
+        }
         log.info("User logged in successfully: {}", request.getEmail());
+        auditService.logLogin(
+                UUID.fromString(response.getUserId()),
+                httpRequest.getRemoteAddr(),
+                httpRequest.getHeader("User-Agent")
+        );
+        return ResponseEntity.ok(ApiResponse.success("Login successful", response));
+    }
+
+    @PostMapping("/verify-2fa")
+    public ResponseEntity<ApiResponse<AuthResponse>> verifyTwoFactor(
+            @Valid @RequestBody TwoFactorVerifyRequest request,
+            HttpServletRequest httpRequest) {
+        log.info("2FA verification attempt for email: {}", request.getEmail());
+        AuthResponse response = authService.verifyTwoFactorLogin(request.getEmail(), request.getCode());
+        log.info("User logged in with 2FA: {}", request.getEmail());
         auditService.logLogin(
                 UUID.fromString(response.getUserId()),
                 httpRequest.getRemoteAddr(),
@@ -183,5 +203,13 @@ public class AuthController {
                 null
         );
         return ResponseEntity.ok(ApiResponse.success("Password changed successfully", response));
+    }
+
+    private String getClientIp(HttpServletRequest request) {
+        String forwardedFor = request.getHeader("X-Forwarded-For");
+        if (forwardedFor != null && !forwardedFor.isEmpty()) {
+            return forwardedFor.split(",")[0].trim();
+        }
+        return request.getRemoteAddr();
     }
 }

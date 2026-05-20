@@ -12,6 +12,8 @@ import com.securevault.mobile.ui.mvi.MviViewModel
 
 sealed class VaultIntent : MviIntent {
     data object LoadEntries : VaultIntent()
+    data object RefreshEntries : VaultIntent()
+    data object TriggerReload : VaultIntent()
     data class SearchChanged(val query: String) : VaultIntent()
     data class DeleteEntry(val id: Long) : VaultIntent()
     data class ConfirmDeleteEntry(val id: Long) : VaultIntent()
@@ -26,9 +28,11 @@ data class VaultState(
     val filteredEntries: List<VaultEntryEntity> = emptyList(),
     val searchQuery: String = "",
     val isLoading: Boolean = false,
+    val isRefreshing: Boolean = false,
     val error: String? = null,
     val showDeleteDialog: Long? = null,
-    val showLogoutDialog: Boolean = false
+    val showLogoutDialog: Boolean = false,
+    val reloadTrigger: Boolean = false
 ) : MviState
 
 sealed class VaultEffect : MviEffect {
@@ -51,6 +55,8 @@ class VaultViewModel(
     override fun handleIntent(intent: VaultIntent) {
         when (intent) {
             is VaultIntent.LoadEntries -> loadEntries()
+            is VaultIntent.RefreshEntries -> refreshEntries()
+            is VaultIntent.TriggerReload -> loadEntries()
             is VaultIntent.SearchChanged -> search(intent.query)
             is VaultIntent.DeleteEntry -> setState { copy(showDeleteDialog = intent.id) }
             is VaultIntent.ConfirmDeleteEntry -> deleteEntry(intent.id)
@@ -68,6 +74,23 @@ class VaultViewModel(
             block = { getVaultEntriesUseCase() },
             onResult = { result ->
                 setState { copy(isLoading = false) }
+                when (val r = result.getOrNull()) {
+                    is com.securevault.mobile.domain.usecase.vault.VaultEntriesResult.Success -> {
+                        val filtered = filterEntries(r.entries, currentState.searchQuery)
+                        setState { copy(entries = r.entries, filteredEntries = filtered) }
+                    }
+                    is com.securevault.mobile.domain.usecase.vault.VaultEntriesResult.Error -> setState { copy(error = r.message) }
+                    null -> setState { copy(error = result.exceptionOrNull()?.message) }
+                }
+            }
+        )
+    }
+
+    private fun refreshEntries() {
+        runInBackground(
+            block = { getVaultEntriesUseCase() },
+            onResult = { result ->
+                setState { copy(isRefreshing = false) }
                 when (val r = result.getOrNull()) {
                     is com.securevault.mobile.domain.usecase.vault.VaultEntriesResult.Success -> {
                         val filtered = filterEntries(r.entries, currentState.searchQuery)

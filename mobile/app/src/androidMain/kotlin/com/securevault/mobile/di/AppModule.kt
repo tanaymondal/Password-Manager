@@ -28,7 +28,7 @@ import org.koin.dsl.module
 
 val appModule = module {
     // API
-    single<SecureVaultApi> { SecureVaultApi.create("https://vault.tanay.pro") }
+    single<SecureVaultApi> { SecureVaultApi.create("http://192.168.1.38:8080") }
 
     // Encryptor - Android specific (single instance for both EntryEncryptor and VaultKeyManager)
     single { AndroidEntryEncryptor() }
@@ -44,6 +44,7 @@ val appModule = module {
     // Auth Use Cases
     factory<GetAuthStateUseCase> { GetAuthStateUseCaseImpl(get()) }
     factory<LoginUseCase> { LoginUseCaseImpl(get()) }
+    factory<VerifyTwoFactorUseCase> { VerifyTwoFactorUseCaseImpl(get()) }
     factory<RegisterUseCase> { RegisterUseCaseImpl(get()) }
     factory<LogoutUseCase> { LogoutUseCaseImpl(get()) }
     factory<RefreshTokenUseCase> { RefreshTokenUseCaseImpl(get()) }
@@ -69,7 +70,7 @@ val appModule = module {
     factory<GetTwoFactorStatusUseCase> { GetTwoFactorStatusUseCaseImpl(get()) }
 
     // ViewModels
-    viewModel { LoginViewModel(get(), get()) }
+    viewModel { LoginViewModel(get(), get(), get()) }
     viewModel { RegisterViewModel(get(), get()) }
     viewModel { VaultViewModel(get(), get(), get()) }
     viewModel { AddEditEntryViewModel(get(), get(), get()) }

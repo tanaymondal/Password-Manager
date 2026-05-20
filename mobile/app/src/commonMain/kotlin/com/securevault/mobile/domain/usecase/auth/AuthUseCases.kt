@@ -2,6 +2,7 @@ package com.securevault.mobile.domain.usecase.auth
 
 import com.securevault.mobile.domain.entity.AuthTokens
 import com.securevault.mobile.domain.entity.User
+import com.securevault.mobile.domain.model.TwoFactorInfo
 
 interface LoginUseCase {
     suspend operator fun invoke(email: String, password: String): LoginResult
@@ -9,7 +10,17 @@ interface LoginUseCase {
 
 sealed class LoginResult {
     data class Success(val tokens: AuthTokens, val user: User) : LoginResult()
+    data class TwoFactorRequired(val info: TwoFactorInfo) : LoginResult()
     data class Error(val message: String) : LoginResult()
+}
+
+interface VerifyTwoFactorUseCase {
+    suspend operator fun invoke(email: String, code: String, password: String): VerifyTwoFactorResult
+}
+
+sealed class VerifyTwoFactorResult {
+    data class Success(val tokens: AuthTokens, val user: User) : VerifyTwoFactorResult()
+    data class Error(val message: String) : VerifyTwoFactorResult()
 }
 
 interface RegisterUseCase {

@@ -50,7 +50,7 @@ public class PasswordService {
     private static final int GCM_IV_LENGTH = 12;
     private static final int GCM_TAG_LENGTH = 128;
 
-    private static final int ITERATIONS = 3;
+    private static final int ITERATIONS = 4;
     private static final int MEMORY_KB = 65536;
     private static final int PARALLELISM = 4;
 
