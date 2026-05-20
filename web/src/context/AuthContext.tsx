@@ -4,7 +4,6 @@ import {
   useState,
   useEffect,
   useCallback,
-  useRef,
   type ReactNode,
 } from 'react'
 import {
@@ -47,7 +46,7 @@ interface AuthContextType extends AuthState {
 
 const AuthContext = createContext<AuthContextType | null>(null)
 
-function persistCryptoMaterial(data: AuthResponse) {
+function persistCryptoMaterial(data: { encryptionSalt: string; wrappedVaultKey: string; encryptionVersion: number }) {
   localStorage.setItem('encryptionSalt', data.encryptionSalt)
   localStorage.setItem('wrappedVaultKey', data.wrappedVaultKey)
   localStorage.setItem('encryptionVersion', String(data.encryptionVersion))
@@ -111,7 +110,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
     if (!res.twoFactorRequired && res.accessToken && res.refreshToken) {
       setTokens(res.accessToken, res.refreshToken)
-      persistCryptoMaterial(res)
+      persistCryptoMaterial({
+        encryptionSalt: res.encryptionSalt!,
+        wrappedVaultKey: res.wrappedVaultKey!,
+        encryptionVersion: res.encryptionVersion,
+      })
       setState({
         user: { id: res.userId, email: res.email },
         isAuthenticated: true,

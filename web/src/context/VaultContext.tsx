@@ -19,7 +19,6 @@ import {
 } from '../api/vault'
 import { changePassword } from '../api/auth'
 import { setTokens } from '../api/client'
-import { useAuth } from './AuthContext'
 
 export interface EntryFields {
   name: string
