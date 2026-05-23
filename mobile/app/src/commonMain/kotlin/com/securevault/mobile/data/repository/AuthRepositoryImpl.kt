@@ -167,7 +167,8 @@ class AuthRepositoryImpl(
                         authResponse.encryptionSalt!!,
                         authResponse.userId!!,
                         authResponse.email!!,
-                        authResponse.encryptionVersion
+                        authResponse.encryptionVersion,
+                        authResponse.wrappedVaultKey
                     )
                     Result.Success(getCurrentAuthState())
                 },

@@ -65,7 +65,7 @@ data class AuthApiResponse(
 
 @Serializable
 data class RefreshTokenRequest(
-    @SerialName("refresh_token") val refreshToken: String
+    val refreshToken: String
 )
 
 @Serializable

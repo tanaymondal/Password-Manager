@@ -59,6 +59,15 @@ sealed class ChangePasswordResult {
     data class Error(val message: String) : ChangePasswordResult()
 }
 
+interface UnlockVaultUseCase {
+    suspend operator fun invoke(password: String): UnlockVaultResult
+}
+
+sealed class UnlockVaultResult {
+    data object Success : UnlockVaultResult()
+    data class Error(val message: String) : UnlockVaultResult()
+}
+
 interface GetAuthStateUseCase {
     operator fun invoke(): AuthStateResult
 }

@@ -18,6 +18,7 @@ import com.securevault.mobile.domain.usecase.vault.*
 import com.securevault.mobile.domain.usecase.vault.impl.*
 import com.securevault.mobile.ui.screens.auth.LoginViewModel
 import com.securevault.mobile.ui.screens.auth.RegisterViewModel
+import com.securevault.mobile.ui.screens.auth.UnlockViewModel
 import com.securevault.mobile.ui.screens.settings.ChangePasswordViewModel
 import com.securevault.mobile.ui.screens.settings.SettingsViewModel
 import com.securevault.mobile.ui.screens.vault.AddEditEntryViewModel
@@ -28,7 +29,7 @@ import org.koin.dsl.module
 
 val appModule = module {
     // API
-    single<SecureVaultApi> { SecureVaultApi.create("http://192.168.1.38:8080") }
+    single<SecureVaultApi> { SecureVaultApi.create("https://vault.tanay.pro") }
 
     // Encryptor - Android specific (single instance for both EntryEncryptor and VaultKeyManager)
     single { AndroidEntryEncryptor() }
@@ -49,6 +50,7 @@ val appModule = module {
     factory<LogoutUseCase> { LogoutUseCaseImpl(get()) }
     factory<RefreshTokenUseCase> { RefreshTokenUseCaseImpl(get()) }
     factory<ChangePasswordUseCase> { ChangePasswordUseCaseImpl(get()) }
+    factory<UnlockVaultUseCase> { UnlockVaultUseCaseImpl(get()) }
 
     // Vault Use Cases
     factory<GetVaultEntriesUseCase> { GetVaultEntriesUseCaseImpl(get()) }
@@ -76,4 +78,5 @@ val appModule = module {
     viewModel { AddEditEntryViewModel(get(), get(), get()) }
     viewModel { SettingsViewModel(get(), get(), get()) }
     viewModel { ChangePasswordViewModel(get()) }
+    viewModel { UnlockViewModel(get()) }
 }

@@ -12,6 +12,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -36,7 +37,8 @@ fun VaultScreen(
     onNavigateToAddEntry: () -> Unit,
     onNavigateToEditEntry: (Long) -> Unit,
     onNavigateToSettings: () -> Unit,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    onNavigateToUnlock: (() -> Unit)? = null
 ) {
     val viewModel: VaultViewModel = koinViewModel()
     val state by viewModel.state.collectAsState()
@@ -105,6 +107,12 @@ fun VaultScreen(
                             Spacer(modifier = Modifier.height(16.dp))
                             Button(onClick = { viewModel.handleIntent(VaultIntent.LoadEntries) }) {
                                 Text("Retry")
+                            }
+                            if (onNavigateToUnlock != null) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                OutlinedButton(onClick = onNavigateToUnlock) {
+                                    Text("Unlock Vault")
+                                }
                             }
                         }
                     }

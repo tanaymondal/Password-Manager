@@ -135,6 +135,18 @@ class ChangePasswordUseCaseImpl(
     }
 }
 
+class UnlockVaultUseCaseImpl(
+    private val authRepository: AuthRepository
+) : UnlockVaultUseCase {
+    override suspend operator fun invoke(password: String): UnlockVaultResult {
+        return when (val result = authRepository.unlockVault(password)) {
+            is Result.Success -> UnlockVaultResult.Success
+            is Result.Error -> UnlockVaultResult.Error(result.message)
+            is Result.Loading -> UnlockVaultResult.Error("Loading...")
+        }
+    }
+}
+
 class GetAuthStateUseCaseImpl(
     private val authRepository: AuthRepository
 ) : GetAuthStateUseCase {

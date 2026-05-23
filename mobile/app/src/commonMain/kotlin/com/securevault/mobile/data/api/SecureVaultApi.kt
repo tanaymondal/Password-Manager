@@ -271,6 +271,11 @@ class SecureVaultApi(
 
             SessionManager.setAccessToken(authData.accessToken ?: return false)
             SessionManager.setRefreshToken(authData.refreshToken ?: currentRefreshToken)
+            authData.encryptionSalt?.let { SessionManager.setEncryptionSalt(it) }
+            authData.wrappedVaultKey?.let { SessionManager.setWrappedVaultKey(it) }
+            authData.userId?.let { SessionManager.setUserId(it) }
+            authData.email?.let { SessionManager.setUserEmail(it) }
+            authData.encryptionVersion?.let { SessionManager.setEncryptionVersion(it) }
             true
         } catch (e: Exception) {
             SessionManager.clearSession()

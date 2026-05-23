@@ -16,7 +16,7 @@ abstract class SecureVaultDatabase : RoomDatabase() {
     abstract fun vaultEntryDao(): VaultEntryDao
 
     companion object {
-        private const val DATABASE_NAME = "secure_vault.db"
+        const val DATABASE_NAME = "secure_vault.db"
 
         @Volatile
         private var INSTANCE: SecureVaultDatabase? = null

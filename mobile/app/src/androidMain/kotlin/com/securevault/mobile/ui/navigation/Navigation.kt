@@ -1,11 +1,7 @@
 package com.securevault.mobile.ui.navigation
 
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -16,6 +12,7 @@ import com.securevault.mobile.domain.usecase.auth.AuthStateResult
 import com.securevault.mobile.domain.usecase.auth.GetAuthStateUseCase
 import com.securevault.mobile.ui.screens.auth.LoginScreen
 import com.securevault.mobile.ui.screens.auth.RegisterScreen
+import com.securevault.mobile.ui.screens.auth.UnlockScreen
 import com.securevault.mobile.ui.screens.settings.ChangePasswordScreen
 import com.securevault.mobile.ui.screens.settings.ChangePasswordViewModel
 import com.securevault.mobile.ui.screens.settings.SettingsScreen
@@ -37,6 +34,7 @@ sealed class Screen(val route: String) {
     }
     data object Settings : Screen("settings")
     data object ChangePassword : Screen("change_password")
+    data object Unlock : Screen("unlock")
 }
 
 @Serializable
@@ -46,17 +44,11 @@ data class EditEntryRoute(val entryId: Long)
 fun SecureVaultNavHost() {
     val navController = rememberNavController()
     val getAuthStateUseCase = getAuthStateUseCase()
-
-    var initialAuthState by remember { mutableStateOf<AuthStateResult?>(null) }
-
-    LaunchedEffect(Unit) {
-        initialAuthState = getAuthStateUseCase()
-    }
-
-    val startDestination = when (val state = initialAuthState) {
-        is AuthStateResult.Authenticated -> Screen.Vault.route
-        is AuthStateResult.Unauthenticated -> Screen.Login.route
-        else -> Screen.Login.route
+    val startDestination = remember { getAuthStateUseCase() }.let { state ->
+        when (state) {
+            is AuthStateResult.Authenticated -> Screen.Vault.route
+            is AuthStateResult.Unauthenticated -> Screen.Login.route
+        }
     }
 
     NavHost(navController = navController, startDestination = startDestination) {
@@ -82,12 +74,28 @@ fun SecureVaultNavHost() {
             )
         }
 
+        composable(Screen.Unlock.route) {
+            UnlockScreen(
+                onUnlockSuccess = {
+                    navController.navigate(Screen.Vault.route) {
+                        popUpTo(Screen.Unlock.route) { inclusive = true }
+                    }
+                },
+                onLogout = {
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
+            )
+        }
+
         composable(Screen.Vault.route) {
             VaultScreen(
                 onNavigateToAddEntry = { navController.navigate(Screen.AddEntry.route) },
                 onNavigateToEditEntry = { entryId -> navController.navigate(Screen.EditEntry.createRoute(entryId)) },
                 onNavigateToSettings = { navController.navigate(Screen.Settings.route) },
-                onLogout = { navController.navigate(Screen.Login.route) { popUpTo(Screen.Vault.route) { inclusive = true } } }
+                onLogout = { navController.navigate(Screen.Login.route) { popUpTo(Screen.Vault.route) { inclusive = true } } },
+                onNavigateToUnlock = { navController.navigate(Screen.Unlock.route) }
             )
         }
 

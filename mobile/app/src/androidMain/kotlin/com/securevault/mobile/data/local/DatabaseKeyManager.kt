@@ -6,6 +6,7 @@ import android.security.keystore.KeyProperties
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import java.security.SecureRandom
+import androidx.core.content.edit
 
 class DatabaseKeyManager(private val context: Context) {
 
@@ -35,10 +36,19 @@ class DatabaseKeyManager(private val context: Context) {
         val storedPassphrase = encryptedPrefs.getString(KEY_DB_PASSPHRASE, null)
 
         return if (storedPassphrase != null) {
-            storedPassphrase.toByteArray(Charsets.UTF_8)
+            try {
+                android.util.Base64.decode(storedPassphrase, android.util.Base64.NO_WRAP)
+            } catch (e: IllegalArgumentException) {
+                encryptedPrefs.edit { remove(KEY_DB_PASSPHRASE) }
+                val newPassphrase = generateSecurePassphrase()
+                val encoded = android.util.Base64.encodeToString(newPassphrase, android.util.Base64.NO_WRAP)
+                encryptedPrefs.edit { putString(KEY_DB_PASSPHRASE, encoded) }
+                newPassphrase
+            }
         } else {
             val newPassphrase = generateSecurePassphrase()
-            encryptedPrefs.edit().putString(KEY_DB_PASSPHRASE, String(newPassphrase, Charsets.UTF_8)).apply()
+            val encoded = android.util.Base64.encodeToString(newPassphrase, android.util.Base64.NO_WRAP)
+            encryptedPrefs.edit { putString(KEY_DB_PASSPHRASE, encoded) }
             newPassphrase
         }
     }
@@ -51,6 +61,6 @@ class DatabaseKeyManager(private val context: Context) {
     }
 
     fun clearPassphrase() {
-        encryptedPrefs.edit().clear().apply()
+        encryptedPrefs.edit { clear() }
     }
 }
