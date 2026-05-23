@@ -14,7 +14,7 @@ export async function unwrapVaultKey(
     ciphertext,
   )
 
-  return crypto.subtle.importKey('raw', new Uint8Array(vaultKeyBytes), 'AES-GCM', false, [
+  return crypto.subtle.importKey('raw', new Uint8Array(vaultKeyBytes), 'AES-GCM', true, [
     'encrypt',
     'decrypt',
   ])

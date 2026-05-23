@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useVault } from '../context/VaultContext'
 import { EmptyState } from '../components/EmptyState'
@@ -10,6 +10,18 @@ export function VaultPage() {
   const [search, setSearch] = useState('')
   const [unlockPw, setUnlockPw] = useState('')
   const [unlockErr, setUnlockErr] = useState('')
+  const autoUnlocked = useRef(false)
+
+  useEffect(() => {
+    if (!isUnlocked && !autoUnlocked.current) {
+      const saved = sessionStorage.getItem('autoUnlockPassword')
+      if (saved) {
+        autoUnlocked.current = true
+        sessionStorage.removeItem('autoUnlockPassword')
+        unlock(saved).catch(() => {})
+      }
+    }
+  }, [isUnlocked, unlock])
 
   useEffect(() => {
     if (isUnlocked) loadEntries()

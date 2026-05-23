@@ -16,7 +16,6 @@ interface AuthRepository {
     suspend fun logout(): Result<Unit>
     suspend fun refreshToken(): Result<AuthState>
     suspend fun unlockVault(password: String): Result<Unit>
-    suspend fun changePassword(currentPassword: String, newPassword: String): Result<Unit>
     fun getAuthState(): AuthState
     fun observeAuthState(): kotlinx.coroutines.flow.Flow<AuthState>
 }

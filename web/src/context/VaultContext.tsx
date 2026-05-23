@@ -4,9 +4,10 @@ import {
   useState,
   useCallback,
   useRef,
+  useEffect,
   type ReactNode,
 } from 'react'
-import { deriveKek } from '../crypto/argon2'
+import { deriveKek, generateVaultKey } from '../crypto/argon2'
 import { unwrapVaultKey, wrapVaultKey } from '../crypto/vaultKey'
 import { encryptEntry, decryptEntry } from '../crypto/entries'
 import { bytesToBase64, generateRandomBytes } from '../crypto/util'
@@ -32,6 +33,7 @@ interface VaultContextType {
   isUnlocked: boolean
   isLoading: boolean
   error: string | null
+  crossTabLocked: boolean
   unlock: (password: string) => Promise<void>
   lock: () => void
   clearError: () => void
@@ -45,7 +47,7 @@ interface VaultContextType {
   updateEntry: (id: string, data: EntryFields) => Promise<void>
   deleteEntry: (id: string) => Promise<void>
   clearEntryError: () => void
-  changeMasterPassword: (currentPassword: string, newPassword: string) => Promise<void>
+  changeMasterPassword: (currentPassword: string, newPassword: string, onProgress?: (pct: number) => void) => Promise<void>
 }
 
 const VaultContext = createContext<VaultContextType | null>(null)
@@ -55,15 +57,32 @@ export function VaultProvider({ children }: { children: ReactNode }) {
   const [isUnlocked, setIsUnlocked] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [crossTabLocked, setCrossTabLocked] = useState(false)
 
   const [entries, setEntries] = useState<VaultEntryResponse[]>([])
   const [decrypted, setDecrypted] = useState<Record<string, EntryFields>>({})
   const [isLoadingEntries, setIsLoadingEntries] = useState(false)
   const [entryError, setEntryError] = useState<string | null>(null)
 
+  useEffect(() => {
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'encryptionSalt' || e.key === 'wrappedVaultKey') {
+        vaultKeyRef.current = null
+        setIsUnlocked(false)
+        setCrossTabLocked(true)
+        setEntries([])
+        setDecrypted({})
+        setError('Your master password was changed in another session. Please log out and log back in.')
+      }
+    }
+    window.addEventListener('storage', handleStorage)
+    return () => window.removeEventListener('storage', handleStorage)
+  }, [])
+
   const lock = useCallback(() => {
     vaultKeyRef.current = null
     setIsUnlocked(false)
+    setCrossTabLocked(false)
     setError(null)
     setEntries([])
     setDecrypted({})
@@ -205,28 +224,49 @@ export function VaultProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const changeMasterPassword = useCallback(
-    async (currentPassword: string, newPassword: string) => {
+    async (currentPassword: string, newPassword: string, onProgress?: (pct: number) => void) => {
       const currentSalt = localStorage.getItem('encryptionSalt')
       const wrapped = localStorage.getItem('wrappedVaultKey')
       if (!currentSalt || !wrapped) throw new Error('No vault key material')
 
-      let vaultKey = vaultKeyRef.current
-      if (!vaultKey) {
+      onProgress?.(0.1)
+      let oldVaultKey = vaultKeyRef.current
+      if (!oldVaultKey) {
         const kek = await deriveKek(currentPassword, currentSalt)
-        vaultKey = await unwrapVaultKey(kek, wrapped)
+        oldVaultKey = await unwrapVaultKey(kek, wrapped)
       }
 
+      onProgress?.(0.25)
+      const entriesRes = await getVaultEntries()
+      const existingEntries = entriesRes.entries
+
+      onProgress?.(0.4)
+      const newVaultKey = await generateVaultKey()
+
+      onProgress?.(0.55)
+      const reEncryptedEntries = await Promise.all(
+        existingEntries.map(async (entry) => {
+          const plaintext = await decryptEntry(oldVaultKey, entry.encryptedData, entry.iv)
+          const encrypted = await encryptEntry(newVaultKey, plaintext)
+          return { id: entry.id, ...encrypted }
+        }),
+      )
+
+      onProgress?.(0.75)
       const newSalt = bytesToBase64(generateRandomBytes(16))
       const newKek = await deriveKek(newPassword, newSalt)
-      const newWrapped = await wrapVaultKey(newKek, vaultKey)
+      const newWrapped = await wrapVaultKey(newKek, newVaultKey)
 
+      onProgress?.(0.9)
       const res = await changePassword({
-        currentPassword,
-        newPassword,
-        wrappedVaultKey: newWrapped,
-        newEncryptionSalt: newSalt,
-        entries: [],
+        current_password: currentPassword,
+        new_password: newPassword,
+        wrapped_vault_key: newWrapped,
+        new_encryption_salt: newSalt,
+        entries: reEncryptedEntries,
       })
+
+      vaultKeyRef.current = newVaultKey
 
       localStorage.setItem('encryptionSalt', res.encryptionSalt)
       localStorage.setItem('wrappedVaultKey', res.wrappedVaultKey)
@@ -242,6 +282,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
         isUnlocked,
         isLoading,
         error,
+        crossTabLocked,
         unlock,
         lock,
         clearError,

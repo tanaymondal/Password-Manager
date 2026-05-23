@@ -48,7 +48,7 @@ export function generateSalt(): string {
 
 export async function generateVaultKey(): Promise<CryptoKey> {
   const keyBytes = generateRandomBytes(32)
-  return crypto.subtle.importKey('raw', keyBytes as Uint8Array<ArrayBuffer>, 'AES-GCM', false, [
+  return crypto.subtle.importKey('raw', keyBytes as Uint8Array<ArrayBuffer>, 'AES-GCM', true, [
     'encrypt',
     'decrypt',
   ])

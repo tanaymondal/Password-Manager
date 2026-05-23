@@ -50,15 +50,6 @@ sealed class RefreshTokenResult {
     data class Error(val message: String) : RefreshTokenResult()
 }
 
-interface ChangePasswordUseCase {
-    suspend operator fun invoke(currentPassword: String, newPassword: String): ChangePasswordResult
-}
-
-sealed class ChangePasswordResult {
-    data object Success : ChangePasswordResult()
-    data class Error(val message: String) : ChangePasswordResult()
-}
-
 interface UnlockVaultUseCase {
     suspend operator fun invoke(password: String): UnlockVaultResult
 }

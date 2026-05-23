@@ -19,7 +19,6 @@ import com.securevault.mobile.domain.usecase.vault.impl.*
 import com.securevault.mobile.ui.screens.auth.LoginViewModel
 import com.securevault.mobile.ui.screens.auth.RegisterViewModel
 import com.securevault.mobile.ui.screens.auth.UnlockViewModel
-import com.securevault.mobile.ui.screens.settings.ChangePasswordViewModel
 import com.securevault.mobile.ui.screens.settings.SettingsViewModel
 import com.securevault.mobile.ui.screens.vault.AddEditEntryViewModel
 import com.securevault.mobile.ui.screens.vault.VaultViewModel
@@ -49,7 +48,6 @@ val appModule = module {
     factory<RegisterUseCase> { RegisterUseCaseImpl(get()) }
     factory<LogoutUseCase> { LogoutUseCaseImpl(get()) }
     factory<RefreshTokenUseCase> { RefreshTokenUseCaseImpl(get()) }
-    factory<ChangePasswordUseCase> { ChangePasswordUseCaseImpl(get()) }
     factory<UnlockVaultUseCase> { UnlockVaultUseCaseImpl(get()) }
 
     // Vault Use Cases
@@ -77,6 +75,5 @@ val appModule = module {
     viewModel { VaultViewModel(get(), get(), get()) }
     viewModel { AddEditEntryViewModel(get(), get(), get()) }
     viewModel { SettingsViewModel(get(), get(), get()) }
-    viewModel { ChangePasswordViewModel(get()) }
     viewModel { UnlockViewModel(get()) }
 }

@@ -28,26 +28,6 @@ data class AuthResponse(
 )
 
 @Serializable
-data class ChangePasswordRequest(
-    @SerialName("current_password") val currentPassword: String,
-    @SerialName("new_password") val newPassword: String,
-    @SerialName("wrapped_vault_key") val wrappedVaultKey: String? = null,
-    @SerialName("new_encryption_salt") val newEncryptionSalt: String? = null,
-    val entries: List<VaultEntryRequest>? = null
-)
-
-@Serializable
-data class ChangePasswordResponse(
-    val accessToken: String,
-    val refreshToken: String,
-    @SerialName("encryptionSalt") val encryptionSalt: String,
-    @SerialName("userId") val userId: String,
-    val email: String,
-    @SerialName("wrappedVaultKey") val wrappedVaultKey: String? = null,
-    @SerialName("encryptionVersion") val encryptionVersion: Int = 2
-)
-
-@Serializable
 data class ApiResponse<T>(
     val success: Boolean,
     val message: String? = null,

@@ -1,5 +1,7 @@
 package com.securevault.security;
 
+import com.securevault.entity.User;
+import com.securevault.repository.UserRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -14,6 +16,9 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.util.UUID;
 
 /**
  * Spring Security filter that extracts and validates JWT tokens from HTTP requests.
@@ -43,6 +48,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtTokenProvider jwtTokenProvider;
     private final CustomUserDetailsService userDetailsService;
+    private final UserRepository userRepository;
 
     /**
      * Processes each HTTP request to extract and validate JWT token.
@@ -63,15 +69,35 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String token = getTokenFromRequest(request);
 
         if (StringUtils.hasText(token) && jwtTokenProvider.validateToken(token)) {
-            String email = jwtTokenProvider.getEmailFromToken(token);
+            UUID userId = jwtTokenProvider.getUserIdFromToken(token);
+            Object tokenPwdClaim = jwtTokenProvider.getClaim(token, "pwdUpdatedAt", Object.class);
 
-            UserDetails userDetails = userDetailsService.loadUserByUsername(email);
+            User user = userRepository.findById(userId).orElse(null);
+            if (user != null) {
+                long tokenPwdUpdatedAt = (tokenPwdClaim instanceof Number)
+                    ? ((Number) tokenPwdClaim).longValue() : -1;
+                LocalDateTime dbPwdUpdatedAt = user.getPasswordUpdatedAt();
+                boolean passwordUpToDate = dbPwdUpdatedAt == null || tokenPwdUpdatedAt == -1 ||
+                    tokenPwdUpdatedAt == dbPwdUpdatedAt.toEpochSecond(ZoneOffset.UTC);
 
-            UsernamePasswordAuthenticationToken authentication =
-                    new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
-            authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                if (passwordUpToDate) {
+                    String email = jwtTokenProvider.getEmailFromToken(token);
+                    UserDetails userDetails = userDetailsService.loadUserByUsername(email);
 
-            SecurityContextHolder.getContext().setAuthentication(authentication);
+                    UsernamePasswordAuthenticationToken authentication =
+                            new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
+                    authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+
+                    SecurityContextHolder.getContext().setAuthentication(authentication);
+                } else {
+                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                    response.setContentType("application/json");
+                    response.getWriter().write(
+                        "{\"success\":false,\"message\":\"Password changed on another device. Please re-login.\"}"
+                    );
+                    return;
+                }
+            }
         }
 
         filterChain.doFilter(request, response);

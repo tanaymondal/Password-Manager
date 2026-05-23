@@ -7,6 +7,8 @@ import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Date;
 import java.util.UUID;
 
@@ -65,13 +67,14 @@ public class JwtTokenProvider {
      * @param email Email of the user
      * @return Signed JWT access token
      */
-    public String generateAccessToken(UUID userId, String email) {
+    public String generateAccessToken(UUID userId, String email, LocalDateTime passwordUpdatedAt) {
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + jwtExpiration);
 
         return Jwts.builder()
                 .subject(userId.toString())
                 .claim("email", email)
+                .claim("pwdUpdatedAt", passwordUpdatedAt.toEpochSecond(ZoneOffset.UTC))
                 .issuedAt(now)
                 .expiration(expiryDate)
                 .signWith(key)
@@ -137,6 +140,15 @@ public class JwtTokenProvider {
      * @param token JWT token to validate
      * @return true if valid, false otherwise
      */
+    public <T> T getClaim(String token, String claimName, Class<T> type) {
+        Claims claims = Jwts.parser()
+                .verifyWith(key)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
+        return claims.get(claimName, type);
+    }
+
     public boolean validateToken(String token) {
         try {
             Jwts.parser().verifyWith(key).build().parseSignedClaims(token);

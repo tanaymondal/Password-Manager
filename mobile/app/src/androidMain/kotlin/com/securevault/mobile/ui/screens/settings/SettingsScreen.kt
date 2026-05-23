@@ -18,7 +18,6 @@ import org.koin.androidx.compose.koinViewModel
 @Composable
 fun SettingsScreen(
     onNavigateBack: () -> Unit,
-    onNavigateToChangePassword: () -> Unit,
     onLogout: () -> Unit,
     viewModel: SettingsViewModel
 ) {
@@ -69,15 +68,6 @@ fun SettingsScreen(
                         null -> "Unknown"
                     },
                     onClick = { /* TODO */ }
-                )
-            }
-
-            item {
-                SettingsItem(
-                    icon = Icons.Default.Add,
-                    title = "Change Password",
-                    subtitle = "Update your master password",
-                    onClick = onNavigateToChangePassword
                 )
             }
 

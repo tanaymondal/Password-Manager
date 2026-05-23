@@ -1,11 +1,9 @@
 package com.securevault.mobile.data.repository
 
 import com.securevault.mobile.data.api.SecureVaultApi
-import com.securevault.mobile.data.model.ChangePasswordRequest
 import com.securevault.mobile.data.model.LoginRequest
 import com.securevault.mobile.data.model.RefreshTokenRequest
 import com.securevault.mobile.data.model.RegisterRequest
-import com.securevault.mobile.data.model.VaultEntryRequest
 import com.securevault.mobile.domain.model.AuthState
 import com.securevault.mobile.domain.model.Result
 import com.securevault.mobile.domain.model.TwoFactorInfo
@@ -196,84 +194,6 @@ class AuthRepositoryImpl(
             Result.Success(Unit)
         } catch (e: Exception) {
             Result.Error("Failed to unlock vault: ${e.message}")
-        }
-    }
-
-    override suspend fun changePassword(currentPassword: String, newPassword: String): Result<Unit> {
-        return try {
-            val entriesResult = api.getVaultEntries()
-            val entries = entriesResult.getOrNull()
-                ?: return Result.Error(entriesResult.exceptionOrNull()?.message ?: "Failed to fetch vault entries")
-
-            val oldCachedVaultKey = vaultKeyManager.getCachedVaultKey()
-                ?: return Result.Error("Vault key not available. Please login again.")
-
-            val oldEncryptionSalt = SessionManager.getEncryptionSalt()
-            val newEncryptionSalt = vaultKeyManager.generateEncryptionSalt()
-            val newVaultKey = vaultKeyManager.generateVaultKey()
-
-            val reEncryptedEntries = entries.map { entryResponse ->
-                vaultKeyManager.setCachedVaultKey(oldCachedVaultKey)
-                val decrypted = encryptor.decrypt(entryResponse)
-                vaultKeyManager.setCachedVaultKey(newVaultKey)
-                val request = encryptor.encrypt(decrypted)
-                VaultEntryRequest(
-                    id = entryResponse.id,
-                    encryptedData = request.encryptedData,
-                    iv = request.iv
-                )
-            }
-
-            val newWrappedVaultKey = vaultKeyManager.wrapVaultKey(
-                newVaultKey,
-                newPassword,
-                newEncryptionSalt
-            )
-
-            SessionManager.setEncryptionSalt(newEncryptionSalt)
-
-            val changeResponse = api.changePassword(
-                ChangePasswordRequest(
-                    currentPassword = currentPassword,
-                    newPassword = newPassword,
-                    wrappedVaultKey = newWrappedVaultKey,
-                    newEncryptionSalt = newEncryptionSalt,
-                    entries = reEncryptedEntries
-                )
-            )
-
-            changeResponse.fold(
-                onSuccess = { result ->
-                    saveSession(
-                        result.accessToken,
-                        result.refreshToken,
-                        result.encryptionSalt,
-                        result.userId,
-                        result.email,
-                        result.encryptionVersion,
-                        result.wrappedVaultKey
-                    )
-                    if (result.wrappedVaultKey != null) {
-                        try {
-                            vaultKeyManager.unlockVault(
-                                newPassword,
-                                result.encryptionSalt,
-                                result.wrappedVaultKey
-                            )
-                        } catch (e: Exception) {
-                            vaultKeyManager.clearCachedVaultKey()
-                            return Result.Error("Password changed but vault re-sync failed: ${e.message}")
-                        }
-                    }
-                    Result.Success(Unit)
-                },
-                onFailure = {
-                    vaultKeyManager.clearCachedVaultKey()
-                    Result.Error(it.message ?: "Password change failed")
-                }
-            )
-        } catch (e: Exception) {
-            Result.Error(e.message ?: "Password change failed", e)
         }
     }
 

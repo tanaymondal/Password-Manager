@@ -13,8 +13,6 @@ import com.securevault.mobile.domain.usecase.auth.GetAuthStateUseCase
 import com.securevault.mobile.ui.screens.auth.LoginScreen
 import com.securevault.mobile.ui.screens.auth.RegisterScreen
 import com.securevault.mobile.ui.screens.auth.UnlockScreen
-import com.securevault.mobile.ui.screens.settings.ChangePasswordScreen
-import com.securevault.mobile.ui.screens.settings.ChangePasswordViewModel
 import com.securevault.mobile.ui.screens.settings.SettingsScreen
 import com.securevault.mobile.ui.screens.settings.SettingsViewModel
 import com.securevault.mobile.ui.screens.vault.AddEditEntryScreen
@@ -33,7 +31,6 @@ sealed class Screen(val route: String) {
         fun createRoute(entryId: Long) = "edit_entry/$entryId"
     }
     data object Settings : Screen("settings")
-    data object ChangePassword : Screen("change_password")
     data object Unlock : Screen("unlock")
 }
 
@@ -127,17 +124,8 @@ fun SecureVaultNavHost() {
             val settingsViewModel: SettingsViewModel = koinViewModel()
             SettingsScreen(
                 onNavigateBack = { navController.popBackStack() },
-                onNavigateToChangePassword = { navController.navigate(Screen.ChangePassword.route) },
                 onLogout = { navController.navigate(Screen.Login.route) { popUpTo(0) { inclusive = true } } },
                 viewModel = settingsViewModel
-            )
-        }
-
-        composable(Screen.ChangePassword.route) {
-            val changePasswordViewModel: ChangePasswordViewModel = koinViewModel()
-            ChangePasswordScreen(
-                onNavigateBack = { navController.popBackStack() },
-                viewModel = changePasswordViewModel
             )
         }
     }

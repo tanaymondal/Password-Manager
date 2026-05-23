@@ -123,18 +123,6 @@ class RefreshTokenUseCaseImpl(
     }
 }
 
-class ChangePasswordUseCaseImpl(
-    private val authRepository: AuthRepository
-) : ChangePasswordUseCase {
-    override suspend operator fun invoke(currentPassword: String, newPassword: String): ChangePasswordResult {
-        return when (val result = authRepository.changePassword(currentPassword, newPassword)) {
-            is Result.Success -> ChangePasswordResult.Success
-            is Result.Error -> ChangePasswordResult.Error(result.message)
-            is Result.Loading -> ChangePasswordResult.Error("Loading...")
-        }
-    }
-}
-
 class UnlockVaultUseCaseImpl(
     private val authRepository: AuthRepository
 ) : UnlockVaultUseCase {

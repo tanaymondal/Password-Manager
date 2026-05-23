@@ -66,11 +66,11 @@ export function logout() {
 }
 
 export interface ChangePasswordRequest {
-  currentPassword: string
-  newPassword: string
-  wrappedVaultKey: string
-  newEncryptionSalt: string
-  entries: { encryptedData: string; iv: string }[]
+  current_password: string
+  new_password: string
+  wrapped_vault_key: string
+  new_encryption_salt: string
+  entries: { id?: string; encryptedData: string; iv: string }[]
 }
 
 export interface ChangePasswordResponse {

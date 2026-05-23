@@ -76,18 +76,6 @@ class SecureVaultApi(
         }
     }
 
-    suspend fun changePassword(request: ChangePasswordRequest): Result<ChangePasswordResponse> =
-        authCall { token ->
-            val response: HttpResponse = httpClient.post("$baseUrl/api/v1/auth/change-password") {
-                bearerAuth(token)
-                contentType(ContentType.Application.Json)
-                setBody(request)
-            }
-            val body = response.bodyAsText()
-            val apiResponse: ApiResponse<ChangePasswordResponse> = Json.decodeFromString(body)
-            apiResponse.data ?: throw Exception(apiResponse.message ?: "Password change failed")
-        }
-
     suspend fun getVaultEntries(): Result<List<VaultEntryResponse>> =
         authCall { token ->
             val response: HttpResponse = httpClient.get("$baseUrl/api/v1/vault") {

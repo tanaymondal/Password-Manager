@@ -89,8 +89,8 @@ public class AuthService {
         }
 
         int strength = passwordService.calculatePasswordStrength(request.getPassword());
-        if (strength < 4) {
-            throw new IllegalArgumentException("Password is too weak. Use at least 8 characters with mixed case, numbers, and symbols.");
+        if (strength < 6) {
+            throw new IllegalArgumentException("Password is too weak. Please choose a stronger password.");
         }
 
         if (breachCheckService.isPasswordBreached(request.getPassword())) {
@@ -114,6 +114,7 @@ public class AuthService {
         user.setFailedLoginAttempts(0);
         user.setWrappedVaultKey(wrappedVaultKey);
         user.setEncryptionVersion(2);
+        user.setPasswordUpdatedAt(LocalDateTime.now());
 
         user = userRepository.save(user);
 
@@ -305,8 +306,8 @@ public class AuthService {
         }
 
         int strength = passwordService.calculatePasswordStrength(newPassword);
-        if (strength < 4) {
-            throw new IllegalArgumentException("New password is too weak");
+        if (strength < 6) {
+            throw new IllegalArgumentException("Password is too weak. Please choose a stronger password.");
         }
 
         if (breachCheckService.isPasswordBreached(newPassword)) {
@@ -445,7 +446,7 @@ public class AuthService {
      */
     private AuthResponse generateAuthResponse(User user) {
         refreshTokenRepository.deleteByUserId(user.getId());
-        String accessToken = jwtTokenProvider.generateAccessToken(user.getId(), user.getEmail());
+        String accessToken = jwtTokenProvider.generateAccessToken(user.getId(), user.getEmail(), user.getPasswordUpdatedAt());
         String refreshToken = jwtTokenProvider.generateRefreshToken(user.getId());
 
         RefreshToken token = new RefreshToken();
@@ -465,19 +466,8 @@ public class AuthService {
         );
     }
 
-    /**
-     * Generates change password response with new JWT tokens and updated cryptographic material.
-     *
-     * Similar to generateAuthResponse but returns a ChangePasswordResponse object.
-     * This is used after a successful password change to provide the client with
-     * new tokens and updated encryption material.
-     *
-     * @param user User who changed password
-     * @return ChangePasswordResponse with new tokens and cryptographic material
-     */
     private ChangePasswordResponse generateChangePasswordResponse(User user) {
-        refreshTokenRepository.deleteByUserId(user.getId());
-        String accessToken = jwtTokenProvider.generateAccessToken(user.getId(), user.getEmail());
+        String accessToken = jwtTokenProvider.generateAccessToken(user.getId(), user.getEmail(), user.getPasswordUpdatedAt());
         String refreshToken = jwtTokenProvider.generateRefreshToken(user.getId());
 
         RefreshToken token = new RefreshToken();

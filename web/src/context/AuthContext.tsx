@@ -108,6 +108,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       deviceName: 'Web Browser',
       deviceId: getDeviceId(),
     })
+    sessionStorage.setItem('autoUnlockPassword', password)
     if (!res.twoFactorRequired && res.accessToken && res.refreshToken) {
       setTokens(res.accessToken, res.refreshToken)
       persistCryptoMaterial({
@@ -154,6 +155,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
     setTokens(res.accessToken, res.refreshToken)
     persistCryptoMaterial(res)
+    sessionStorage.setItem('autoUnlockPassword', password)
     setState({
       user: { id: res.userId, email: res.email },
       isAuthenticated: true,

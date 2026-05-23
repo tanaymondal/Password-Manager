@@ -54,19 +54,40 @@ export function SettingsPage() {
 }
 
 function SecuritySection() {
-  const { changeMasterPassword } = useVault()
+  const { changeMasterPassword, crossTabLocked } = useVault()
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const [showPassword, setShowPassword] = useState(false)
+  const [progress, setProgress] = useState(0)
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false)
+  const [showNewPassword, setShowNewPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+
+  if (crossTabLocked) {
+    return (
+      <div>
+        <h2 className="text-lg font-medium mb-1">Password changed elsewhere</h2>
+        <p className="text-sm text-gray-400 mb-4">
+          Your master password was changed in another session. You've been logged out of this session.
+        </p>
+        <button
+          onClick={() => window.location.reload()}
+          className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-600/20 transition-all duration-200 hover:bg-emerald-500"
+        >
+          Reload to re-login
+        </button>
+      </div>
+    )
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
     setSuccess('')
+    setProgress(0)
 
     if (newPassword !== confirmPassword) {
       setError('Passwords do not match')
@@ -76,18 +97,23 @@ function SecuritySection() {
       setError('New password must be at least 8 characters')
       return
     }
-
+    if (newPassword === currentPassword) {
+      setError('New password must be different from current password')
+      return
+    }
     setSubmitting(true)
     try {
-      await changeMasterPassword(currentPassword, newPassword)
-      setSuccess('Password changed successfully')
+      await changeMasterPassword(currentPassword, newPassword, setProgress)
+      setSuccess('Password changed successfully. Other devices have been logged out.')
       setCurrentPassword('')
       setNewPassword('')
       setConfirmPassword('')
+      setTimeout(() => setSuccess(''), 6000)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to change password')
     } finally {
       setSubmitting(false)
+      setProgress(0)
     }
   }
 
@@ -116,13 +142,22 @@ function SecuritySection() {
           <label className="block text-sm font-medium text-gray-300">
             Current password
           </label>
-          <input
-            type="password"
-            value={currentPassword}
-            onChange={(e) => setCurrentPassword(e.target.value)}
-            className="mt-1.5 block w-full rounded-xl border border-gray-700/50 bg-gray-950/50 px-3.5 py-2.5 text-sm text-gray-100 transition-all duration-200 focus:border-emerald-500/50 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-            required
-          />
+          <div className="relative mt-1.5">
+            <input
+              type={showCurrentPassword ? 'text' : 'password'}
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              className="block w-full rounded-xl border border-gray-700/50 bg-gray-950/50 px-3.5 py-2.5 pr-14 text-sm text-gray-100 transition-all duration-200 focus:border-emerald-500/50 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+              required
+            />
+            <button
+              type="button"
+              onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg px-2 py-1 text-xs text-gray-400 transition-colors hover:bg-gray-800"
+            >
+              {showCurrentPassword ? 'Hide' : 'Show'}
+            </button>
+          </div>
         </div>
 
         <div>
@@ -143,7 +178,7 @@ function SecuritySection() {
           </div>
           <div className="relative mt-1.5">
             <input
-              type={showPassword ? 'text' : 'password'}
+              type={showNewPassword ? 'text' : 'password'}
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               className="block w-full rounded-xl border border-gray-700/50 bg-gray-950/50 px-3.5 py-2.5 pr-14 text-sm text-gray-100 transition-all duration-200 focus:border-emerald-500/50 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
@@ -152,10 +187,10 @@ function SecuritySection() {
             />
             <button
               type="button"
-              onClick={() => setShowPassword(!showPassword)}
+              onClick={() => setShowNewPassword(!showNewPassword)}
               className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg px-2 py-1 text-xs text-gray-400 transition-colors hover:bg-gray-800"
             >
-              {showPassword ? 'Hide' : 'Show'}
+              {showNewPassword ? 'Hide' : 'Show'}
             </button>
           </div>
           {newPassword && newPassword.length > 0 && (
@@ -169,13 +204,22 @@ function SecuritySection() {
           <label className="block text-sm font-medium text-gray-300">
             Confirm new password
           </label>
-          <input
-            type="password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            className="mt-1.5 block w-full rounded-xl border border-gray-700/50 bg-gray-950/50 px-3.5 py-2.5 text-sm text-gray-100 transition-all duration-200 focus:border-emerald-500/50 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-            required
-          />
+          <div className="relative mt-1.5">
+            <input
+              type={showConfirmPassword ? 'text' : 'password'}
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              className="block w-full rounded-xl border border-gray-700/50 bg-gray-950/50 px-3.5 py-2.5 pr-14 text-sm text-gray-100 transition-all duration-200 focus:border-emerald-500/50 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+              required
+            />
+            <button
+              type="button"
+              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg px-2 py-1 text-xs text-gray-400 transition-colors hover:bg-gray-800"
+            >
+              {showConfirmPassword ? 'Hide' : 'Show'}
+            </button>
+          </div>
         </div>
 
         {error && (
@@ -189,12 +233,21 @@ function SecuritySection() {
           </div>
         )}
 
+        <div className={`space-y-2 ${submitting ? '' : 'hidden'}`}>
+          <div className="h-1.5 w-full rounded-full bg-gray-700/50 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-emerald-500 transition-all duration-500 ease-out"
+              style={{ width: `${progress * 100}%` }}
+            />
+          </div>
+        </div>
+
         <button
           type="submit"
           disabled={submitting}
           className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-600/20 transition-all duration-200 hover:bg-emerald-500 hover:shadow-emerald-500/30 active:scale-[0.98] disabled:opacity-50 disabled:shadow-none"
         >
-          {submitting ? 'Changing...' : 'Change password'}
+          {submitting ? 'Changing…' : 'Change password'}
         </button>
       </form>
     </div>
