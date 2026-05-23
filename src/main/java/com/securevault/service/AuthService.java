@@ -89,7 +89,7 @@ public class AuthService {
         }
 
         int strength = passwordService.calculatePasswordStrength(request.getPassword());
-        if (strength < 6) {
+        if (strength < 4) {
             throw new IllegalArgumentException("Password is too weak. Please choose a stronger password.");
         }
 
@@ -306,7 +306,7 @@ public class AuthService {
         }
 
         int strength = passwordService.calculatePasswordStrength(newPassword);
-        if (strength < 6) {
+        if (strength < 4) {
             throw new IllegalArgumentException("Password is too weak. Please choose a stronger password.");
         }
 
