@@ -1,10 +1,11 @@
 # Web Frontend — Status
 
 ## Stack
-- **Framework:** React 19 + TypeScript + Vite 8
-- **Styling:** Tailwind CSS v4
+- **Framework:** React 19.2 + TypeScript 6 + Vite 8
+- **Styling:** Tailwind CSS v4.3
 - **HTTP:** Fetch API (custom wrapper with JWT auto-refresh)
-- **Forms:** React Hook Form + Zod
+- **Forms:** React Hook Form + Zod 4.4
+- **Routing:** React Router 7.15
 - **Crypto:** `hash-wasm` (Argon2id Wasm) + Web Crypto API (AES-256-GCM)
 - **2FA QR:** `qrcode`
 - **Deploy:** Docker (multi-stage) + nginx (alpine)
@@ -13,7 +14,7 @@
 
 | Layer | Algorithm | Parameters |
 |-------|-----------|------------|
-| KEK Derivation | Argon2id | iter=3, mem=65536KB, par=4, salt=16B, out=32B |
+| KEK Derivation | Argon2id | iter=4, mem=65536KB, par=4, salt=16B, out=32B |
 | Vault Key Wrap/Unwrap | AES-256-GCM | key=KEK(32B), iv=12B, tag=128bit |
 | Entry Encrypt/Decrypt | AES-256-GCM | key=VaultKey(32B), iv=12B, tag=128bit |
 | Encryption Version | 2 | from AuthResponse |
@@ -22,49 +23,49 @@
 
 ```
 web/
-├── .env.example
+├── .env / .env.local          # VITE_API_URL
 ├── .dockerignore
-├── Dockerfile              # Multi-stage (node:22 build → nginx:alpine)
-├── nginx.conf              # CSP headers + /api/ proxy to app:8080
+├── Dockerfile                  # Multi-stage (node:22 build → nginx:alpine)
+├── nginx.conf                  # CSP headers + /api/ proxy to app:8080
 ├── vite.config.ts
 └── src/
     ├── main.tsx
-    ├── App.tsx              # Routes: /login, /register, /vault, /settings
+    ├── App.tsx                  # Routes: /login, /register, /vault/*, /settings
     ├── index.css
     ├── api/
-    │   ├── client.ts        # fetch wrapper with JWT + refresh interceptor
-    │   ├── auth.ts          # login, register, refresh, logout, changePassword
-    │   ├── vault.ts         # vault CRUD
-    │   ├── twofa.ts         # 2FA endpoints
-    │   ├── audit.ts         # audit log
-    │   └── devices.ts       # device management
+    │   ├── client.ts            # fetch wrapper with JWT + refresh interceptor
+    │   ├── auth.ts              # login, register, refresh, logout, changePassword
+    │   ├── vault.ts             # vault CRUD
+    │   ├── twofa.ts             # 2FA endpoints
+    │   ├── audit.ts             # audit log
+    │   └── devices.ts           # device management
     ├── crypto/
-    │   ├── argon2.ts        # Argon2id Wasm wrapper
-    │   ├── vaultKey.ts      # derive KEK, wrap/unwrap vault key
-    │   ├── entries.ts       # AES-GCM encrypt/decrypt vault entries
-    │   ├── generator.ts     # random password generator
-    │   ├── strength.ts      # password strength (0-10, min 4)
-    │   └── util.ts          # base64 helpers + random bytes
+    │   ├── argon2.ts            # Argon2id Wasm wrapper + generateVaultKey()
+    │   ├── vaultKey.ts          # derive KEK, wrap/unwrap vault key
+    │   ├── entries.ts           # AES-GCM encrypt/decrypt vault entries
+    │   ├── generator.ts         # random password generator
+    │   ├── strength.ts          # password strength (0-10 scale)
+    │   └── util.ts              # base64 helpers + random bytes
     ├── context/
-    │   ├── AuthContext.tsx   # JWT, user, login/logout, master password ref
-    │   └── VaultContext.tsx  # vault key + entries cache + CRUD
+    │   ├── AuthContext.tsx       # JWT, user, login/logout, autoUnlockPassword in sessionStorage
+    │   └── VaultContext.tsx      # vault key + entries cache + CRUD + changeMasterPassword
     ├── hooks/
-    │   └── useAutoLock.ts   # idle timer → wipe vault key
+    │   └── useAutoLock.ts        # idle timer → wipe vault key (5 min default)
     ├── components/
-    │   ├── Layout.tsx        # sidebar + mobile hamburger
+    │   ├── Layout.tsx            # sidebar + mobile hamburger
     │   ├── ProtectedRoute.tsx
     │   ├── PasswordStrength.tsx
-    │   ├── CopyButton.tsx    # 30s auto-clear
+    │   ├── CopyButton.tsx        # 30s auto-clear
     │   ├── EmptyState.tsx
     │   ├── LoadingSpinner.tsx
     │   └── ErrorBoundary.tsx
     └── pages/
         ├── LoginPage.tsx
         ├── RegisterPage.tsx
-        ├── VaultPage.tsx        # list + search + inline unlock
-        ├── VaultEntryPage.tsx   # view/edit/delete
-        ├── VaultEntryForm.tsx   # add/edit + password generator
-        └── SettingsPage.tsx     # security, 2FA, devices, audit tabs
+        ├── VaultPage.tsx          # list + search + inline unlock + auto-unlock from sessionStorage
+        ├── VaultEntryPage.tsx     # view/edit/delete
+        ├── VaultEntryForm.tsx     # add/edit + password generator
+        └── SettingsPage.tsx       # security, 2FA, devices, audit tabs
 ```
 
 ## Implementation Status
@@ -79,7 +80,7 @@ web/
 - `pages/RegisterPage.tsx` — email + password + device setup form
 
 ### Phase 2 — Crypto ✅
-- `crypto/argon2.ts` — `hash-wasm` argon2id wrapper
+- `crypto/argon2.ts` — `hash-wasm` argon2id wrapper + `generateVaultKey()`
 - `crypto/vaultKey.ts` — KEK derivation + vault key wrap/unwrap (AES-GCM)
 - `crypto/entries.ts` — entry encrypt/decrypt (AES-GCM)
 - `crypto/generator.ts` — secure password generator
@@ -118,15 +119,27 @@ web/
 - CSP headers via nginx.conf
 - Multi-stage Dockerfile (node:22 build → nginx:alpine serve)
 - `.dockerignore`
-- `docker-compose.yaml` updated with web service (Traefik labels)
+- docker-compose.yaml with web service (Traefik labels)
 - Vite production build config
 - End-to-end tested against vault.tanay.pro
+
+### Phase 7 — Password Change Enhancements ✅
+- **Vault key rotation** — `changeMasterPassword` generates new vault key, decrypts all entries with old key, re-encrypts with new key
+- **Progress bar** — linear progress (0.1 → 0.9) during re-encryption instead of text phases
+- **Show/hide toggles** on all three password fields (current, new, confirm)
+- **Same-password validation** — client-side check preventing new === current
+- **Auto-dismiss success** — success message disappears after 6 seconds
+- **Device logout warning** — success text warns other sessions will be logged out
+- **Cross-tab detection** — `storage` event listener on `encryptionSalt`/`wrappedVaultKey` locks vault and shows "Password changed elsewhere" prompt with reload button
+- **Auto-unlock after register/login** — stores password in `sessionStorage` (`autoUnlockPassword`), `VaultPage` reads and auto-unlocks once on mount
+- **Snake_case API fields** — `ChangePasswordRequest` sends `current_password` / `new_password` to match backend `@JsonProperty`
 
 ## API Endpoints Consumed
 
 ```
 POST   /api/v1/auth/login
 POST   /api/v1/auth/register
+POST   /api/v1/auth/verify-2fa
 POST   /api/v1/auth/refresh
 POST   /api/v1/auth/logout
 POST   /api/v1/auth/change-password
@@ -142,15 +155,19 @@ GET    /api/v1/2fa/status
 GET    /api/v1/devices
 DELETE /api/v1/devices/:id
 GET    /api/v1/audit
+GET    /api/v1/health
 ```
 
 ## Security Notes
 
 - Vault key lives only in `useRef()` — never persisted to disk/DOM
-- Auto-lock wipes vault key after N minutes of inactivity
+- Auto-lock wipes vault key after 5 minutes of inactivity
 - Session tokens (JWT) stored in localStorage
 - Clipboard auto-clears after 30s
 - All encryption/decryption client-side — zero-knowledge preserved
 - HTTPS required (Web Crypto API requires secure context)
 - CSP headers set by nginx (script-src, connect-src, etc.)
 - nginx proxies `/api/` to backend — no CORS in production
+- Cross-tab detection via `StorageEvent` on `encryptionSalt`/`wrappedVaultKey` — locks vault immediately
+- Auto-unlock password stored in `sessionStorage` (cleared on tab close)
+- Password change re-encrypts all entries with a new vault key (key rotation)
