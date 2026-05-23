@@ -1,50 +1,66 @@
 # SecureVault - Password Manager
 
-A production-ready, security-focused password manager with Spring Boot backend and Kotlin Multiplatform mobile app.
+A production-ready, zero-knowledge password manager with Spring Boot backend, React web app, and Kotlin Multiplatform mobile app.
 
 ## Features
 
 ### Security
-- **Argon2id** password hashing for authentication
-- **Separate encryption key derivation** using unique salt per user
-- **End-to-end encryption** - server never sees plaintext passwords
-- **Client-side AES-256-GCM encryption** using PBKDF2
-- **EncryptedSharedPreferences** for secure session storage
-- **JWT authentication** with access/refresh tokens
+- **Zero-knowledge architecture** — server never sees plaintext passwords
+- **Argon2id** password hashing for authentication (separate salt from encryption)
+- **AES-256-GCM vault key wrapping** — vault key encrypted with key derived from master password
+- **Vault key rotation** — change password re-encrypts all entries with a new vault key
+- **Immediate session invalidation** — `pwdUpdatedAt` JWT claim rejects old tokens instantly
 - **Two-factor authentication** (TOTP/Google Authenticator)
 - **Account lockout** after 5 failed login attempts (15 min lockout)
-- **Password history** - prevents password reuse (stores last 5)
-- **Rate limiting** - 60 requests/minute
+- **Password history** — prevents password reuse (last 5)
+- **HaveIBeenPwned breach check** on registration and password change
+- **Rate limiting** — 60 requests/minute
+- **Cross-tab detection** — detects password changed in another tab
+
+### Web App (React)
+- Client-side AES-256-GCM encryption/decryption
+- Password generator with configurable rules (length, character types, exclude ambiguous)
+- Client-side password strength meter (0–10 scoring)
+- Session management with automatic token refresh
+- Auto-lock vault after inactivity (default 5 min)
+- Cross-tab vault lock on password change
 
 ### Mobile App (Android & iOS)
-- **Kotlin Multiplatform** - Shared code between Android and iOS
-- **Jetpack Compose** UI for Android
-- **Koin** for dependency injection
-- **Ktor** for networking
-- **Clean Architecture** with MVVM pattern
-- **Offline-capable** with local caching
-- **Encrypted local storage** via Android Keystore
+- Kotlin Multiplatform — shared code between Android and iOS
+- Jetpack Compose UI
+- Offline-capable with local caching
+- Encrypted local storage via Android Keystore
 
 ## Project Structure
 
 ```
 Password-Manager/
-├── src/                    # Spring Boot Backend
+├── src/                           # Spring Boot Backend
 │   └── main/java/com/securevault/
-│       ├── controller/     # REST API endpoints
-│       ├── service/       # Business logic
-│       ├── repository/    # Data access
-│       ├── entity/        # JPA entities
-│       ├── dto/           # Request/Response DTOs
-│       ├── config/        # Security & app config
-│       └── util/          # Utilities
-├── mobile/                 # Kotlin Multiplatform Mobile App
-│   ├── app/
-│   │   ├── androidMain/   # Android-specific code
-│   │   ├── commonMain/    # Shared code
-│   │   └── iosMain/       # iOS-specific code
-│   └── gradle/            # Gradle wrapper
-├── docker-compose.yml     # Docker deployment
+│       ├── controller/            # REST API endpoints
+│       ├── service/               # Business logic
+│       ├── repository/            # Data access
+│       ├── entity/                # JPA entities
+│       ├── dto/                   # Request/Response DTOs
+│       ├── security/              # JWT filter, token provider, auth provider
+│       ├── config/                # Security, CORS, rate limiting, Swagger
+│       └── util/                  # Input sanitizer, user utils
+├── web/                           # React Web App (Vite)
+│   └── src/
+│       ├── api/                   # API client + endpoint modules
+│       ├── components/            # Shared UI components
+│       ├── context/               # Auth + Vault context
+│       ├── crypto/                # Argon2, AES-GCM, strength, generator
+│       ├── hooks/                 # useAutoLock
+│       ├── pages/                 # Login, Register, Vault, Settings, etc.
+│       ├── App.tsx                # Router setup
+│       └── main.tsx               # Entry point
+├── mobile/                        # Kotlin Multiplatform Mobile App
+│   └── app/
+│       ├── androidMain/           # Android-specific code
+│       ├── commonMain/            # Shared code
+│       └── iosMain/               # iOS-specific code
+├── docker-compose.yaml            # Docker deployment
 └── README.md
 ```
 
@@ -52,53 +68,75 @@ Password-Manager/
 
 ### Prerequisites
 - **Backend:** Java 17+, Maven 3.9+, PostgreSQL 16+
+- **Web:** Node.js 20+
 - **Mobile:** Android Studio / Xcode, Android SDK
 
 ### Running Backend
 
 ```bash
-# Clone the repository
 git clone git@github.com:tanaymondal/Password-Manager.git
 cd Password-Manager
 
 # Create database
 createdb securevault
 
-# Run the application
-mvn spring-boot:run
+# Set environment variables
+export JWT_SECRET="your-secret-key-at-least-32-chars"
+export DB_USERNAME=postgres
+export DB_PASSWORD=yourpassword
 
-# Or build and run
-mvn clean package -DskipTests
-java -jar target/securevault-1.0.0.jar
+# Run
+mvn spring-boot:run
 ```
 
-### Running Mobile App (Android)
+### Running Web App
+
+```bash
+cd web
+cp .env .env.local        # Change VITE_API_URL to http://localhost:8080/api/v1
+npm install
+npm run dev               # Opens at http://localhost:3000
+```
+
+### Using Docker Compose
+
+```bash
+docker-compose -f docker-compose.yaml up -d
+```
+
+### Running Mobile App
 
 ```bash
 cd mobile
 ./gradlew installDebug
 ```
 
-**Note:** For Android emulator, the app connects to `http://10.0.2.2:8080` (localhost).
-
-### Using Docker Compose
-
-```bash
-docker-compose up -d
-```
-
 ## Environment Variables
 
+### Backend
 | Variable | Required | Default | Description |
-|----------|----------|---------|--------------|
+|----------|----------|---------|-------------|
 | `DB_HOST` | Yes | localhost | Database host |
 | `DB_PORT` | Yes | 5432 | Database port |
 | `DB_NAME` | Yes | securevault | Database name |
-| `DB_USERNAME` | Yes | - | Database user |
-| `DB_PASSWORD` | Yes | - | Database password |
+| `DB_USERNAME` | Yes | tanay | Database user |
+| `DB_PASSWORD` | No | (empty) | Database password |
 | `JWT_SECRET` | Yes | - | JWT signing secret (min 32 chars) |
+| `JWT_EXPIRATION` | No | 3600000 | Access token expiry (ms) |
+| `JWT_REFRESH_EXPIRATION` | No | 86400000 | Refresh token expiry (ms) |
 | `SERVER_PORT` | No | 8080 | Server port |
+| `RATE_LIMIT` | No | 60 | Requests per minute |
 | `SWAGGER_ENABLED` | No | false | Enable Swagger UI |
+| `SSL_ENABLED` | No | false | Enable SSL |
+| `SSL_KEYSTORE` | No | - | Keystore path (SSL) |
+| `SSL_KEYSTORE_PASSWORD` | No | - | Keystore password |
+| `REDIS_HOST` | No | localhost | Redis host |
+| `LOG_LEVEL` | No | INFO | Logging level |
+
+### Web
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `VITE_API_URL` | Yes | - | Backend API base URL |
 
 ## API Endpoints
 
@@ -106,10 +144,11 @@ docker-compose up -d
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | POST | `/api/v1/auth/register` | Register new user |
-| POST | `/api/v1/auth/login` | Login (returns JWT + encryption salt) |
+| POST | `/api/v1/auth/login` | Login (returns JWT + wrapped vault key) |
+| POST | `/api/v1/auth/verify-2fa` | Verify 2FA TOTP code |
 | POST | `/api/v1/auth/refresh` | Refresh access token |
-| POST | `/api/v1/auth/logout` | Logout |
-| POST | `/api/v1/auth/change-password` | Change password |
+| POST | `/api/v1/auth/logout` | Logout (invalidates refresh token) |
+| POST | `/api/v1/auth/change-password` | Change master password |
 
 ### Vault
 | Method | Endpoint | Description |
@@ -119,19 +158,18 @@ docker-compose up -d
 | GET | `/api/v1/vault/{id}` | Get single entry |
 | PUT | `/api/v1/vault/{id}` | Update entry (encrypted) |
 | DELETE | `/api/v1/vault/{id}` | Delete entry |
-| DELETE | `/api/v1/vault` | Delete all entries |
 
 ### Devices
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/v1/devices` | List devices |
+| GET | `/api/v1/devices` | List registered devices |
 | POST | `/api/v1/devices` | Register device |
 | DELETE | `/api/v1/devices/{id}` | Remove device |
 
 ### Two-Factor Auth
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/v1/2fa/setup` | Get 2FA QR code |
+| GET | `/api/v1/2fa/setup` | Get 2FA setup (QR code + secret) |
 | POST | `/api/v1/2fa/enable` | Enable 2FA |
 | POST | `/api/v1/2fa/disable` | Disable 2FA |
 | GET | `/api/v1/2fa/status` | Check 2FA status |
@@ -142,36 +180,89 @@ docker-compose up -d
 | GET | `/api/v1/health` | Health check |
 | GET | `/api/v1/audit` | Get audit logs |
 
-## Security Flow
+## Web Routes
+
+| Path | Page | Description |
+|------|------|-------------|
+| `/login` | LoginPage | Login with email/password |
+| `/register` | RegisterPage | Create account |
+| `/vault` | VaultPage | View all entries (requires unlock) |
+| `/vault/new` | VaultEntryForm | Create new entry |
+| `/vault/:id` | VaultEntryPage | View single entry |
+| `/settings` | SettingsPage | Change password, 2FA, devices |
+
+## Security Architecture
+
+### Encryption Model
+
+```
+Master Password
+      │
+      ├── Argon2id(auth_salt) ──→ Password Hash (stored, for server verification)
+      │
+      └── Argon2id(encryption_salt) ──→ KEK (Key Encryption Key)
+                                              │
+                                    AES-256-GCM unwrap
+                                              │
+                                            Vault Key (random 256-bit)
+                                              │
+                                    AES-256-GCM encrypt/decrypt
+                                              │
+                                      Encrypted Entries
+```
 
 ### Registration
-1. Client sends email + password
-2. Server generates two salts (auth + encryption)
-3. Server stores: `password_hash = Argon2id(password, auth_salt)`
-4. Server returns: JWT + `encryption_salt`
+1. Server generates two random salts (auth + encryption)
+2. Hashes password with auth salt → stores hash for verification
+3. Generates a random vault key, wraps it with KEK derived from master password + encryption salt
+4. Returns JWT tokens + wrapped vault key + encryption salt to client
+5. Client unwraps vault key and caches it in memory
 
 ### Login
-1. Client sends email + password
-2. Server verifies: `Argon2id(password, stored_salt) == stored_hash`
-3. Server returns: JWT + `encryption_salt`
+1. Server verifies password hash
+2. Returns JWT tokens + wrapped vault key + encryption salt
+3. Client derives KEK from password, unwraps vault key, caches in memory
 
-### Client-Side Encryption
-1. Client derives: `encryption_key = PBKDF2(master_password, encryption_salt)`
-2. Client encrypts: `ciphertext = AES-256-GCM(plaintext, encryption_key)`
-3. Client sends: `ciphertext + iv` to server
-4. Server stores encrypted data (never sees plaintext)
+### Password Change
+1. Client fetches all vault entries
+2. Generates a **new vault key** and re-encrypts every entry
+3. Derives new KEK from new password + new encryption salt
+4. Wraps new vault key with new KEK
+5. Sends re-encrypted entries + new wrapped vault key to server
+6. Server deletes all refresh tokens (forces other sessions to re-login)
+7. Issues new JWT tokens tagged with current `passwordUpdatedAt`
+8. Old access tokens rejected immediately (pwdUpdatedAt claim mismatch)
+
+## Database Migrations (Flyway)
+
+| Migration | Description |
+|-----------|-------------|
+| `V1__initial_schema.sql` | Users, vault entries, devices, audit logs |
+| `V2__add_security_enhancements.sql` | Lockout, 2FA, password history |
+| `V3__add_vault_key_management.sql` | Wrapped vault key, encryption salt |
+| `V4__add_password_salt_to_history.sql` | Track salt per password history entry |
+| `V5__rename_token_to_token_hash.sql` | Rename token column for clarity |
 
 ## Tech Stack
 
 ### Backend
 - **Framework:** Spring Boot 3.2
 - **Language:** Java 17
-- **Database:** PostgreSQL 16
+- **Database:** PostgreSQL 16 with Flyway migrations
 - **ORM:** Spring Data JPA / Hibernate
-- **Authentication:** JWT (jjwt)
-- **Password Hashing:** BouncyCastle (Argon2id)
+- **Authentication:** JWT (jjwt 0.12.3) with access/refresh tokens
+- **Password Hashing:** Argon2id (BouncyCastle)
 - **2FA:** TOTP (samstevens/totp)
-- **API Docs:** SpringDoc OpenAPI
+- **API Docs:** SpringDoc OpenAPI (disabled by default)
+
+### Web App
+- **Framework:** React 19.2 + Vite 8
+- **Language:** TypeScript 6
+- **Styling:** Tailwind CSS 4.3
+- **Crypto:** hash-wasm (Argon2id), Web Crypto API (AES-256-GCM)
+- **Forms:** React Hook Form + Zod 4
+- **Routing:** React Router 7.15
+- **Linting:** ESLint 10 + typescript-eslint
 
 ### Mobile App
 - **Language:** Kotlin
@@ -180,25 +271,6 @@ docker-compose up -d
 - **DI:** Koin
 - **Networking:** Ktor
 - **Architecture:** Clean Architecture + MVVM
-- **Encryption:** AES-256-GCM with PBKDF2
-- **Secure Storage:** Android EncryptedSharedPreferences
-
-## Database Schema
-
-### Users Table
-- id, email, password_hash, password_salt, encryption_salt
-- two_factor_enabled, two_factor_secret
-- failed_login_attempts, locked_until
-- password_history (last 5 passwords)
-
-### Vault Entries Table
-- id, user_id, encrypted_data, iv, version
-
-### Devices Table
-- id, user_id, device_name, device_id, public_key
-
-### Audit Logs Table
-- id, user_id, action, ip_address, user_agent, details
 
 ## License
 
