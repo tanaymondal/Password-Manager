@@ -152,31 +152,13 @@ fun VaultScreen(
                             VaultEntryCard(
                                 entry = entry,
                                 onClick = { viewModel.onEntryClick(entry.id) },
-                                onDelete = { viewModel.handleIntent(VaultIntent.DeleteEntry(entry.id)) }
+                                onDelete = { viewModel.handleIntent(VaultIntent.ConfirmDeleteEntry(entry.id)) }
                             )
                         }
                     }
                 }
             }
         }
-    }
-
-    if (state.showDeleteDialog != null) {
-        AlertDialog(
-            onDismissRequest = { viewModel.handleIntent(VaultIntent.DismissError) },
-            title = { Text("Delete Entry") },
-            text = { Text("Are you sure you want to delete this entry?") },
-            confirmButton = {
-                TextButton(onClick = { viewModel.handleIntent(VaultIntent.ConfirmDeleteEntry(state.showDeleteDialog!!)) }) {
-                    Text("Delete")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { viewModel.handleIntent(VaultIntent.DismissError) }) {
-                    Text("Cancel")
-                }
-            }
-        )
     }
 
     if (state.showLogoutDialog) {

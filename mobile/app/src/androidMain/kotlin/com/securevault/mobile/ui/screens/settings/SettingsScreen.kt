@@ -1,16 +1,21 @@
 package com.securevault.mobile.ui.screens.settings
 
+import android.content.Context
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.fragment.app.FragmentActivity
+import com.securevault.mobile.data.local.BiometricStorage
 import com.securevault.mobile.domain.entity.DeviceEntity
 import kotlinx.coroutines.flow.collectLatest
 import org.koin.androidx.compose.koinViewModel
@@ -22,12 +27,51 @@ fun SettingsScreen(
     viewModel: SettingsViewModel
 ) {
     val state by viewModel.state.collectAsState()
+    val context = LocalContext.current
+    val biometricStorage = remember { BiometricStorage(context) }
 
     LaunchedEffect(Unit) {
         viewModel.effect.collectLatest { effect ->
             when (effect) {
                 is SettingsEffect.NavigateToLogin -> onLogout()
             }
+        }
+    }
+
+    LaunchedEffect(state.showBiometricPrompt) {
+        if (state.showBiometricPrompt) {
+            val vaultKey = state.vaultKeyForBiometric ?: return@LaunchedEffect
+            val activity = context as? FragmentActivity ?: return@LaunchedEffect
+
+            if (!biometricStorage.isAvailable()) {
+                viewModel.handleIntent(SettingsIntent.BiometricSetupResult(false))
+                return@LaunchedEffect
+            }
+
+            val cipher = biometricStorage.getEncryptionCipher()
+            biometricStorage.showBiometricPrompt(
+                activity = activity,
+                title = "Enable Biometric Unlock",
+                subtitle = "Authenticate to enable biometric unlock for SecureVault",
+                cipher = cipher,
+                onSuccess = { authenticatedCipher ->
+                    val success = biometricStorage.onEncryptComplete(authenticatedCipher, vaultKey)
+                    viewModel.handleIntent(SettingsIntent.BiometricSetupResult(success))
+                },
+                onError = { error ->
+                    viewModel.handleIntent(SettingsIntent.BiometricSetupResult(false))
+                },
+                onCancel = {
+                    viewModel.handleIntent(SettingsIntent.BiometricSetupResult(false))
+                }
+            )
+        }
+    }
+
+    LaunchedEffect(state.biometricClearRequested) {
+        if (state.biometricClearRequested) {
+            biometricStorage.clear()
+            viewModel.handleIntent(SettingsIntent.BiometricClearDone)
         }
     }
 
@@ -69,6 +113,32 @@ fun SettingsScreen(
                     },
                     onClick = { /* TODO */ }
                 )
+            }
+
+            item {
+                BiometricSettingsItem(
+                    isAvailable = biometricStorage.isAvailable(),
+                    isEnabled = state.biometricEnabled,
+                    onToggle = { enabled ->
+                        if (enabled) {
+                            viewModel.handleIntent(SettingsIntent.ToggleBiometricOn)
+                        } else {
+                            viewModel.handleIntent(SettingsIntent.ToggleBiometricOff)
+                        }
+                    }
+                )
+            }
+
+            val bioError = state.biometricError
+            if (bioError != null) {
+                item {
+                    Text(
+                        text = bioError,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
+                }
             }
 
             item {
@@ -182,6 +252,51 @@ fun SettingsItem(
                 Text(text = subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Icon(Icons.Default.Add, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
+private fun BiometricSettingsItem(
+    isAvailable: Boolean,
+    isEnabled: Boolean,
+    onToggle: (Boolean) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                Icons.Default.Fingerprint,
+                contentDescription = null,
+                tint = if (isEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Biometric Unlock",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+                Text(
+                    text = when {
+                        !isAvailable -> "Not available on this device"
+                        isEnabled -> "Enabled"
+                        else -> "Disabled"
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Switch(
+                checked = isEnabled,
+                onCheckedChange = { if (isAvailable) onToggle(it) },
+                enabled = isAvailable
+            )
         }
     }
 }

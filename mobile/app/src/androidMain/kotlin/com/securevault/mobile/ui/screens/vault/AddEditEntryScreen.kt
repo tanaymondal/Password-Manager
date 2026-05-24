@@ -9,6 +9,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -111,13 +113,13 @@ fun AddEditEntryScreen(
                     trailingIcon = {
                         IconButton(onClick = { viewModel.handleIntent(AddEditEntryIntent.TogglePasswordVisibility) }) {
                             Icon(
-                                if (state.passwordVisible) Icons.Default.Check else Icons.Default.Lock,
-                                contentDescription = null
+                                if (state.passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                contentDescription = if (state.passwordVisible) "Hide password" else "Show password"
                             )
                         }
                     },
                     visualTransformation = if (state.passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    keyboardOptions = KeyboardOptions(keyboardType = if (state.passwordVisible) KeyboardType.Text else KeyboardType.Password),
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )

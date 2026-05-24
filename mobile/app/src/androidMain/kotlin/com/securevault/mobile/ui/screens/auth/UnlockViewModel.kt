@@ -1,5 +1,6 @@
 package com.securevault.mobile.ui.screens.auth
 
+import com.securevault.mobile.data.repository.VaultKeyManager
 import com.securevault.mobile.domain.usecase.auth.UnlockVaultResult
 import com.securevault.mobile.domain.usecase.auth.UnlockVaultUseCase
 import com.securevault.mobile.ui.mvi.MviEffect
@@ -11,12 +12,15 @@ sealed class UnlockIntent : MviIntent {
     data class PasswordChanged(val password: String) : UnlockIntent()
     data object UnlockClicked : UnlockIntent()
     data object DismissError : UnlockIntent()
+    data class BiometricUnlockSuccess(val vaultKey: String) : UnlockIntent()
+    data object BiometricUnlockError : UnlockIntent()
 }
 
 data class UnlockState(
     val password: String = "",
     val isLoading: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    val biometricInProgress: Boolean = false
 ) : MviState
 
 sealed class UnlockEffect : MviEffect {
@@ -24,7 +28,8 @@ sealed class UnlockEffect : MviEffect {
 }
 
 class UnlockViewModel(
-    private val unlockVaultUseCase: UnlockVaultUseCase
+    private val unlockVaultUseCase: UnlockVaultUseCase,
+    private val vaultKeyManager: VaultKeyManager
 ) : MviViewModel<UnlockIntent, UnlockState, UnlockEffect>(UnlockState()) {
 
     override fun handleIntent(intent: UnlockIntent) {
@@ -32,6 +37,8 @@ class UnlockViewModel(
             is UnlockIntent.PasswordChanged -> setState { copy(password = intent.password) }
             is UnlockIntent.UnlockClicked -> unlock()
             is UnlockIntent.DismissError -> setState { copy(error = null) }
+            is UnlockIntent.BiometricUnlockSuccess -> onBiometricSuccess(intent.vaultKey)
+            is UnlockIntent.BiometricUnlockError -> onBiometricError()
         }
     }
 
@@ -56,5 +63,15 @@ class UnlockViewModel(
                 }
             }
         )
+    }
+
+    private fun onBiometricSuccess(vaultKey: String) {
+        vaultKeyManager.setCachedVaultKey(vaultKey)
+        setState { copy(biometricInProgress = false) }
+        setEffect(UnlockEffect.NavigateToVault)
+    }
+
+    private fun onBiometricError() {
+        setState { copy(biometricInProgress = false, error = null) }
     }
 }

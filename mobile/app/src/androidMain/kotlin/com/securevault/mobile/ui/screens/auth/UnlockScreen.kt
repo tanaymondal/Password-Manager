@@ -3,15 +3,23 @@ package com.securevault.mobile.ui.screens.auth
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.fragment.app.FragmentActivity
+import com.securevault.mobile.data.local.BiometricStorage
+import com.securevault.mobile.data.repository.SessionManager
 import kotlinx.coroutines.flow.collectLatest
 import org.koin.androidx.compose.koinViewModel
 
@@ -22,7 +30,9 @@ fun UnlockScreen(
 ) {
     val viewModel: UnlockViewModel = koinViewModel()
     val state by viewModel.state.collectAsState()
-    val errorMessage = state.error
+    val context = LocalContext.current
+    val biometricStorage = remember { BiometricStorage(context) }
+    var biometricTriggered by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         viewModel.effect.collectLatest { effect ->
@@ -31,6 +41,41 @@ fun UnlockScreen(
             }
         }
     }
+
+    LaunchedEffect(Unit) {
+        if (!biometricTriggered
+            && SessionManager.getBiometricEnabled()
+            && biometricStorage.hasEncryptedVaultKey()
+            && biometricStorage.isAvailable()
+        ) {
+            biometricTriggered = true
+            val activity = context as? FragmentActivity ?: return@LaunchedEffect
+            val cipher = biometricStorage.getDecryptionCipher()
+            biometricStorage.showBiometricPrompt(
+                activity = activity,
+                title = "Unlock SecureVault",
+                subtitle = "Authenticate to unlock your vault",
+                cipher = cipher,
+                onSuccess = { authenticatedCipher ->
+                    val vaultKey = biometricStorage.onDecryptComplete(authenticatedCipher)
+                    if (vaultKey != null) {
+                        viewModel.handleIntent(UnlockIntent.BiometricUnlockSuccess(vaultKey))
+                    } else {
+                        viewModel.handleIntent(UnlockIntent.BiometricUnlockError)
+                    }
+                },
+                onError = { error ->
+                    viewModel.handleIntent(UnlockIntent.BiometricUnlockError)
+                },
+                onCancel = {
+                    viewModel.handleIntent(UnlockIntent.BiometricUnlockError)
+                }
+            )
+        }
+    }
+
+    val errorMessage = state.error
+    var passwordVisible by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -70,8 +115,16 @@ fun UnlockScreen(
             onValueChange = { viewModel.handleIntent(UnlockIntent.PasswordChanged(it)) },
             label = { Text("Master Password") },
             leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
-            visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+            trailingIcon = {
+                IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                    Icon(
+                        if (passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                        contentDescription = if (passwordVisible) "Hide password" else "Show password"
+                    )
+                }
+            },
+            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(keyboardType = if (passwordVisible) KeyboardType.Text else KeyboardType.Password),
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
@@ -101,6 +154,34 @@ fun UnlockScreen(
                 )
             } else {
                 Text("Unlock")
+            }
+        }
+
+        if (biometricStorage.isAvailable() && biometricStorage.hasEncryptedVaultKey() && SessionManager.getBiometricEnabled()) {
+            Spacer(modifier = Modifier.height(12.dp))
+            OutlinedButton(
+                onClick = {
+                    val activity = context as? FragmentActivity ?: return@OutlinedButton
+                    val cipher = biometricStorage.getDecryptionCipher()
+                    biometricStorage.showBiometricPrompt(
+                        activity = activity,
+                        title = "Unlock SecureVault",
+                        subtitle = "Authenticate to unlock your vault",
+                        cipher = cipher,
+                        onSuccess = { authenticatedCipher ->
+                            val vaultKey = biometricStorage.onDecryptComplete(authenticatedCipher)
+                            if (vaultKey != null) {
+                                viewModel.handleIntent(UnlockIntent.BiometricUnlockSuccess(vaultKey))
+                            }
+                        },
+                        onError = { }
+                    )
+                },
+                modifier = Modifier.fillMaxWidth().height(50.dp)
+            ) {
+                Icon(Icons.Default.Fingerprint, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Use Biometrics")
             }
         }
 

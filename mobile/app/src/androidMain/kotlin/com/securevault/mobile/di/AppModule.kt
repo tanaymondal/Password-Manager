@@ -74,6 +74,6 @@ val appModule = module {
     viewModel { RegisterViewModel(get(), get()) }
     viewModel { VaultViewModel(get(), get(), get()) }
     viewModel { AddEditEntryViewModel(get(), get(), get()) }
-    viewModel { SettingsViewModel(get(), get(), get()) }
-    viewModel { UnlockViewModel(get()) }
+    viewModel { SettingsViewModel(get(), get(), get(), get()) }
+    viewModel { UnlockViewModel(get(), get()) }
 }

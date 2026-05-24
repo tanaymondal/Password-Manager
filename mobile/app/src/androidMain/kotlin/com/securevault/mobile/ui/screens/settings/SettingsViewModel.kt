@@ -1,5 +1,7 @@
 package com.securevault.mobile.ui.screens.settings
 
+import com.securevault.mobile.data.repository.SessionManager
+import com.securevault.mobile.data.repository.VaultKeyManager
 import com.securevault.mobile.domain.entity.DeviceEntity
 import com.securevault.mobile.domain.usecase.auth.LogoutUseCase
 import com.securevault.mobile.domain.usecase.device.GetDevicesUseCase
@@ -14,13 +16,23 @@ sealed class SettingsIntent : MviIntent {
     data object LogoutClicked : SettingsIntent()
     data object ConfirmLogout : SettingsIntent()
     data object DismissLogoutDialog : SettingsIntent()
+    data object ToggleBiometricOn : SettingsIntent()
+    data object ToggleBiometricOff : SettingsIntent()
+    data class BiometricSetupResult(val success: Boolean) : SettingsIntent()
+    data object BiometricClearDone : SettingsIntent()
 }
 
 data class SettingsState(
     val devices: List<DeviceEntity> = emptyList(),
     val twoFactorEnabled: Boolean? = null,
     val isLoading: Boolean = false,
-    val showLogoutDialog: Boolean = false
+    val showLogoutDialog: Boolean = false,
+    val biometricAvailable: Boolean = false,
+    val biometricEnabled: Boolean = false,
+    val showBiometricPrompt: Boolean = false,
+    val vaultKeyForBiometric: String? = null,
+    val biometricError: String? = null,
+    val biometricClearRequested: Boolean = false
 ) : MviState
 
 sealed class SettingsEffect : MviEffect {
@@ -30,7 +42,8 @@ sealed class SettingsEffect : MviEffect {
 class SettingsViewModel(
     private val getDevicesUseCase: GetDevicesUseCase,
     private val getTwoFactorStatusUseCase: GetTwoFactorStatusUseCase,
-    private val logoutUseCase: LogoutUseCase
+    private val logoutUseCase: LogoutUseCase,
+    private val vaultKeyManager: VaultKeyManager
 ) : MviViewModel<SettingsIntent, SettingsState, SettingsEffect>(SettingsState()) {
 
     init {
@@ -43,11 +56,20 @@ class SettingsViewModel(
             is SettingsIntent.LogoutClicked -> setState { copy(showLogoutDialog = true) }
             is SettingsIntent.ConfirmLogout -> logout()
             is SettingsIntent.DismissLogoutDialog -> setState { copy(showLogoutDialog = false) }
+            is SettingsIntent.ToggleBiometricOn -> toggleBiometricOn()
+            is SettingsIntent.ToggleBiometricOff -> toggleBiometricOff()
+            is SettingsIntent.BiometricSetupResult -> onBiometricSetupResult(intent.success)
+            is SettingsIntent.BiometricClearDone -> setState { copy(biometricClearRequested = false) }
         }
     }
 
     private fun loadSettings() {
-        setState { copy(isLoading = true) }
+        setState {
+            copy(
+                isLoading = true,
+                biometricEnabled = SessionManager.getBiometricEnabled()
+            )
+        }
 
         runInBackground(
             block = { getDevicesUseCase() },
@@ -72,6 +94,47 @@ class SettingsViewModel(
                 )
             }
         )
+    }
+
+    private fun toggleBiometricOn() {
+        val vaultKey = vaultKeyManager.getCachedVaultKey()
+        if (vaultKey == null) {
+            setState { copy(biometricError = "Vault key not available. Please unlock the vault first.") }
+            return
+        }
+        setState {
+            copy(
+                showBiometricPrompt = true,
+                vaultKeyForBiometric = vaultKey,
+                biometricError = null
+            )
+        }
+    }
+
+    private fun toggleBiometricOff() {
+        setState { copy(biometricEnabled = false, biometricClearRequested = true) }
+        SessionManager.setBiometricEnabled(false)
+    }
+
+    private fun onBiometricSetupResult(success: Boolean) {
+        if (success) {
+            SessionManager.setBiometricEnabled(true)
+            setState {
+                copy(
+                    biometricEnabled = true,
+                    showBiometricPrompt = false,
+                    vaultKeyForBiometric = null
+                )
+            }
+        } else {
+            setState {
+                copy(
+                    showBiometricPrompt = false,
+                    vaultKeyForBiometric = null,
+                    biometricError = "Biometric setup failed or was cancelled"
+                )
+            }
+        }
     }
 
     private fun logout() {

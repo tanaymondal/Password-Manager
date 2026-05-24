@@ -15,7 +15,6 @@ sealed class VaultIntent : MviIntent {
     data object RefreshEntries : VaultIntent()
     data object TriggerReload : VaultIntent()
     data class SearchChanged(val query: String) : VaultIntent()
-    data class DeleteEntry(val id: Long) : VaultIntent()
     data class ConfirmDeleteEntry(val id: Long) : VaultIntent()
     data object DismissError : VaultIntent()
     data object ShowLogoutDialog : VaultIntent()
@@ -30,7 +29,6 @@ data class VaultState(
     val isLoading: Boolean = false,
     val isRefreshing: Boolean = false,
     val error: String? = null,
-    val showDeleteDialog: Long? = null,
     val showLogoutDialog: Boolean = false,
     val reloadTrigger: Boolean = false
 ) : MviState
@@ -58,9 +56,8 @@ class VaultViewModel(
             is VaultIntent.RefreshEntries -> refreshEntries()
             is VaultIntent.TriggerReload -> loadEntries()
             is VaultIntent.SearchChanged -> search(intent.query)
-            is VaultIntent.DeleteEntry -> setState { copy(showDeleteDialog = intent.id) }
             is VaultIntent.ConfirmDeleteEntry -> deleteEntry(intent.id)
-            is VaultIntent.DismissError -> setState { copy(error = null, showDeleteDialog = null) }
+            is VaultIntent.DismissError -> setState { copy(error = null) }
             is VaultIntent.ShowLogoutDialog -> setState { copy(showLogoutDialog = true) }
             is VaultIntent.DismissLogoutDialog -> setState { copy(showLogoutDialog = false) }
             is VaultIntent.LogoutConfirmed -> logout()
@@ -130,8 +127,6 @@ class VaultViewModel(
     }
 
     private fun deleteEntry(id: Long) {
-        setState { copy(showDeleteDialog = null) }
-
         runInBackground(
             block = { deleteVaultEntryUseCase(id) },
             onResult = { result ->

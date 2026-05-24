@@ -69,6 +69,9 @@ androidMain.dependencies {
 
     // Argon2 for key derivation (matches backend)
     implementation("com.lambdapioneer.argon2kt:argon2kt:1.6.0")
+
+    // Biometric authentication
+    implementation("androidx.biometric:biometric:1.2.0-alpha05")
 }
 
 android {

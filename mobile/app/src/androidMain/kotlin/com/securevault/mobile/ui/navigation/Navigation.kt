@@ -43,7 +43,7 @@ fun SecureVaultNavHost() {
     val getAuthStateUseCase = getAuthStateUseCase()
     val startDestination = remember { getAuthStateUseCase() }.let { state ->
         when (state) {
-            is AuthStateResult.Authenticated -> Screen.Vault.route
+            is AuthStateResult.Authenticated -> Screen.Unlock.route
             is AuthStateResult.Unauthenticated -> Screen.Login.route
         }
     }
