@@ -86,7 +86,9 @@ class LoginViewModel(
     }
 
     private fun verifyTwoFactor() {
-        val email = currentState.twoFactorInfo?.email ?: return
+        val info = currentState.twoFactorInfo ?: return
+        val email = info.email
+        val challengeId = info.challengeId
         val password = currentState.password
         val code = currentState.twoFactorCode
 
@@ -103,7 +105,7 @@ class LoginViewModel(
         setState { copy(isLoading = true, error = null) }
 
         runInBackground(
-            block = { verifyTwoFactorUseCase(email, code, password) },
+            block = { verifyTwoFactorUseCase(email, challengeId, code, password) },
             onResult = { result ->
                 setState { copy(isLoading = false) }
                 when (val r = result.getOrNull()) {

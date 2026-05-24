@@ -4,6 +4,7 @@ import android.content.Context
 import com.securevault.mobile.data.api.SecureVaultApi
 import com.securevault.mobile.data.local.AndroidEntryEncryptor
 import com.securevault.mobile.data.repository.*
+import com.securevault.mobile.domain.crypto.CryptoEngine
 import com.securevault.mobile.domain.repository.AuthRepository
 import com.securevault.mobile.domain.repository.DeviceRepository
 import com.securevault.mobile.domain.repository.TwoFactorRepository
@@ -30,13 +31,16 @@ val appModule = module {
     // API
     single<SecureVaultApi> { SecureVaultApi.create("https://vault.tanay.pro") }
 
+    // CryptoEngine - client-side crypto
+    single { CryptoEngine() }
+
     // Encryptor - Android specific (single instance for both EntryEncryptor and VaultKeyManager)
     single { AndroidEntryEncryptor() }
     single<EntryEncryptor> { get<AndroidEntryEncryptor>() }
     single<VaultKeyManager> { get<AndroidEntryEncryptor>() }
 
     // Repositories
-    single<AuthRepository> { AuthRepositoryImpl(get(), get(), get()) }
+    single<AuthRepository> { AuthRepositoryImpl(get(), get(), get(), get()) }
     single<VaultRepository> { CachedVaultRepository(androidContext(), VaultRepositoryImpl(get(), get())) }
     single<DeviceRepository> { DeviceRepositoryImpl(get()) }
     single<TwoFactorRepository> { TwoFactorRepositoryImpl(get()) }

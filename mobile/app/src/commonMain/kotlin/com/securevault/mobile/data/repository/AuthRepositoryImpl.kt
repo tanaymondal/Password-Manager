@@ -4,6 +4,7 @@ import com.securevault.mobile.data.api.SecureVaultApi
 import com.securevault.mobile.data.model.LoginRequest
 import com.securevault.mobile.data.model.RefreshTokenRequest
 import com.securevault.mobile.data.model.RegisterRequest
+import com.securevault.mobile.domain.crypto.CryptoEngine
 import com.securevault.mobile.domain.model.AuthState
 import com.securevault.mobile.domain.model.Result
 import com.securevault.mobile.domain.model.TwoFactorInfo
@@ -16,6 +17,7 @@ import kotlinx.coroutines.flow.asStateFlow
 
 class AuthRepositoryImpl(
     private val api: SecureVaultApi,
+    private val cryptoEngine: CryptoEngine,
     private val encryptor: EntryEncryptor,
     private val vaultKeyManager: VaultKeyManager
 ) : AuthRepository {
@@ -24,9 +26,19 @@ class AuthRepositoryImpl(
 
     override suspend fun register(email: String, password: String): Result<AuthState> {
         return try {
-            val response = api.register(RegisterRequest(email, password))
+            val authSalt = cryptoEngine.generateSalt()
+            val encryptionSalt = cryptoEngine.generateSalt()
+            val vaultKey = cryptoEngine.generateVaultKey()
+            val authHash = cryptoEngine.generateAuthHash(password, authSalt)
+            val kek = cryptoEngine.deriveKek(password, encryptionSalt)
+            val wrappedVaultKey = cryptoEngine.wrapVaultKey(vaultKey, kek)
+
+            val response = api.register(
+                RegisterRequest(email, authHash, authSalt, encryptionSalt, wrappedVaultKey, 2)
+            )
             response.fold(
                 onSuccess = { authResponse ->
+                    vaultKeyManager.setCachedVaultKey(vaultKey)
                     saveSession(
                         authResponse.accessToken!!,
                         authResponse.refreshToken!!,
@@ -34,19 +46,9 @@ class AuthRepositoryImpl(
                         authResponse.userId!!,
                         email,
                         authResponse.encryptionVersion,
-                        authResponse.wrappedVaultKey
+                        authResponse.wrappedVaultKey,
+                        authResponse.authSalt
                     )
-                    if (authResponse.wrappedVaultKey != null) {
-                        try {
-                            vaultKeyManager.unlockVault(
-                                password,
-                                authResponse.encryptionSalt!!,
-                                authResponse.wrappedVaultKey
-                            )
-                        } catch (e: Exception) {
-                            return Result.Error("Failed to initialize vault encryption: ${e.message}")
-                        }
-                    }
                     Result.Success(getCurrentAuthState())
                 },
                 onFailure = { Result.Error(it.message ?: "Registration failed", it) }
@@ -58,18 +60,34 @@ class AuthRepositoryImpl(
 
     override suspend fun login(email: String, password: String): Result<LoginResponse> {
         return try {
-            val response = api.login(LoginRequest(email, password))
+            val authSalt = api.getAuthSalt(email).getOrNull()
+                ?: getCachedAuthSalt(email)
+                ?: return Result.Error("Failed to retrieve authentication salt")
+
+            val authHash = cryptoEngine.generateAuthHash(password, authSalt)
+            val response = api.login(LoginRequest(email, authHash))
+
             response.fold(
                 onSuccess = { authResponse ->
                     if (authResponse.twoFactorRequired) {
                         val info = TwoFactorInfo(
                             userId = authResponse.userId!!,
                             email = authResponse.email!!,
+                            challengeId = authResponse.challengeId!!,
+                            authSalt = authResponse.authSalt!!,
                             encryptionSalt = authResponse.encryptionSalt!!,
                             wrappedVaultKey = authResponse.wrappedVaultKey
                         )
                         Result.Success(LoginResponse.TwoFactorRequired(info))
                     } else {
+                        val vaultKey = deriveVaultKey(
+                            password,
+                            authResponse.encryptionSalt!!,
+                            authResponse.wrappedVaultKey
+                        )
+                        if (vaultKey != null) {
+                            vaultKeyManager.setCachedVaultKey(vaultKey)
+                        }
                         saveSession(
                             authResponse.accessToken!!,
                             authResponse.refreshToken!!,
@@ -77,19 +95,9 @@ class AuthRepositoryImpl(
                             authResponse.userId!!,
                             email,
                             authResponse.encryptionVersion,
-                            authResponse.wrappedVaultKey
+                            authResponse.wrappedVaultKey,
+                            authResponse.authSalt
                         )
-                        if (authResponse.wrappedVaultKey != null) {
-                            try {
-                                vaultKeyManager.unlockVault(
-                                    password,
-                                    authResponse.encryptionSalt!!,
-                                    authResponse.wrappedVaultKey
-                                )
-                            } catch (e: Exception) {
-                                return Result.Error("Failed to initialize vault encryption: ${e.message}")
-                            }
-                        }
                         Result.Success(LoginResponse.Success(getCurrentAuthState()))
                     }
                 },
@@ -100,11 +108,24 @@ class AuthRepositoryImpl(
         }
     }
 
-    override suspend fun verifyTwoFactor(email: String, code: String, password: String): Result<AuthState> {
+    override suspend fun verifyTwoFactor(
+        email: String,
+        challengeId: String,
+        code: String,
+        password: String
+    ): Result<AuthState> {
         return try {
-            val response = api.verifyTwoFactor(email, code)
+            val response = api.verifyTwoFactor(email, challengeId, code)
             response.fold(
                 onSuccess = { authResponse ->
+                    val vaultKey = deriveVaultKey(
+                        password,
+                        authResponse.encryptionSalt!!,
+                        authResponse.wrappedVaultKey
+                    )
+                    if (vaultKey != null) {
+                        vaultKeyManager.setCachedVaultKey(vaultKey)
+                    }
                     saveSession(
                         authResponse.accessToken!!,
                         authResponse.refreshToken!!,
@@ -112,19 +133,9 @@ class AuthRepositoryImpl(
                         authResponse.userId!!,
                         email,
                         authResponse.encryptionVersion,
-                        authResponse.wrappedVaultKey
+                        authResponse.wrappedVaultKey,
+                        authResponse.authSalt
                     )
-                    if (authResponse.wrappedVaultKey != null) {
-                        try {
-                            vaultKeyManager.unlockVault(
-                                password,
-                                authResponse.encryptionSalt!!,
-                                authResponse.wrappedVaultKey
-                            )
-                        } catch (e: Exception) {
-                            return Result.Error("Failed to initialize vault encryption: ${e.message}")
-                        }
-                    }
                     Result.Success(getCurrentAuthState())
                 },
                 onFailure = { Result.Error(it.message ?: "2FA verification failed", it) }
@@ -166,7 +177,8 @@ class AuthRepositoryImpl(
                         authResponse.userId!!,
                         authResponse.email!!,
                         authResponse.encryptionVersion,
-                        authResponse.wrappedVaultKey
+                        authResponse.wrappedVaultKey,
+                        authResponse.authSalt
                     )
                     Result.Success(getCurrentAuthState())
                 },
@@ -190,10 +202,25 @@ class AuthRepositoryImpl(
                 return Result.Error("Vault key material not available. Please login again.")
             }
 
-            vaultKeyManager.unlockVault(password, encryptionSalt, wrappedVaultKey)
+            val vaultKey = deriveVaultKey(password, encryptionSalt, wrappedVaultKey)
+            if (vaultKey != null) {
+                vaultKeyManager.setCachedVaultKey(vaultKey)
+            }
             Result.Success(Unit)
         } catch (e: Exception) {
             Result.Error("Failed to unlock vault: ${e.message}")
+        }
+    }
+
+    override suspend fun getAuthSalt(email: String): Result<String> {
+        return try {
+            val result = api.getAuthSalt(email)
+            result.fold(
+                onSuccess = { Result.Success(it) },
+                onFailure = { Result.Error(it.message ?: "Failed to get auth salt") }
+            )
+        } catch (e: Exception) {
+            Result.Error(e.message ?: "Failed to get auth salt")
         }
     }
 
@@ -224,6 +251,17 @@ class AuthRepositoryImpl(
 
     private fun getAuthStateFromStorage(): AuthState = getCurrentAuthState()
 
+    private fun getCachedAuthSalt(email: String): String? {
+        val cached = SessionManager.getAuthSalt()
+        return if (cached.isNotEmpty()) cached else null
+    }
+
+    private fun deriveVaultKey(password: String, encryptionSalt: String, wrappedVaultKey: String?): String? {
+        if (wrappedVaultKey.isNullOrEmpty()) return null
+        val kek = cryptoEngine.deriveKek(password, encryptionSalt)
+        return cryptoEngine.unwrapVaultKey(wrappedVaultKey, kek)
+    }
+
     private fun saveSession(
         accessToken: String,
         refreshToken: String,
@@ -231,7 +269,8 @@ class AuthRepositoryImpl(
         userId: String,
         email: String,
         encryptionVersion: Int,
-        wrappedVaultKey: String? = null
+        wrappedVaultKey: String? = null,
+        authSalt: String? = null
     ) {
         SessionManager.setAccessToken(accessToken)
         SessionManager.setRefreshToken(refreshToken)
@@ -241,6 +280,9 @@ class AuthRepositoryImpl(
         SessionManager.setEncryptionVersion(encryptionVersion)
         if (wrappedVaultKey != null) {
             SessionManager.setWrappedVaultKey(wrappedVaultKey)
+        }
+        if (authSalt != null) {
+            SessionManager.setAuthSalt(authSalt)
         }
         _authState.value = AuthState(
             user = User(userId.hashCode().toLong(), email),

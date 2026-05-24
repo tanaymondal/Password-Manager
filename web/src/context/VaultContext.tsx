@@ -7,7 +7,7 @@ import {
   useEffect,
   type ReactNode,
 } from 'react'
-import { deriveKek, generateVaultKey } from '../crypto/argon2'
+import { deriveKek, derivePasswordHash, generateSalt, generateVaultKey } from '../crypto/argon2'
 import { unwrapVaultKey, wrapVaultKey } from '../crypto/vaultKey'
 import { encryptEntry, decryptEntry } from '../crypto/entries'
 import { bytesToBase64, generateRandomBytes } from '../crypto/util'
@@ -257,10 +257,18 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       const newKek = await deriveKek(newPassword, newSalt)
       const newWrapped = await wrapVaultKey(newKek, newVaultKey)
 
-      onProgress?.(0.9)
+      onProgress?.(0.85)
+      const currentAuthSalt = localStorage.getItem('authSalt')
+      if (!currentAuthSalt) throw new Error('No auth salt found. Please log in again.')
+      const newAuthSalt = generateSalt()
+      const currentAuthHash = await derivePasswordHash(currentPassword, currentAuthSalt)
+      const newAuthHash = await derivePasswordHash(newPassword, newAuthSalt)
+
+      onProgress?.(0.95)
       const res = await changePassword({
-        current_password: currentPassword,
-        new_password: newPassword,
+        current_auth_hash: currentAuthHash,
+        new_auth_hash: newAuthHash,
+        new_auth_salt: newAuthSalt,
         wrapped_vault_key: newWrapped,
         new_encryption_salt: newSalt,
         entries: reEncryptedEntries,

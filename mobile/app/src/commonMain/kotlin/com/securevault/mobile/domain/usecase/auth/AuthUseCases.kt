@@ -15,7 +15,7 @@ sealed class LoginResult {
 }
 
 interface VerifyTwoFactorUseCase {
-    suspend operator fun invoke(email: String, code: String, password: String): VerifyTwoFactorResult
+    suspend operator fun invoke(email: String, challengeId: String, code: String, password: String): VerifyTwoFactorResult
 }
 
 sealed class VerifyTwoFactorResult {

@@ -2,26 +2,28 @@ package com.securevault.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 @Data
 public class ChangePasswordRequest {
 
-    @NotBlank(message = "Current password is required")
-    @JsonProperty("current_password")
-    private String currentPassword;
+    @NotBlank(message = "Current auth hash is required")
+    @JsonProperty("current_auth_hash")
+    private String currentAuthHash;
 
-    @NotBlank(message = "New password is required")
-    @Size(min = 8, message = "Password must be at least 8 characters")
-    @JsonProperty("new_password")
-    private String newPassword;
+    @NotBlank(message = "New auth hash is required")
+    @JsonProperty("new_auth_hash")
+    private String newAuthHash;
 
-    @JsonProperty("wrapped_vault_key")
-    private String wrappedVaultKey;
+    @NotBlank(message = "New auth salt is required")
+    @JsonProperty("new_auth_salt")
+    private String newAuthSalt;
 
     @JsonProperty("new_encryption_salt")
     private String newEncryptionSalt;
+
+    @JsonProperty("wrapped_vault_key")
+    private String wrappedVaultKey;
 
     private java.util.List<VaultEntryRequest> entries;
 }

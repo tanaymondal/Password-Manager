@@ -61,11 +61,23 @@ class SecureVaultApi(
         }
     }
 
-    suspend fun verifyTwoFactor(email: String, code: String): Result<AuthResponse> {
+    suspend fun getAuthSalt(email: String): Result<String> = runCatching {
+        val response: HttpResponse = httpClient.post("$baseUrl/api/v1/auth/auth-salt") {
+            contentType(ContentType.Application.Json)
+            setBody(mapOf("email" to email))
+        }
+        val body = response.bodyAsText()
+        val json = Json.parseToJsonElement(body)
+        val dataObj = json.jsonObject["data"]?.jsonObject
+        dataObj?.get("authSalt")?.jsonPrimitive?.content
+            ?: throw Exception("Failed to get auth salt")
+    }
+
+    suspend fun verifyTwoFactor(email: String, challengeId: String, code: String): Result<AuthResponse> {
         return try {
             val response: HttpResponse = httpClient.post("$baseUrl/api/v1/auth/verify-2fa") {
                 contentType(ContentType.Application.Json)
-                setBody(TwoFactorVerifyRequest(email, code))
+                setBody(TwoFactorVerifyRequest(email, challengeId, code))
             }
             parseAuthResponse(response)
         } catch (e: TokenExpiredException) {
@@ -336,14 +348,18 @@ class SecureVaultApi(
         val wrappedVaultKey = dataObj?.get("wrappedVaultKey")?.jsonPrimitive?.content
         val encryptionVersion = dataObj?.get("encryptionVersion")?.jsonPrimitive?.content?.toIntOrNull() ?: 2
         val twoFactorRequired = dataObj?.get("twoFactorRequired")?.jsonPrimitive?.content?.toBoolean() ?: false
+        val challengeId = dataObj?.get("challengeId")?.jsonPrimitive?.content
+        val authSalt = dataObj?.get("authSalt")?.jsonPrimitive?.content
 
         if (twoFactorRequired) {
-            if (userId == null || email == null || encryptionSalt == null) {
+            if (userId == null || email == null || encryptionSalt == null || challengeId == null || authSalt == null) {
                 throw Exception("Missing required fields for 2FA verification")
             }
             AuthResponse(
                 userId = userId,
                 email = email,
+                challengeId = challengeId,
+                authSalt = authSalt,
                 encryptionSalt = encryptionSalt,
                 wrappedVaultKey = wrappedVaultKey,
                 encryptionVersion = encryptionVersion,
@@ -353,6 +369,7 @@ class SecureVaultApi(
             AuthResponse(
             accessToken = accessToken ?: throw Exception("Missing accessToken"),
             refreshToken = refreshToken ?: throw Exception("Missing refreshToken"),
+            authSalt = authSalt,
             encryptionSalt = encryptionSalt ?: throw Exception("Missing encryptionSalt"),
             userId = userId ?: throw Exception("Missing userId"),
             email = email ?: throw Exception("Missing email"),

@@ -5,6 +5,7 @@ export interface AuthResponse {
   refreshToken: string
   userId: string
   email: string
+  authSalt: string
   encryptionSalt: string
   wrappedVaultKey: string
   encryptionVersion: number
@@ -14,6 +15,8 @@ export interface TwoFactorLoginResponse {
   twoFactorRequired: boolean
   userId: string
   email: string
+  challengeId: string
+  authSalt: string
   encryptionSalt: string
   wrappedVaultKey: string
   encryptionVersion: number
@@ -23,16 +26,18 @@ export interface TwoFactorLoginResponse {
 
 export interface LoginRequest {
   email: string
-  password: string
+  authHash: string
   deviceName: string
   deviceId: string
 }
 
 export interface RegisterRequest {
   email: string
-  password: string
-  deviceName: string
-  deviceId: string
+  authHash: string
+  authSalt: string
+  encryptionSalt: string
+  wrappedVaultKey: string
+  encryptionVersion: number
 }
 
 export function login(data: LoginRequest) {
@@ -44,6 +49,7 @@ export function login(data: LoginRequest) {
 
 export interface TwoFactorVerifyRequest {
   email: string
+  challengeId: string
   code: string
 }
 
@@ -61,6 +67,13 @@ export function register(data: RegisterRequest) {
   })
 }
 
+export function getAuthSalt(email: string) {
+  return apiClient<{ authSalt: string }>('/auth/auth-salt', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  })
+}
+
 export async function logout() {
   const refreshToken = localStorage.getItem('refreshToken')
   const accessToken = localStorage.getItem('accessToken')
@@ -74,8 +87,9 @@ export async function logout() {
 }
 
 export interface ChangePasswordRequest {
-  current_password: string
-  new_password: string
+  current_auth_hash: string
+  new_auth_hash: string
+  new_auth_salt: string
   wrapped_vault_key: string
   new_encryption_salt: string
   entries: { id?: string; encryptedData: string; iv: string }[]

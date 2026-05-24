@@ -11,8 +11,8 @@ public class LoginRequest {
     @Email(message = "Invalid email format")
     private String email;
 
-    @NotBlank(message = "Password is required")
-    private String password;
+    @NotBlank(message = "Auth hash is required")
+    private String authHash;
 
     private String deviceName;
     private String deviceId;

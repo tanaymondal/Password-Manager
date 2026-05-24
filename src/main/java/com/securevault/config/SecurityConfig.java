@@ -1,6 +1,5 @@
 package com.securevault.config;
 
-import com.securevault.security.Argon2AuthenticationProvider;
 import com.securevault.security.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
@@ -21,7 +20,6 @@ import org.springframework.web.cors.CorsConfigurationSource;
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
-    private final Argon2AuthenticationProvider argon2AuthenticationProvider;
     private final CorsConfigurationSource corsConfigurationSource;
 
     @Bean
@@ -36,7 +34,6 @@ public class SecurityConfig {
                     auth.requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll();
                     auth.anyRequest().authenticated();
                 })
-                .authenticationProvider(argon2AuthenticationProvider)
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .headers(headers -> headers
                         .frameOptions(frame -> frame.deny())

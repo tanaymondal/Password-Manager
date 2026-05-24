@@ -43,8 +43,8 @@ class LoginUseCaseImpl(
 class VerifyTwoFactorUseCaseImpl(
     private val authRepository: AuthRepository
 ) : VerifyTwoFactorUseCase {
-    override suspend operator fun invoke(email: String, code: String, password: String): VerifyTwoFactorResult {
-        return when (val result = authRepository.verifyTwoFactor(email, code, password)) {
+    override suspend operator fun invoke(email: String, challengeId: String, code: String, password: String): VerifyTwoFactorResult {
+        return when (val result = authRepository.verifyTwoFactor(email, challengeId, code, password)) {
             is Result.Success -> {
                 val authState = result.data
                 VerifyTwoFactorResult.Success(

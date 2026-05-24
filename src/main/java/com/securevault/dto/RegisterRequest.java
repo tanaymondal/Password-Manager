@@ -2,7 +2,7 @@ package com.securevault.dto;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 @Data
@@ -12,10 +12,18 @@ public class RegisterRequest {
     @Email(message = "Invalid email format")
     private String email;
 
-    @NotBlank(message = "Password is required")
-    @Size(min = 8, message = "Password must be at least 8 characters")
-    private String password;
+    @NotBlank(message = "Auth hash is required")
+    private String authHash;
 
-    private String deviceName;
-    private String deviceId;
+    @NotBlank(message = "Auth salt is required")
+    private String authSalt;
+
+    @NotBlank(message = "Encryption salt is required")
+    private String encryptionSalt;
+
+    @NotBlank(message = "Wrapped vault key is required")
+    private String wrappedVaultKey;
+
+    @NotNull(message = "Encryption version is required")
+    private Integer encryptionVersion;
 }

@@ -6,22 +6,28 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class LoginRequest(
     val email: String,
-    val password: String
+    val authHash: String
 )
 
 @Serializable
 data class RegisterRequest(
     val email: String,
-    val password: String
+    val authHash: String,
+    val authSalt: String,
+    val encryptionSalt: String,
+    val wrappedVaultKey: String,
+    val encryptionVersion: Int
 )
 
 @Serializable
 data class AuthResponse(
     val accessToken: String? = null,
     val refreshToken: String? = null,
+    @SerialName("authSalt") val authSalt: String? = null,
     @SerialName("encryptionSalt") val encryptionSalt: String? = null,
     val userId: String? = null,
     val email: String? = null,
+    val challengeId: String? = null,
     @SerialName("wrappedVaultKey") val wrappedVaultKey: String? = null,
     @SerialName("encryptionVersion") val encryptionVersion: Int = 2,
     @SerialName("twoFactorRequired") val twoFactorRequired: Boolean = false
@@ -51,5 +57,6 @@ data class RefreshTokenRequest(
 @Serializable
 data class TwoFactorVerifyRequest(
     val email: String,
+    val challengeId: String,
     val code: String
 )

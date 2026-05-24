@@ -12,6 +12,9 @@ public class AuthResponse {
     private String userId;
     private String email;
 
+    @JsonProperty("authSalt")
+    private String authSalt;
+
     @JsonProperty("encryptionSalt")
     private String encryptionSalt;
 

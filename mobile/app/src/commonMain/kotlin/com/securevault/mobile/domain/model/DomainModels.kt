@@ -31,6 +31,8 @@ data class AuthState(
 data class TwoFactorInfo(
     val userId: String,
     val email: String,
+    val challengeId: String,
+    val authSalt: String,
     val encryptionSalt: String,
     val wrappedVaultKey: String?
 )

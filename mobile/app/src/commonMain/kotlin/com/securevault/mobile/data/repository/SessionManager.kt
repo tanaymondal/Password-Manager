@@ -15,6 +15,7 @@ object SessionManager {
     private const val KEY_USER_EMAIL = "user_email"
     private const val KEY_ENCRYPTION_VERSION = "encryption_version"
     private const val KEY_WRAPPED_VAULT_KEY = "wrapped_vault_key"
+    private const val KEY_AUTH_SALT = "auth_salt"
     private const val KEY_BIOMETRIC_ENABLED = "biometric_enabled"
 
     private var encryptedPrefs: SharedPreferences? = null
@@ -94,6 +95,12 @@ object SessionManager {
 
     fun setWrappedVaultKey(value: String) {
         encryptedPrefs?.edit()?.putString(KEY_WRAPPED_VAULT_KEY, value)?.apply()
+    }
+
+    fun getAuthSalt(): String = encryptedPrefs?.getString(KEY_AUTH_SALT, "") ?: ""
+
+    fun setAuthSalt(value: String) {
+        encryptedPrefs?.edit()?.putString(KEY_AUTH_SALT, value)?.apply()
     }
 
     fun getBiometricEnabled(): Boolean = encryptedPrefs?.getBoolean(KEY_BIOMETRIC_ENABLED, false) ?: false

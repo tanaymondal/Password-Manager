@@ -23,6 +23,7 @@ export function LoginPage() {
   const [submitting, setSubmitting] = useState(false)
   const [twoFactorRequired, setTwoFactorRequired] = useState(false)
   const [pendingEmail, setPendingEmail] = useState('')
+  const [pendingChallengeId, setPendingChallengeId] = useState('')
 
   const {
     register: registerLogin,
@@ -52,6 +53,7 @@ export function LoginPage() {
       if (res.twoFactorRequired) {
         setTwoFactorRequired(true)
         setPendingEmail(data.email)
+        setPendingChallengeId(res.challengeId)
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Login failed')
@@ -64,7 +66,7 @@ export function LoginPage() {
     setError('')
     setSubmitting(true)
     try {
-      await verifyTwoFactor(pendingEmail, data.code)
+      await verifyTwoFactor(pendingEmail, pendingChallengeId, data.code)
     } catch (e) {
       setError(e instanceof Error ? e.message : '2FA verification failed')
     } finally {
@@ -129,6 +131,7 @@ export function LoginPage() {
               onClick={() => {
                 setTwoFactorRequired(false)
                 setPendingEmail('')
+                setPendingChallengeId('')
                 setError('')
               }}
               className="font-medium text-emerald-400 transition-colors hover:text-emerald-300"

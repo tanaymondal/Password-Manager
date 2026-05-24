@@ -6,6 +6,9 @@ import com.securevault.service.AuthService;
 import com.securevault.util.UserUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -14,6 +17,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -55,6 +59,13 @@ public class AuthController {
      * @param httpRequest HTTP request for audit logging (IP, User-Agent)
      * @return AuthResponse with tokens and cryptographic material
      */
+    @PostMapping("/auth-salt")
+    public ResponseEntity<ApiResponse<Map<String, String>>> getAuthSalt(
+            @Valid @RequestBody AuthSaltRequest request) {
+        String authSalt = authService.getAuthSalt(request.getEmail());
+        return ResponseEntity.ok(ApiResponse.success(Map.of("authSalt", authSalt)));
+    }
+
     @PostMapping("/register")
     public ResponseEntity<ApiResponse<AuthResponse>> register(
             @Valid @RequestBody RegisterRequest request,
@@ -110,7 +121,7 @@ public class AuthController {
             @Valid @RequestBody TwoFactorVerifyRequest request,
             HttpServletRequest httpRequest) {
         log.info("2FA verification attempt for email: {}", request.getEmail());
-        AuthResponse response = authService.verifyTwoFactorLogin(request.getEmail(), request.getCode());
+        AuthResponse response = authService.verifyTwoFactorLogin(request.getEmail(), request.getChallengeId(), request.getCode());
         log.info("User logged in with 2FA: {}", request.getEmail());
         auditService.logLogin(
                 UUID.fromString(response.getUserId()),
@@ -192,11 +203,12 @@ public class AuthController {
         log.info("Password change request for user: {}", userId);
         ChangePasswordResponse response = authService.changePassword(
                 userId,
-                request.getCurrentPassword(),
-                request.getNewPassword(),
+                request.getCurrentAuthHash(),
+                request.getNewAuthHash(),
+                request.getNewAuthSalt(),
                 request.getWrappedVaultKey(),
-                request.getEntries(),
-                request.getNewEncryptionSalt()
+                request.getNewEncryptionSalt(),
+                request.getEntries()
         );
         auditService.logAction(
                 userId,
@@ -214,5 +226,12 @@ public class AuthController {
             return forwardedFor.split(",")[0].trim();
         }
         return request.getRemoteAddr();
+    }
+
+    @Data
+    private static class AuthSaltRequest {
+        @NotBlank(message = "Email is required")
+        @Email(message = "Invalid email format")
+        private String email;
     }
 }
