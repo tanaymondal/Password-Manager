@@ -149,12 +149,15 @@ public class AuthController {
     @PostMapping("/logout")
     public ResponseEntity<ApiResponse<String>> logout(
             @AuthenticationPrincipal UserDetails userDetails,
+            @RequestBody(required = false) RefreshTokenRequest refreshRequest,
             HttpServletRequest httpRequest) {
         if (userDetails != null) {
             UUID userId = UserUtils.getUserId(userDetails);
             log.info("User logged out: {}", userId);
             auditService.logLogout(userId, httpRequest.getRemoteAddr(), httpRequest.getHeader("User-Agent"));
             authService.logout(userId);
+        } else if (refreshRequest != null && refreshRequest.getRefreshToken() != null && !refreshRequest.getRefreshToken().isEmpty()) {
+            authService.logoutByRefreshToken(refreshRequest.getRefreshToken());
         }
         return ResponseEntity.ok(ApiResponse.success("Logged out successfully", ""));
     }

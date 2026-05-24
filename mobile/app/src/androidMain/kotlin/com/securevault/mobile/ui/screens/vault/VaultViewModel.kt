@@ -74,13 +74,21 @@ class VaultViewModel(
             block = { getVaultEntriesUseCase() },
             onResult = { result ->
                 setState { copy(isLoading = false) }
-                when (val r = result.getOrNull()) {
+                val errorMessage = when (val r = result.getOrNull()) {
                     is com.securevault.mobile.domain.usecase.vault.VaultEntriesResult.Success -> {
                         val filtered = filterEntries(r.entries, currentState.searchQuery)
                         setState { copy(entries = r.entries, filteredEntries = filtered) }
+                        null
                     }
-                    is com.securevault.mobile.domain.usecase.vault.VaultEntriesResult.Error -> setState { copy(error = r.message) }
-                    null -> setState { copy(error = result.exceptionOrNull()?.message) }
+                    is com.securevault.mobile.domain.usecase.vault.VaultEntriesResult.Error -> r.message
+                    null -> result.exceptionOrNull()?.message
+                }
+                if (errorMessage != null) {
+                    if (isAuthError(errorMessage)) {
+                        setEffect(VaultEffect.NavigateToLogin)
+                    } else {
+                        setState { copy(error = errorMessage) }
+                    }
                 }
             }
         )
@@ -91,13 +99,21 @@ class VaultViewModel(
             block = { getVaultEntriesUseCase() },
             onResult = { result ->
                 setState { copy(isRefreshing = false) }
-                when (val r = result.getOrNull()) {
+                val errorMessage = when (val r = result.getOrNull()) {
                     is com.securevault.mobile.domain.usecase.vault.VaultEntriesResult.Success -> {
                         val filtered = filterEntries(r.entries, currentState.searchQuery)
                         setState { copy(entries = r.entries, filteredEntries = filtered) }
+                        null
                     }
-                    is com.securevault.mobile.domain.usecase.vault.VaultEntriesResult.Error -> setState { copy(error = r.message) }
-                    null -> setState { copy(error = result.exceptionOrNull()?.message) }
+                    is com.securevault.mobile.domain.usecase.vault.VaultEntriesResult.Error -> r.message
+                    null -> result.exceptionOrNull()?.message
+                }
+                if (errorMessage != null) {
+                    if (isAuthError(errorMessage)) {
+                        setEffect(VaultEffect.NavigateToLogin)
+                    } else {
+                        setState { copy(error = errorMessage) }
+                    }
                 }
             }
         )
@@ -146,4 +162,14 @@ class VaultViewModel(
     fun onAddEntryClick() = setEffect(VaultEffect.NavigateToAddEntry)
     fun onEntryClick(entryId: Long) = setEffect(VaultEffect.NavigateToEditEntry(entryId))
     fun onSettingsClick() = setEffect(VaultEffect.NavigateToSettings)
+
+    private fun isAuthError(message: String?): Boolean {
+        if (message == null) return false
+        val lower = message.lowercase()
+        return lower.contains("session expired") ||
+                lower.contains("token expired") ||
+                lower.contains("not authenticated") ||
+                lower.contains("unauthorized") ||
+                lower.contains("login again")
+    }
 }

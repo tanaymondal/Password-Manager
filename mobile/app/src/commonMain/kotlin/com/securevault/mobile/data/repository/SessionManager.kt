@@ -17,8 +17,10 @@ object SessionManager {
     private const val KEY_WRAPPED_VAULT_KEY = "wrapped_vault_key"
 
     private var encryptedPrefs: SharedPreferences? = null
+    private var appContext: Context? = null
 
     fun init(context: Context) {
+        appContext = context.applicationContext
         if (encryptedPrefs == null) {
             try {
                 val masterKey = MasterKey.Builder(context)
@@ -98,5 +100,16 @@ object SessionManager {
 
     fun clearSession() {
         encryptedPrefs?.edit()?.clear()?.apply()
+        clearLocalDatabase()
+    }
+
+    private fun clearLocalDatabase() {
+        val context = appContext ?: return
+        context.deleteDatabase("secure_vault.db")
+        context.getSharedPreferences("secure_vault_db_prefs", Context.MODE_PRIVATE)
+            .edit()
+            .clear()
+            .apply()
+        context.deleteSharedPreferences("secure_vault_db_prefs")
     }
 }

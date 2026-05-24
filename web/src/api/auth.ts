@@ -61,8 +61,16 @@ export function register(data: RegisterRequest) {
   })
 }
 
-export function logout() {
-  return apiClient<void>('/auth/logout', { method: 'POST' })
+export async function logout() {
+  const refreshToken = localStorage.getItem('refreshToken')
+  const accessToken = localStorage.getItem('accessToken')
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`
+  await fetch(`${import.meta.env.VITE_API_URL || '/api/v1'}/auth/logout`, {
+    method: 'POST',
+    headers,
+    body: refreshToken ? JSON.stringify({ refreshToken }) : undefined,
+  }).catch(() => {})
 }
 
 export interface ChangePasswordRequest {

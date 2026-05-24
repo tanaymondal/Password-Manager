@@ -64,7 +64,11 @@ class CachedVaultRepository(
             context.deleteDatabase(SecureVaultDatabase.DATABASE_NAME)
             DatabaseKeyManager(context).clearPassphrase()
             resetDao()
-            block(getOrCreateDao())
+            try {
+                block(getOrCreateDao())
+            } catch (retryException: Exception) {
+                throw retryException
+            }
         }
     }
 
@@ -72,6 +76,8 @@ class CachedVaultRepository(
         val apiResult = apiRepository.getEntries()
         return if (apiResult is Result.Success) {
             withDao { dao -> dao.syncFromRemote(apiResult.data) }
+            apiResult
+        } else if (apiResult is Result.Error && isAuthError(apiResult.message)) {
             apiResult
         } else {
             val cached = withDao { dao -> dao.getAllEntriesSnapshot() }
@@ -89,6 +95,8 @@ class CachedVaultRepository(
             withDao { dao ->
                 dao.getEntryById(id)?.let { dao.insertEntry(apiResult.data.toEntity(true)) }
             }
+            apiResult
+        } else if (apiResult is Result.Error && isAuthError(apiResult.message)) {
             apiResult
         } else {
             val cached = withDao { dao -> dao.getEntryById(id) }
@@ -160,4 +168,14 @@ class CachedVaultRepository(
         folder = folder,
         isSynced = isSynced
     )
+
+    private fun isAuthError(message: String?): Boolean {
+        if (message == null) return false
+        val lower = message.lowercase()
+        return lower.contains("session expired") ||
+                lower.contains("token expired") ||
+                lower.contains("not authenticated") ||
+                lower.contains("unauthorized") ||
+                lower.contains("login again")
+    }
 }

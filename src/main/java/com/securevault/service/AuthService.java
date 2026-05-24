@@ -18,6 +18,7 @@ import com.securevault.security.JwtTokenProvider;
 import com.securevault.security.LoginRateLimiter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -61,6 +62,9 @@ public class AuthService {
     private final BreachCheckService breachCheckService;
     private final LoginRateLimiter loginRateLimiter;
     private final TwoFactorAuthService twoFactorAuthService;
+
+    @Value("${app.jwt.refresh-expiration}")
+    private long refreshTokenExpirationMs;
 
     /**
      * Registers a new user in the system.
@@ -263,6 +267,18 @@ public class AuthService {
         }
     }
 
+    @Transactional
+    public void logoutByRefreshToken(String refreshToken) {
+        try {
+            if (jwtTokenProvider.validateToken(refreshToken)) {
+                UUID userId = jwtTokenProvider.getUserIdFromToken(refreshToken);
+                refreshTokenRepository.deleteByUserId(userId);
+            }
+        } catch (Exception e) {
+            log.warn("Logout by refresh token failed: {}", e.getMessage());
+        }
+    }
+
     /**
      * Changes the user's master password and updates all cryptographic material.
      *
@@ -452,7 +468,7 @@ public class AuthService {
         RefreshToken token = new RefreshToken();
         token.setUserId(user.getId());
         token.setTokenHash(hashToken(refreshToken));
-        token.setExpiresAt(LocalDateTime.now().plusDays(1));
+        token.setExpiresAt(calculateRefreshTokenExpiry());
         refreshTokenRepository.save(token);
 
         return new AuthResponse(
@@ -473,7 +489,7 @@ public class AuthService {
         RefreshToken token = new RefreshToken();
         token.setUserId(user.getId());
         token.setTokenHash(hashToken(refreshToken));
-        token.setExpiresAt(LocalDateTime.now().plusDays(1));
+        token.setExpiresAt(calculateRefreshTokenExpiry());
         refreshTokenRepository.save(token);
 
         return new ChangePasswordResponse(
@@ -485,6 +501,10 @@ public class AuthService {
                 user.getWrappedVaultKey(),
                 user.getEncryptionVersion() != null ? user.getEncryptionVersion() : 2
         );
+    }
+
+    private LocalDateTime calculateRefreshTokenExpiry() {
+        return LocalDateTime.now().plus(refreshTokenExpirationMs, java.time.temporal.ChronoUnit.MILLIS);
     }
 
     private String hashToken(String token) {

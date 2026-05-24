@@ -1,8 +1,7 @@
 package com.securevault.mobile.data.local
 
 import android.content.Context
-import android.security.keystore.KeyGenParameterSpec
-import android.security.keystore.KeyProperties
+import android.content.SharedPreferences
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import java.security.SecureRandom
@@ -16,39 +15,66 @@ class DatabaseKeyManager(private val context: Context) {
         private const val PASSPHRASE_LENGTH = 32
     }
 
-    private val masterKey: MasterKey by lazy {
-        MasterKey.Builder(context)
-            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-            .build()
+    private var encryptedPrefs: SharedPreferences? = null
+
+    private fun getPrefs(): SharedPreferences {
+        var prefs = encryptedPrefs
+        if (prefs == null) {
+            prefs = createEncryptedPrefs()
+            encryptedPrefs = prefs
+        }
+        return prefs
     }
 
-    private val encryptedPrefs by lazy {
-        EncryptedSharedPreferences.create(
-            context,
-            PREFS_NAME,
-            masterKey,
-            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-        )
+    private fun createEncryptedPrefs(): SharedPreferences {
+        return try {
+            val masterKey = MasterKey.Builder(context)
+                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                .build()
+            EncryptedSharedPreferences.create(
+                context,
+                PREFS_NAME,
+                masterKey,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
+        } catch (e: Exception) {
+            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .edit()
+                .clear()
+                .apply()
+            context.deleteSharedPreferences(PREFS_NAME)
+            val masterKey = MasterKey.Builder(context)
+                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                .build()
+            EncryptedSharedPreferences.create(
+                context,
+                PREFS_NAME,
+                masterKey,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
+        }
     }
 
     fun getOrCreatePassphrase(): ByteArray {
-        val storedPassphrase = encryptedPrefs.getString(KEY_DB_PASSPHRASE, null)
+        val prefs = getPrefs()
+        val storedPassphrase = prefs.getString(KEY_DB_PASSPHRASE, null)
 
         return if (storedPassphrase != null) {
             try {
                 android.util.Base64.decode(storedPassphrase, android.util.Base64.NO_WRAP)
             } catch (e: IllegalArgumentException) {
-                encryptedPrefs.edit { remove(KEY_DB_PASSPHRASE) }
+                prefs.edit { remove(KEY_DB_PASSPHRASE) }
                 val newPassphrase = generateSecurePassphrase()
                 val encoded = android.util.Base64.encodeToString(newPassphrase, android.util.Base64.NO_WRAP)
-                encryptedPrefs.edit { putString(KEY_DB_PASSPHRASE, encoded) }
+                prefs.edit { putString(KEY_DB_PASSPHRASE, encoded) }
                 newPassphrase
             }
         } else {
             val newPassphrase = generateSecurePassphrase()
             val encoded = android.util.Base64.encodeToString(newPassphrase, android.util.Base64.NO_WRAP)
-            encryptedPrefs.edit { putString(KEY_DB_PASSPHRASE, encoded) }
+            prefs.edit { putString(KEY_DB_PASSPHRASE, encoded) }
             newPassphrase
         }
     }
@@ -61,6 +87,6 @@ class DatabaseKeyManager(private val context: Context) {
     }
 
     fun clearPassphrase() {
-        encryptedPrefs.edit { clear() }
+        getPrefs().edit { clear() }
     }
 }

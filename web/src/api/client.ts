@@ -36,28 +36,39 @@ export function loadTokens(): TokenStore {
   return store
 }
 
+let refreshPromise: Promise<string | null> | null = null
+
 async function refreshAccessToken(): Promise<string | null> {
   if (!store.refreshToken) return null
-  try {
-    const res = await fetch(`${API_BASE}/auth/refresh`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refreshToken: store.refreshToken }),
-    })
-    if (!res.ok) {
+
+  if (refreshPromise) return refreshPromise
+
+  refreshPromise = (async () => {
+    try {
+      const res = await fetch(`${API_BASE}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken: store.refreshToken }),
+      })
+      if (!res.ok) {
+        clearTokens()
+        return null
+      }
+      const json: ApiResponse<{
+        accessToken: string
+        refreshToken: string
+      }> = await res.json()
+      setTokens(json.data.accessToken, json.data.refreshToken)
+      return json.data.accessToken
+    } catch {
       clearTokens()
       return null
+    } finally {
+      refreshPromise = null
     }
-    const json: ApiResponse<{
-      accessToken: string
-      refreshToken: string
-    }> = await res.json()
-    setTokens(json.data.accessToken, json.data.refreshToken)
-    return json.data.accessToken
-  } catch {
-    clearTokens()
-    return null
-  }
+  })()
+
+  return refreshPromise
 }
 
 export async function apiClient<T>(
@@ -79,6 +90,8 @@ export async function apiClient<T>(
     if (newToken) {
       headers['Authorization'] = `Bearer ${newToken}`
       res = await fetch(`${API_BASE}${path}`, { ...options, headers })
+    } else {
+      throw new Error('Session expired. Please login again.')
     }
   }
 

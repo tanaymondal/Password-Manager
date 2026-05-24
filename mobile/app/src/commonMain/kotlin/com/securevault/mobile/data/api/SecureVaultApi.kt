@@ -23,6 +23,15 @@ class SecureVaultApi(
     private val refreshMutex = Mutex()
 
     class TokenExpiredException : Exception("Token expired or invalid")
+    class SessionExpiredException : Exception("Session expired. Please login again.")
+
+    private suspend fun authRequest(block: suspend () -> HttpResponse): HttpResponse {
+        val response = block()
+        if (response.status == HttpStatusCode.Unauthorized || response.status == HttpStatusCode.Forbidden) {
+            throw TokenExpiredException()
+        }
+        return response
+    }
 
     suspend fun register(request: RegisterRequest): Result<AuthResponse> {
         return try {
@@ -31,6 +40,8 @@ class SecureVaultApi(
                 setBody(request)
             }
             parseAuthResponse(response)
+        } catch (e: TokenExpiredException) {
+            Result.failure(Exception("Invalid email or password"))
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -43,6 +54,8 @@ class SecureVaultApi(
                 setBody(request)
             }
             parseAuthResponse(response)
+        } catch (e: TokenExpiredException) {
+            Result.failure(Exception("Invalid email or password"))
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -55,6 +68,8 @@ class SecureVaultApi(
                 setBody(TwoFactorVerifyRequest(email, code))
             }
             parseAuthResponse(response)
+        } catch (e: TokenExpiredException) {
+            Result.failure(Exception("Invalid email or password"))
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -72,14 +87,17 @@ class SecureVaultApi(
 
     suspend fun logout(): Result<Unit> = runCatching {
         httpClient.post("$baseUrl/api/v1/auth/logout") {
-            bearerAuth(getAccessToken())
+            val token = getAccessToken()
+            if (token.isNotEmpty()) bearerAuth(token)
+            contentType(ContentType.Application.Json)
+            setBody(RefreshTokenRequest(SessionManager.getRefreshToken()))
         }
     }
 
     suspend fun getVaultEntries(): Result<List<VaultEntryResponse>> =
         authCall { token ->
-            val response: HttpResponse = httpClient.get("$baseUrl/api/v1/vault") {
-                bearerAuth(token)
+            val response: HttpResponse = authRequest {
+                httpClient.get("$baseUrl/api/v1/vault") { bearerAuth(token) }
             }
             val body = response.bodyAsText()
             val apiResponse: VaultEntriesApiResponse = Json.decodeFromString(body)
@@ -88,8 +106,8 @@ class SecureVaultApi(
 
     suspend fun getVaultEntry(id: String): Result<VaultEntryResponse> =
         authCall { token ->
-            val response: HttpResponse = httpClient.get("$baseUrl/api/v1/vault/$id") {
-                bearerAuth(token)
+            val response: HttpResponse = authRequest {
+                httpClient.get("$baseUrl/api/v1/vault/$id") { bearerAuth(token) }
             }
             val body = response.bodyAsText()
             val apiResponse: VaultEntryApiResponse = Json.decodeFromString(body)
@@ -98,10 +116,12 @@ class SecureVaultApi(
 
     suspend fun createVaultEntry(request: VaultEntryRequest): Result<VaultEntryResponse> =
         authCall { token ->
-            val response: HttpResponse = httpClient.post("$baseUrl/api/v1/vault") {
-                bearerAuth(token)
-                contentType(ContentType.Application.Json)
-                setBody(request)
+            val response: HttpResponse = authRequest {
+                httpClient.post("$baseUrl/api/v1/vault") {
+                    bearerAuth(token)
+                    contentType(ContentType.Application.Json)
+                    setBody(request)
+                }
             }
             val body = response.bodyAsText()
             val apiResponse: VaultEntryApiResponse = Json.decodeFromString(body)
@@ -110,10 +130,12 @@ class SecureVaultApi(
 
     suspend fun updateVaultEntry(id: String, request: VaultEntryRequest): Result<VaultEntryResponse> =
         authCall { token ->
-            val response: HttpResponse = httpClient.put("$baseUrl/api/v1/vault/$id") {
-                bearerAuth(token)
-                contentType(ContentType.Application.Json)
-                setBody(request)
+            val response: HttpResponse = authRequest {
+                httpClient.put("$baseUrl/api/v1/vault/$id") {
+                    bearerAuth(token)
+                    contentType(ContentType.Application.Json)
+                    setBody(request)
+                }
             }
             val body = response.bodyAsText()
             val apiResponse: VaultEntryApiResponse = Json.decodeFromString(body)
@@ -122,22 +144,22 @@ class SecureVaultApi(
 
     suspend fun deleteVaultEntry(id: String): Result<Unit> =
         authCallVoid { token ->
-            httpClient.delete("$baseUrl/api/v1/vault/$id") {
-                bearerAuth(token)
+            authRequest {
+                httpClient.delete("$baseUrl/api/v1/vault/$id") { bearerAuth(token) }
             }
         }
 
     suspend fun deleteAllVaultEntries(): Result<Unit> =
         authCallVoid { token ->
-            httpClient.delete("$baseUrl/api/v1/vault") {
-                bearerAuth(token)
+            authRequest {
+                httpClient.delete("$baseUrl/api/v1/vault") { bearerAuth(token) }
             }
         }
 
     suspend fun getDevices(): Result<List<DeviceResponse>> =
         authCall { token ->
-            val response: HttpResponse = httpClient.get("$baseUrl/api/v1/devices") {
-                bearerAuth(token)
+            val response: HttpResponse = authRequest {
+                httpClient.get("$baseUrl/api/v1/devices") { bearerAuth(token) }
             }
             val body = response.bodyAsText()
             val apiResponse: DevicesApiResponse = Json.decodeFromString(body)
@@ -146,10 +168,12 @@ class SecureVaultApi(
 
     suspend fun registerDevice(request: DeviceRequest): Result<DeviceResponse> =
         authCall { token ->
-            val response: HttpResponse = httpClient.post("$baseUrl/api/v1/devices") {
-                bearerAuth(token)
-                contentType(ContentType.Application.Json)
-                setBody(request)
+            val response: HttpResponse = authRequest {
+                httpClient.post("$baseUrl/api/v1/devices") {
+                    bearerAuth(token)
+                    contentType(ContentType.Application.Json)
+                    setBody(request)
+                }
             }
             val body = response.bodyAsText()
             val apiResponse: DeviceApiResponse = Json.decodeFromString(body)
@@ -158,15 +182,15 @@ class SecureVaultApi(
 
     suspend fun removeDevice(id: Long): Result<Unit> =
         authCallVoid { token ->
-            httpClient.delete("$baseUrl/api/v1/devices/$id") {
-                bearerAuth(token)
+            authRequest {
+                httpClient.delete("$baseUrl/api/v1/devices/$id") { bearerAuth(token) }
             }
         }
 
     suspend fun setupTwoFactor(): Result<TwoFactorSetupResponse> =
         authCall { token ->
-            val response: HttpResponse = httpClient.get("$baseUrl/api/v1/2fa/setup") {
-                bearerAuth(token)
+            val response: HttpResponse = authRequest {
+                httpClient.get("$baseUrl/api/v1/2fa/setup") { bearerAuth(token) }
             }
             val body = response.bodyAsText()
             val apiResponse: ApiResponse<TwoFactorSetupResponse> = Json.decodeFromString(body)
@@ -175,26 +199,30 @@ class SecureVaultApi(
 
     suspend fun enableTwoFactor(request: EnableTwoFactorRequest): Result<Unit> =
         authCallVoid { token ->
-            httpClient.post("$baseUrl/api/v1/2fa/enable") {
-                bearerAuth(token)
-                contentType(ContentType.Application.Json)
-                setBody(request)
+            authRequest {
+                httpClient.post("$baseUrl/api/v1/2fa/enable") {
+                    bearerAuth(token)
+                    contentType(ContentType.Application.Json)
+                    setBody(request)
+                }
             }
         }
 
     suspend fun disableTwoFactor(code: String): Result<Unit> =
         authCallVoid { token ->
-            httpClient.post("$baseUrl/api/v1/2fa/disable") {
-                bearerAuth(token)
-                contentType(ContentType.Application.Json)
-                setBody(mapOf("code" to code))
+            authRequest {
+                httpClient.post("$baseUrl/api/v1/2fa/disable") {
+                    bearerAuth(token)
+                    contentType(ContentType.Application.Json)
+                    setBody(mapOf("code" to code))
+                }
             }
         }
 
     suspend fun getTwoFactorStatus(): Result<TwoFactorStatusResponse> =
         authCall { token ->
-            val response: HttpResponse = httpClient.get("$baseUrl/api/v1/2fa/status") {
-                bearerAuth(token)
+            val response: HttpResponse = authRequest {
+                httpClient.get("$baseUrl/api/v1/2fa/status") { bearerAuth(token) }
             }
             val body = response.bodyAsText()
             val apiResponse: ApiResponse<TwoFactorStatusResponse> = Json.decodeFromString(body)
@@ -216,6 +244,8 @@ class SecureVaultApi(
         } catch (e: Exception) {
             if (isUnauthorized(e) && refreshAccessToken()) {
                 block(getAccessToken())
+            } else if (isUnauthorized(e)) {
+                throw SessionExpiredException()
             } else {
                 throw e
             }
@@ -231,6 +261,8 @@ class SecureVaultApi(
         } catch (e: Exception) {
             if (isUnauthorized(e) && refreshAccessToken()) {
                 block(getAccessToken())
+            } else if (isUnauthorized(e)) {
+                throw SessionExpiredException()
             } else {
                 throw e
             }
@@ -272,6 +304,7 @@ class SecureVaultApi(
     }
 
     private fun isUnauthorized(e: Exception): Boolean {
+        if (e is SessionExpiredException) return false
         if (e is TokenExpiredException) return true
         val message = e.message ?: ""
         return message.contains("401") || message.contains("403") ||
@@ -343,13 +376,6 @@ class SecureVaultApi(
                 install(HttpTimeout) {
                     requestTimeoutMillis = 30000
                     connectTimeoutMillis = 15000
-                }
-                HttpResponseValidator {
-                    validateResponse { response ->
-                        if (response.status == HttpStatusCode.Unauthorized || response.status == HttpStatusCode.Forbidden) {
-                            throw TokenExpiredException()
-                        }
-                    }
                 }
                 defaultRequest {
                     contentType(ContentType.Application.Json)
