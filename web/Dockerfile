@@ -2,9 +2,14 @@
 FROM node:22-alpine AS build
 WORKDIR /app
 COPY package*.json ./
-RUN npm install
-COPY . .
-RUN npm run build
+RUN npm ci
+
+COPY index.html ./
+COPY tsconfig*.json ./
+COPY vite.config.ts ./
+COPY public ./public
+COPY src ./src
+RUN rm -rf dist && npm run build
 
 # Serve stage
 FROM nginx:alpine
