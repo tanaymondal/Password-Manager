@@ -83,7 +83,11 @@ export async function apiClient<T>(
 
   let res = await fetch(`${API_BASE}${path}`, { ...options, headers, credentials: 'include' })
 
-  if (res.status === 401) {
+  const isPublicEndpoint = ['/auth/login', '/auth/register', '/auth/auth-salt'].some(p =>
+    path.startsWith(p),
+  )
+
+  if (res.status === 401 && !isPublicEndpoint) {
     const newToken = await refreshAccessToken()
     if (newToken) {
       headers['Authorization'] = `Bearer ${newToken}`
