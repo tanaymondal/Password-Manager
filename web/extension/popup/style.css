@@ -1,0 +1,131 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  width: 360px;
+  min-height: 200px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #fff;
+  color: #222;
+}
+
+#app { padding: 20px; }
+
+.view { display: flex; flex-direction: column; gap: 10px; }
+.view.hidden { display: none; }
+
+h1 {
+  font-size: 20px;
+  font-weight: 700;
+  color: #4f46e5;
+}
+
+.subtitle {
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 4px;
+}
+
+input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+input:focus {
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.1);
+}
+
+button {
+  width: 100%;
+  padding: 10px;
+  background: #4f46e5;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+button:hover { background: #4338ca; }
+button:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.error {
+  font-size: 13px;
+  color: #dc2626;
+  min-height: 18px;
+}
+
+.link-btn {
+  background: none;
+  color: #666;
+  font-weight: 400;
+  font-size: 13px;
+  padding: 4px;
+}
+
+.link-btn:hover { background: none; color: #333; }
+
+.vault-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.icon-btn {
+  width: auto;
+  padding: 4px 8px;
+  background: none;
+  color: #666;
+  font-size: 16px;
+}
+
+.icon-btn:hover { background: none; color: #dc2626; }
+
+#vault-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.entry-item {
+  padding: 10px 12px;
+  border: 1px solid #eee;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.entry-item:hover {
+  background: #f5f5ff;
+  border-color: #c7d2fe;
+}
+
+.entry-name {
+  font-weight: 500;
+  font-size: 14px;
+  color: #222;
+}
+
+.entry-username {
+  font-size: 12px;
+  color: #888;
+  margin-top: 2px;
+}
+
+#vault-empty {
+  text-align: center;
+  color: #888;
+  font-size: 13px;
+  padding: 20px;
+}
+
+.hidden { display: none !important; }
