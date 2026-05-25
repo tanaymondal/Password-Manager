@@ -1,6 +1,7 @@
 # Build stage
 FROM maven:3-eclipse-temurin-17-alpine AS build
 WORKDIR /app
+ARG CACHEBUST=1
 COPY pom.xml .
 COPY src ./src
 RUN mvn package -DskipTests -q
