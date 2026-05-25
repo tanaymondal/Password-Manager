@@ -3,6 +3,9 @@
   "name": "SecureVault",
   "version": "1.0.0",
   "description": "Zero-knowledge password manager",
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval';"
+  },
   "permissions": [
     "storage",
     "clipboardWrite"
