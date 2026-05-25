@@ -168,6 +168,7 @@ public class AuthService {
             throw new BadCredentialsException("Invalid 2FA code");
         }
 
+        pendingLoginChallengeStore.consumeChallenge(challengeId);
         loginRateLimiter.recordSuccess(clientIp);
         user.resetFailedAttempts();
         userRepository.save(user);
