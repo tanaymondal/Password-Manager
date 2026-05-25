@@ -107,9 +107,13 @@ public class AuthController {
     @PostMapping("/refresh")
     public ResponseEntity<ApiResponse<AuthResponse>> refresh(
             HttpServletRequest httpRequest,
-            HttpServletResponse httpResponse) {
+            HttpServletResponse httpResponse,
+            @RequestBody(required = false) RefreshTokenRequest body) {
         String refreshToken = extractRefreshToken(httpRequest);
-        if (refreshToken == null) {
+        if (refreshToken == null && body != null) {
+            refreshToken = body.getRefreshToken();
+        }
+        if (refreshToken == null || refreshToken.isEmpty()) {
             return ResponseEntity.badRequest()
                     .body(ApiResponse.<AuthResponse>builder()
                             .success(false)

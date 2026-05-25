@@ -1,6 +1,5 @@
 package com.securevault.dto;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -10,7 +9,6 @@ import lombok.Data;
 public class AuthResponse {
     private String accessToken;
 
-    @JsonIgnore
     private String refreshToken;
 
     private String userId;
