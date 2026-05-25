@@ -144,7 +144,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const verifyTwoFactor = useCallback(async (email: string, challengeId: string, code: string) => {
     const res = await apiVerifyTwoFactor({ email, challengeId, code })
     setTokens(res.accessToken, res.refreshToken)
-    persistCryptoMaterial({ authSalt: res.authSalt, ...res })
+    persistCryptoMaterial(res)
     setState({
       user: { id: res.userId, email: res.email },
       isAuthenticated: true,
