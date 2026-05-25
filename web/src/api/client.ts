@@ -1,5 +1,7 @@
 const API_BASE = import.meta.env.VITE_API_URL || '/api/v1'
 
+import { setCryptoMaterial } from '../store/cryptoMaterial'
+
 interface ApiResponse<T> {
   success: boolean
   message: string
@@ -44,9 +46,18 @@ async function refreshAccessToken(): Promise<string | null> {
         clearTokens()
         return null
       }
-      const json: ApiResponse<{ accessToken: string }> = await res.json()
-      setTokens(json.data.accessToken)
-      return json.data.accessToken
+      const json: ApiResponse<Record<string, unknown>> = await res.json()
+      const data = json.data
+      setTokens(data.accessToken as string)
+      if (data.encryptionSalt && data.wrappedVaultKey) {
+        setCryptoMaterial({
+          authSalt: data.authSalt as string,
+          encryptionSalt: data.encryptionSalt as string,
+          wrappedVaultKey: data.wrappedVaultKey as string,
+          encryptionVersion: (data.encryptionVersion as number) ?? 2,
+        })
+      }
+      return data.accessToken as string
     } catch {
       clearTokens()
       return null

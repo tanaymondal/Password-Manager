@@ -18,7 +18,7 @@ public class CorsConfig {
             "http://localhost:3000",
             "http://localhost:8080",
             "https://vault.tanay.pro",
-            "chrome-extension://<your-securevault-extension-id>"
+            "chrome-extension://*"
         ));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));

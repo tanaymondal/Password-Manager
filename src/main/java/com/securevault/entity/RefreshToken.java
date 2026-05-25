@@ -50,6 +50,13 @@ public class RefreshToken {
     private String tokenHash;
 
     /**
+     * Device ID this token was issued to, for device revocation.
+     * Null for tokens issued before device tracking was added.
+     */
+    @Column(name = "device_id")
+    private String deviceId;
+
+    /**
      * Token expiration timestamp.
      * After this time, the token cannot be used for refresh.
      */

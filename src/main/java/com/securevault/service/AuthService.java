@@ -91,7 +91,7 @@ public class AuthService {
         user = userRepository.save(user);
 
         log.info("User registered successfully: {}", user.getEmail());
-        return generateAuthResponse(user);
+        return generateAuthResponse(user, request.getDeviceId());
     }
 
     @Transactional
@@ -115,11 +115,11 @@ public class AuthService {
             throw new BadCredentialsException("Invalid email or password");
         }
 
-        loginRateLimiter.recordSuccess(clientIp);
+        String deviceId = request.getDeviceId();
 
         if (user.getTwoFactorEnabled()) {
             log.info("2FA required for user: {}", user.getEmail());
-            String challengeId = pendingLoginChallengeStore.createChallenge(user.getId(), user.getEmail());
+            String challengeId = pendingLoginChallengeStore.createChallenge(user.getId(), user.getEmail(), deviceId);
             return TwoFactorLoginResponse.requireTwoFactor(
                     user.getId().toString(),
                     user.getEmail(),
@@ -131,11 +131,12 @@ public class AuthService {
             );
         }
 
+        loginRateLimiter.recordSuccess(clientIp);
         user.resetFailedAttempts();
         userRepository.save(user);
 
         log.info("User logged in successfully: {}", user.getEmail());
-        AuthResponse authResponse = generateAuthResponse(user);
+        AuthResponse authResponse = generateAuthResponse(user, deviceId);
         return TwoFactorLoginResponse.loginSuccess(
                 authResponse.getAccessToken(),
                 authResponse.getRefreshToken(),
@@ -149,8 +150,10 @@ public class AuthService {
     }
 
     @Transactional
-    public AuthResponse verifyTwoFactorLogin(String email, String challengeId, String code) {
-        UUID userId = pendingLoginChallengeStore.validateChallenge(challengeId, email);
+    public AuthResponse verifyTwoFactorLogin(String email, String challengeId, String code, String clientIp) {
+        PendingLoginChallengeStore.ChallengeResult challengeResult = pendingLoginChallengeStore.validateChallenge(challengeId, email);
+        UUID userId = challengeResult.userId();
+        String deviceId = challengeResult.deviceId();
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BadCredentialsException("Invalid email or password"));
@@ -160,14 +163,17 @@ public class AuthService {
         }
 
         if (!twoFactorAuthService.verifyCode(user.getId(), code)) {
+            loginRateLimiter.recordFailure(clientIp);
+            handleFailedLogin(user);
             throw new BadCredentialsException("Invalid 2FA code");
         }
 
+        loginRateLimiter.recordSuccess(clientIp);
         user.resetFailedAttempts();
         userRepository.save(user);
 
         log.info("User logged in with 2FA: {}", user.getEmail());
-        return generateAuthResponse(user);
+        return generateAuthResponse(user, deviceId);
     }
 
     @Transactional
@@ -188,9 +194,10 @@ public class AuthService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
 
+        String deviceId = storedToken.getDeviceId();
         refreshTokenRepository.delete(storedToken);
 
-        return generateAuthResponse(user);
+        return generateAuthResponse(user, deviceId);
     }
 
     @Transactional
@@ -204,8 +211,10 @@ public class AuthService {
     public void logoutByRefreshToken(String refreshToken) {
         try {
             if (jwtTokenProvider.validateToken(refreshToken)) {
-                UUID userId = jwtTokenProvider.getUserIdFromToken(refreshToken);
-                refreshTokenRepository.deleteByUserId(userId);
+                String tokenHash = hashToken(refreshToken);
+                refreshTokenRepository.findByTokenHash(tokenHash).ifPresent(token ->
+                    refreshTokenRepository.delete(token)
+                );
             }
         } catch (Exception e) {
             log.warn("Logout by refresh token failed: {}", e.getMessage());
@@ -268,7 +277,7 @@ public class AuthService {
         refreshTokenRepository.deleteByUserId(userId);
 
         log.info("Password changed for user: {}", user.getEmail());
-        return generateChangePasswordResponse(user);
+        return generateChangePasswordResponse(user, null);
     }
 
     public String getAuthSalt(String email) {
@@ -318,14 +327,14 @@ public class AuthService {
         userRepository.save(user);
     }
 
-    private AuthResponse generateAuthResponse(User user) {
-        refreshTokenRepository.deleteByUserId(user.getId());
+    private AuthResponse generateAuthResponse(User user, String deviceId) {
         String accessToken = jwtTokenProvider.generateAccessToken(user.getId(), user.getEmail(), user.getPasswordUpdatedAt());
         String refreshToken = jwtTokenProvider.generateRefreshToken(user.getId());
 
         RefreshToken token = new RefreshToken();
         token.setUserId(user.getId());
         token.setTokenHash(hashToken(refreshToken));
+        token.setDeviceId(deviceId);
         token.setExpiresAt(calculateRefreshTokenExpiry());
         refreshTokenRepository.save(token);
 
@@ -341,13 +350,14 @@ public class AuthService {
         );
     }
 
-    private ChangePasswordResponse generateChangePasswordResponse(User user) {
+    private ChangePasswordResponse generateChangePasswordResponse(User user, String deviceId) {
         String accessToken = jwtTokenProvider.generateAccessToken(user.getId(), user.getEmail(), user.getPasswordUpdatedAt());
         String refreshToken = jwtTokenProvider.generateRefreshToken(user.getId());
 
         RefreshToken token = new RefreshToken();
         token.setUserId(user.getId());
         token.setTokenHash(hashToken(refreshToken));
+        token.setDeviceId(deviceId);
         token.setExpiresAt(calculateRefreshTokenExpiry());
         refreshTokenRepository.save(token);
 

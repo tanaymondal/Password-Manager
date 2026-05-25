@@ -7,4 +7,5 @@ expect class CryptoEngine {
     fun deriveKek(password: String, encryptionSalt: String): ByteArray
     fun wrapVaultKey(vaultKey: String, kek: ByteArray): String
     fun unwrapVaultKey(wrappedVaultKey: String, kek: ByteArray): String
+    fun sha1Hex(data: String): String
 }

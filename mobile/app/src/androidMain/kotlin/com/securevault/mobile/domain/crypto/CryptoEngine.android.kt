@@ -2,6 +2,7 @@ package com.securevault.mobile.domain.crypto
 
 import com.lambdapioneer.argon2kt.Argon2Kt
 import com.lambdapioneer.argon2kt.Argon2Mode
+import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.Base64
 import javax.crypto.Cipher
@@ -85,5 +86,11 @@ actual class CryptoEngine {
 
         val decrypted = cipher.doFinal(encrypted)
         return Base64.getEncoder().encodeToString(decrypted)
+    }
+
+    actual fun sha1Hex(data: String): String {
+        val digest = MessageDigest.getInstance("SHA-1")
+        val hash = digest.digest(data.toByteArray(Charsets.UTF_8))
+        return hash.joinToString("") { "%02x".format(it) }.uppercase()
     }
 }

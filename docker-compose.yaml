@@ -30,6 +30,7 @@ services:
       - DB_USERNAME=postgres
       - DB_PASSWORD=mg8Jn^#Cpe
       - JWT_SECRET=AHGwDAAO4J/e0FrHjnh/9vHcrIJ1cOC785IhFM2FWIA=
+      - ENCRYPTION_KEY=+59gmDEjQeqWYmgZKA1OZaVWuFcyN+qN/J9R0xUsOWM=
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=mg8Jn^#Cpe

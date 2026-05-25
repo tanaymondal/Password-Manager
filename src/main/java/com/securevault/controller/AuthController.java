@@ -3,7 +3,6 @@ package com.securevault.controller;
 import com.securevault.dto.*;
 import com.securevault.service.AuditService;
 import com.securevault.service.AuthService;
-import com.securevault.service.BreachCheckService;
 import com.securevault.util.UserUtils;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
@@ -32,7 +31,6 @@ public class AuthController {
 
     private final AuthService authService;
     private final AuditService auditService;
-    private final BreachCheckService breachCheckService;
 
     @Value("${app.jwt.refresh-expiration}")
     private long refreshTokenExpirationMs;
@@ -44,19 +42,15 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.success(Map.of("authSalt", authSalt)));
     }
 
-    @PostMapping("/check-breach")
-    public ResponseEntity<ApiResponse<Map<String, Boolean>>> checkBreach(
-            @Valid @RequestBody BreachCheckRequest request) {
-        boolean breached = breachCheckService.isHashBreached(request.getSha1Hash());
-        return ResponseEntity.ok(ApiResponse.success(Map.of("breached", breached)));
-    }
-
     @PostMapping("/register")
     public ResponseEntity<ApiResponse<AuthResponse>> register(
             @Valid @RequestBody RegisterRequest request,
             HttpServletRequest httpRequest,
             HttpServletResponse httpResponse) {
         log.info("Registration attempt for email: {}", request.getEmail());
+        if (request.getDeviceId() == null) {
+            request.setDeviceId(UUID.randomUUID().toString());
+        }
         AuthResponse response = authService.register(request);
         setRefreshTokenCookie(httpRequest, httpResponse, response.getRefreshToken());
         log.info("User registered successfully: {}", request.getEmail());
@@ -99,7 +93,7 @@ public class AuthController {
             HttpServletRequest httpRequest,
             HttpServletResponse httpResponse) {
         log.info("2FA verification attempt for email: {}", request.getEmail());
-        AuthResponse response = authService.verifyTwoFactorLogin(request.getEmail(), request.getChallengeId(), request.getCode());
+        AuthResponse response = authService.verifyTwoFactorLogin(request.getEmail(), request.getChallengeId(), request.getCode(), getClientIp(httpRequest));
         setRefreshTokenCookie(httpRequest, httpResponse, response.getRefreshToken());
         log.info("User logged in with 2FA: {}", request.getEmail());
         auditService.logLogin(
@@ -183,7 +177,7 @@ public class AuthController {
         if (refreshToken == null) return;
         Cookie cookie = new Cookie("refreshToken", refreshToken);
         cookie.setHttpOnly(true);
-        cookie.setSecure(request.isSecure());
+        cookie.setSecure(true);
         cookie.setPath("/api/v1/auth");
         cookie.setMaxAge((int) (refreshTokenExpirationMs / 1000));
         cookie.setAttribute("SameSite", "Strict");
@@ -193,7 +187,7 @@ public class AuthController {
     private void clearRefreshTokenCookie(HttpServletRequest request, HttpServletResponse response) {
         Cookie cookie = new Cookie("refreshToken", null);
         cookie.setHttpOnly(true);
-        cookie.setSecure(request.isSecure());
+        cookie.setSecure(true);
         cookie.setPath("/api/v1/auth");
         cookie.setMaxAge(0);
         response.addCookie(cookie);

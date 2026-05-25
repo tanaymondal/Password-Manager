@@ -36,6 +36,7 @@ export interface RegisterRequest {
   encryptionSalt: string
   wrappedVaultKey: string
   encryptionVersion: number
+  deviceId?: string
 }
 
 export function login(data: LoginRequest) {
@@ -67,12 +68,13 @@ export function register(data: RegisterRequest) {
 
 export async function checkBreach(password: string): Promise<boolean> {
   const sha1 = await crypto.subtle.digest('SHA-1', new TextEncoder().encode(password))
-  const hash = Array.from(new Uint8Array(sha1)).map(b => b.toString(16).padStart(2, '0')).join('')
-  const { breached } = await apiClient<{ breached: boolean }>('/auth/check-breach', {
-    method: 'POST',
-    body: JSON.stringify({ sha1Hash: hash }),
-  })
-  return breached
+  const hash = Array.from(new Uint8Array(sha1)).map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase()
+  const prefix = hash.slice(0, 5)
+  const suffix = hash.slice(5)
+  const res = await fetch(`https://api.pwnedpasswords.com/range/${prefix}`)
+  if (!res.ok) return false
+  const body = await res.text()
+  return body.split('\n').some(line => line.startsWith(suffix))
 }
 
 export function getAuthSalt(email: string) {

@@ -26,4 +26,6 @@ public class RegisterRequest {
 
     @NotNull(message = "Encryption version is required")
     private Integer encryptionVersion;
+
+    private String deviceId;
 }

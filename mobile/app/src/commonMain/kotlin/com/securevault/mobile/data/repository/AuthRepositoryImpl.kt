@@ -1,6 +1,7 @@
 package com.securevault.mobile.data.repository
 
 import com.securevault.mobile.data.api.SecureVaultApi
+import com.securevault.mobile.data.breach.BreachChecker
 import com.securevault.mobile.data.model.LoginRequest
 import com.securevault.mobile.data.model.RefreshTokenRequest
 import com.securevault.mobile.data.model.RegisterRequest
@@ -14,6 +15,7 @@ import com.securevault.mobile.domain.repository.LoginResponse
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlin.random.Random
 
 class AuthRepositoryImpl(
     private val api: SecureVaultApi,
@@ -26,15 +28,20 @@ class AuthRepositoryImpl(
 
     override suspend fun register(email: String, password: String): Result<AuthState> {
         return try {
+            if (BreachChecker.checkBreach(password, cryptoEngine)) {
+                return Result.Error("This password has been exposed in a data breach. Please choose a different password.")
+            }
+
             val authSalt = cryptoEngine.generateSalt()
             val encryptionSalt = cryptoEngine.generateSalt()
             val vaultKey = cryptoEngine.generateVaultKey()
             val authHash = cryptoEngine.generateAuthHash(password, authSalt)
             val kek = cryptoEngine.deriveKek(password, encryptionSalt)
             val wrappedVaultKey = cryptoEngine.wrapVaultKey(vaultKey, kek)
+            val deviceId = getOrCreateDeviceId()
 
             val response = api.register(
-                RegisterRequest(email, authHash, authSalt, encryptionSalt, wrappedVaultKey, 2)
+                RegisterRequest(email, authHash, authSalt, encryptionSalt, wrappedVaultKey, 2, deviceId)
             )
             response.fold(
                 onSuccess = { authResponse ->
@@ -65,7 +72,8 @@ class AuthRepositoryImpl(
                 ?: return Result.Error("Failed to retrieve authentication salt")
 
             val authHash = cryptoEngine.generateAuthHash(password, authSalt)
-            val response = api.login(LoginRequest(email, authHash))
+            val deviceId = getOrCreateDeviceId()
+            val response = api.login(LoginRequest(email, authHash, deviceName = "Mobile App", deviceId = deviceId))
 
             response.fold(
                 onSuccess = { authResponse ->
@@ -254,6 +262,17 @@ class AuthRepositoryImpl(
     private fun getCachedAuthSalt(email: String): String? {
         val cached = SessionManager.getAuthSalt()
         return if (cached.isNotEmpty()) cached else null
+    }
+
+    private fun getOrCreateDeviceId(): String {
+        val existing = SessionManager.getDeviceId()
+        if (existing.isNotEmpty()) return existing
+        val newId = buildString {
+            val hex = "0123456789abcdef"
+            repeat(32) { append(hex[Random.nextInt(hex.length)]) }
+        }
+        SessionManager.setDeviceId(newId)
+        return newId
     }
 
     private fun deriveVaultKey(password: String, encryptionSalt: String, wrappedVaultKey: String?): String? {

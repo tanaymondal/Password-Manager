@@ -20,6 +20,9 @@ import {
 } from '../api/vault'
 import { changePassword, checkBreach } from '../api/auth'
 import { setTokens } from '../api/client'
+import { getCryptoMaterial, setCryptoMaterial } from '../store/cryptoMaterial'
+
+const CROSS_TAB_CHANNEL = 'securevault-crypto'
 
 export interface EntryFields {
   name: string
@@ -65,8 +68,9 @@ export function VaultProvider({ children }: { children: ReactNode }) {
   const [entryError, setEntryError] = useState<string | null>(null)
 
   useEffect(() => {
-    const handleStorage = (e: StorageEvent) => {
-      if (e.key === 'encryptionSalt' || e.key === 'wrappedVaultKey') {
+    const channel = new BroadcastChannel(CROSS_TAB_CHANNEL)
+    channel.onmessage = (e) => {
+      if (e.data === 'crypto-changed') {
         vaultKeyRef.current = null
         setIsUnlocked(false)
         setCrossTabLocked(true)
@@ -75,8 +79,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
         setError('Your master password was changed in another session. Please log out and log back in.')
       }
     }
-    window.addEventListener('storage', handleStorage)
-    return () => window.removeEventListener('storage', handleStorage)
+    return () => channel.close()
   }, [])
 
   const lock = useCallback(() => {
@@ -95,9 +98,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       return
     }
 
-    const salt = localStorage.getItem('encryptionSalt')
-    const wrapped = localStorage.getItem('wrappedVaultKey')
-    if (!salt || !wrapped) {
+    const material = getCryptoMaterial()
+    if (!material) {
       setError('No vault key material found. Please log in again.')
       return
     }
@@ -105,8 +107,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
     setIsLoading(true)
     setError(null)
     try {
-      const kek = await deriveKek(password, salt)
-      const vaultKeyDerived = await unwrapVaultKey(kek, wrapped)
+      const kek = await deriveKek(password, material.encryptionSalt)
+      const vaultKeyDerived = await unwrapVaultKey(kek, material.wrappedVaultKey)
       vaultKeyRef.current = vaultKeyDerived
       setIsUnlocked(true)
     } catch {
@@ -234,15 +236,14 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       if (await checkBreach(newPassword)) {
         throw new Error('This password has been exposed in a data breach. Please choose a different password.')
       }
-      const currentSalt = localStorage.getItem('encryptionSalt')
-      const wrapped = localStorage.getItem('wrappedVaultKey')
-      if (!currentSalt || !wrapped) throw new Error('No vault key material')
+      const material = getCryptoMaterial()
+      if (!material) throw new Error('No vault key material')
 
       onProgress?.(0.1)
       let oldVaultKey = vaultKeyRef.current
       if (!oldVaultKey) {
-        const kek = await deriveKek(currentPassword, currentSalt)
-        oldVaultKey = await unwrapVaultKey(kek, wrapped)
+        const kek = await deriveKek(currentPassword, material.encryptionSalt)
+        oldVaultKey = await unwrapVaultKey(kek, material.wrappedVaultKey)
       }
 
       onProgress?.(0.25)
@@ -267,7 +268,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       const newWrapped = await wrapVaultKey(newKek, newVaultKey)
 
       onProgress?.(0.85)
-      const currentAuthSalt = localStorage.getItem('authSalt')
+      const currentAuthSalt = material.authSalt
       if (!currentAuthSalt) throw new Error('No auth salt found. Please log in again.')
       const newAuthSalt = generateSalt()
       const currentAuthHash = await derivePasswordHash(currentPassword, currentAuthSalt)
@@ -285,10 +286,18 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 
       vaultKeyRef.current = newVaultKey
 
-      localStorage.setItem('encryptionSalt', res.encryptionSalt)
-      localStorage.setItem('wrappedVaultKey', res.wrappedVaultKey)
-      localStorage.setItem('encryptionVersion', String(res.encryptionVersion))
+      setCryptoMaterial({
+        authSalt: newAuthSalt,
+        encryptionSalt: res.encryptionSalt,
+        wrappedVaultKey: res.wrappedVaultKey,
+        encryptionVersion: res.encryptionVersion,
+      })
       setTokens(res.accessToken)
+
+      try {
+        new BroadcastChannel(CROSS_TAB_CHANNEL).postMessage('crypto-changed')
+      } catch {
+      }
     },
     [],
   )

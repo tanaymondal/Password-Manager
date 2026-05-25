@@ -5,6 +5,7 @@ import com.securevault.dto.DeviceResponse;
 import com.securevault.dto.DevicesResponse;
 import com.securevault.entity.Device;
 import com.securevault.repository.DeviceRepository;
+import com.securevault.repository.RefreshTokenRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,6 +45,7 @@ import java.util.stream.Collectors;
 public class DeviceService {
 
     private final DeviceRepository deviceRepository;
+    private final RefreshTokenRepository refreshTokenRepository;
 
     /**
      * Registers a new device or updates an existing one.
@@ -125,6 +127,7 @@ public class DeviceService {
             throw new IllegalArgumentException("Access denied");
         }
 
+        refreshTokenRepository.deleteByUserIdAndDeviceId(userId, deviceId);
         deviceRepository.delete(device);
     }
 

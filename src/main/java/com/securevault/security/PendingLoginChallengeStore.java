@@ -17,14 +17,14 @@ public class PendingLoginChallengeStore {
 
     private final Map<String, Challenge> challenges = new ConcurrentHashMap<>();
 
-    public String createChallenge(UUID userId, String email) {
+    public String createChallenge(UUID userId, String email, String deviceId) {
         String challengeId = UUID.randomUUID().toString();
-        challenges.put(challengeId, new Challenge(userId, email, Instant.now()));
+        challenges.put(challengeId, new Challenge(userId, email, deviceId, Instant.now()));
         log.debug("Created pending login challenge for user: {}", email);
         return challengeId;
     }
 
-    public UUID validateChallenge(String challengeId, String email) {
+    public ChallengeResult validateChallenge(String challengeId, String email) {
         Challenge challenge = challenges.remove(challengeId);
         if (challenge == null) {
             throw new BadCredentialsException("Invalid or expired login challenge");
@@ -37,8 +37,10 @@ public class PendingLoginChallengeStore {
             log.warn("Email mismatch in login challenge. Expected: {}, got: {}", challenge.email(), email);
             throw new BadCredentialsException("Invalid login challenge");
         }
-        return challenge.userId();
+        return new ChallengeResult(challenge.userId(), challenge.deviceId());
     }
 
-    private record Challenge(UUID userId, String email, Instant createdAt) {}
+    public record ChallengeResult(UUID userId, String deviceId) {}
+
+    private record Challenge(UUID userId, String email, String deviceId, Instant createdAt) {}
 }
