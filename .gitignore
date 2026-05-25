@@ -52,6 +52,9 @@ web/.env.local
 # Build outputs
 target/
 
+# Tooling
+.commandcode/
+
 # Logs
 logs/
 server.log

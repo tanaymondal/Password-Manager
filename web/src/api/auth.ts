@@ -2,7 +2,6 @@ import { apiClient } from './client'
 
 export interface AuthResponse {
   accessToken: string
-  refreshToken: string
   userId: string
   email: string
   authSalt: string
@@ -17,11 +16,10 @@ export interface TwoFactorLoginResponse {
   email: string
   challengeId: string
   authSalt: string
-  encryptionSalt: string
-  wrappedVaultKey: string
-  encryptionVersion: number
+  encryptionSalt: string | null
+  wrappedVaultKey: string | null
+  encryptionVersion: number | null
   accessToken: string | null
-  refreshToken: string | null
 }
 
 export interface LoginRequest {
@@ -75,15 +73,15 @@ export function getAuthSalt(email: string) {
 }
 
 export async function logout() {
-  const refreshToken = localStorage.getItem('refreshToken')
-  const accessToken = localStorage.getItem('accessToken')
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-  if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`
-  await fetch(`${import.meta.env.VITE_API_URL || '/api/v1'}/auth/logout`, {
-    method: 'POST',
-    headers,
-    body: refreshToken ? JSON.stringify({ refreshToken }) : undefined,
-  }).catch(() => {})
+  try {
+    await fetch(`${import.meta.env.VITE_API_URL || '/api/v1'}/auth/logout`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+    })
+  } catch {
+    // ignore
+  }
 }
 
 export interface ChangePasswordRequest {
@@ -97,7 +95,6 @@ export interface ChangePasswordRequest {
 
 export interface ChangePasswordResponse {
   accessToken: string
-  refreshToken: string
   encryptionSalt: string
   wrappedVaultKey: string
   encryptionVersion: number

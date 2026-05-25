@@ -97,10 +97,11 @@ public class TwoFactorController {
     @PostMapping("/disable")
     public ResponseEntity<ApiResponse<String>> disable2FA(
             @AuthenticationPrincipal UserDetails userDetails,
+            @Valid @RequestBody Enable2FARequest request,
             HttpServletRequest httpRequest) {
         UUID userId = getUserId(userDetails);
         log.info("Disabling 2FA for user: {}", userId);
-        twoFactorAuthService.disable2FA(userId);
+        twoFactorAuthService.disable2FA(userId, request.getCode());
         auditService.log2FADisabled(userId, httpRequest.getRemoteAddr(), httpRequest.getHeader("User-Agent"));
         return ResponseEntity.ok(ApiResponse.success("2FA disabled successfully", ""));
     }

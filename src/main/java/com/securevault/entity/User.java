@@ -1,5 +1,6 @@
 package com.securevault.entity;
 
+import com.securevault.config.TwoFactorSecretConverter;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -75,8 +76,10 @@ public class User {
 
     /**
      * TOTP secret for two-factor authentication.
+     * Encrypted at rest using AES-256-GCM via TwoFactorSecretConverter.
      * Stored when 2FA is enabled, null otherwise.
      */
+    @Convert(converter = TwoFactorSecretConverter.class)
     @Column(name = "two_factor_secret")
     private String twoFactorSecret;
 

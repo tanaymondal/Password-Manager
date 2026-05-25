@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useVault } from '../context/VaultContext'
+import { consumeAutoUnlockVaultKey } from '../context/AuthContext'
 import { EmptyState } from '../components/EmptyState'
 import { LoadingSpinner } from '../components/LoadingSpinner'
 
@@ -14,11 +15,10 @@ export function VaultPage() {
 
   useEffect(() => {
     if (!isUnlocked && !autoUnlocked.current) {
-      const saved = sessionStorage.getItem('autoUnlockPassword')
-      if (saved) {
+      const preDerivedKey = consumeAutoUnlockVaultKey()
+      if (preDerivedKey) {
         autoUnlocked.current = true
-        sessionStorage.removeItem('autoUnlockPassword')
-        unlock(saved).catch(() => {})
+        unlock('', preDerivedKey).catch(() => {})
       }
     }
   }, [isUnlocked, unlock])

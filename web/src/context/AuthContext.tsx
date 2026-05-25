@@ -15,9 +15,17 @@ import {
   type AuthResponse,
   type TwoFactorLoginResponse,
 } from '../api/auth'
-import { setTokens, clearTokens, loadTokens } from '../api/client'
+import { setTokens, clearTokens } from '../api/client'
 import { derivePasswordHash, deriveKek, generateSalt, generateVaultKey } from '../crypto/argon2'
-import { wrapVaultKey } from '../crypto/vaultKey'
+import { unwrapVaultKey, wrapVaultKey } from '../crypto/vaultKey'
+
+let _autoUnlockVaultKey: CryptoKey | null = null
+
+export function consumeAutoUnlockVaultKey(): CryptoKey | null {
+  const key = _autoUnlockVaultKey
+  _autoUnlockVaultKey = null
+  return key
+}
 
 function getDeviceId(): string {
   let id = localStorage.getItem('deviceId')
@@ -63,48 +71,56 @@ function clearCryptoMaterial() {
   localStorage.removeItem('encryptionVersion')
 }
 
+function parseUserFromToken(token: string): User | null {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]))
+    return { id: payload.sub || payload.userId, email: payload.email }
+  } catch {
+    return null
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<AuthState>(() => {
-    const tokens = loadTokens()
-    if (tokens.accessToken) {
-      return {
-        user: null,
-        isAuthenticated: true,
-        isLoading: true,
-        authData: null,
-      }
-    }
-    return {
-      user: null,
-      isAuthenticated: false,
-      isLoading: false,
-      authData: null,
-    }
+  const [state, setState] = useState<AuthState>({
+    user: null,
+    isAuthenticated: false,
+    isLoading: true,
+    authData: null,
   })
 
   useEffect(() => {
-    const tokens = loadTokens()
-    if (tokens.accessToken) {
-      try {
-        const payload = JSON.parse(atob(tokens.accessToken.split('.')[1]))
-        setState({
-          user: { id: payload.sub || payload.userId, email: payload.email },
-          isAuthenticated: true,
-          isLoading: false,
-          authData: null,
-        })
-      } catch {
-        clearTokens()
-        clearCryptoMaterial()
-        setState({
-          user: null,
-          isAuthenticated: false,
-          isLoading: false,
-          authData: null,
-        })
-      }
-    }
+    silentRefresh()
   }, [])
+
+  async function silentRefresh() {
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL || '/api/v1'}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+      })
+      if (!res.ok) {
+        setState({ user: null, isAuthenticated: false, isLoading: false, authData: null })
+        return
+      }
+      const json = await res.json()
+      const token = json.data.accessToken
+      if (!token) {
+        setState({ user: null, isAuthenticated: false, isLoading: false, authData: null })
+        return
+      }
+      setTokens(token)
+      const user = parseUserFromToken(token)
+      setState({
+        user,
+        isAuthenticated: true,
+        isLoading: false,
+        authData: null,
+      })
+    } catch {
+      setState({ user: null, isAuthenticated: false, isLoading: false, authData: null })
+    }
+  }
 
   const login = useCallback(async (email: string, password: string): Promise<TwoFactorLoginResponse> => {
     let authSalt = localStorage.getItem('authSalt')
@@ -118,23 +134,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       deviceName: 'Web Browser',
       deviceId: getDeviceId(),
     })
-    sessionStorage.setItem('autoUnlockPassword', password)
-    if (!res.twoFactorRequired && res.accessToken && res.refreshToken) {
-      setTokens(res.accessToken, res.refreshToken)
-      persistCryptoMaterial(res)
+    if (!res.twoFactorRequired && res.accessToken) {
+      try {
+        const kek = await deriveKek(password, res.encryptionSalt!)
+        const vaultKey = await unwrapVaultKey(kek, res.wrappedVaultKey!)
+        _autoUnlockVaultKey = vaultKey
+      } catch {
+        // Vault unlock will require manual password entry
+      }
+      setTokens(res.accessToken)
+      persistCryptoMaterial({
+        authSalt: res.authSalt,
+        encryptionSalt: res.encryptionSalt!,
+        wrappedVaultKey: res.wrappedVaultKey!,
+        encryptionVersion: res.encryptionVersion!,
+      })
       setState({
         user: { id: res.userId, email: res.email },
         isAuthenticated: true,
         isLoading: false,
         authData: {
           accessToken: res.accessToken,
-          refreshToken: res.refreshToken,
           userId: res.userId,
           email: res.email,
           authSalt: res.authSalt,
-          encryptionSalt: res.encryptionSalt,
-          wrappedVaultKey: res.wrappedVaultKey,
-          encryptionVersion: res.encryptionVersion,
+          encryptionSalt: res.encryptionSalt!,
+          wrappedVaultKey: res.wrappedVaultKey!,
+          encryptionVersion: res.encryptionVersion!,
         },
       })
     }
@@ -143,8 +169,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const verifyTwoFactor = useCallback(async (email: string, challengeId: string, code: string) => {
     const res = await apiVerifyTwoFactor({ email, challengeId, code })
-    setTokens(res.accessToken, res.refreshToken)
-    persistCryptoMaterial(res)
+    setTokens(res.accessToken)
+    persistCryptoMaterial({
+      authSalt: res.authSalt,
+      encryptionSalt: res.encryptionSalt,
+      wrappedVaultKey: res.wrappedVaultKey,
+      encryptionVersion: res.encryptionVersion,
+    })
     setState({
       user: { id: res.userId, email: res.email },
       isAuthenticated: true,
@@ -160,6 +191,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const authHash = await derivePasswordHash(password, authSalt)
     const kek = await deriveKek(password, encryptionSalt)
     const wrappedVaultKey = await wrapVaultKey(kek, vaultKey)
+    _autoUnlockVaultKey = vaultKey
 
     const res = await apiRegister({
       email,
@@ -169,9 +201,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       wrappedVaultKey,
       encryptionVersion: 2,
     })
-    setTokens(res.accessToken, res.refreshToken)
-    persistCryptoMaterial(res)
-    sessionStorage.setItem('autoUnlockPassword', password)
+    setTokens(res.accessToken)
+    persistCryptoMaterial({
+      authSalt,
+      encryptionSalt: res.encryptionSalt,
+      wrappedVaultKey: res.wrappedVaultKey,
+      encryptionVersion: res.encryptionVersion,
+    })
     setState({
       user: { id: res.userId, email: res.email },
       isAuthenticated: true,
@@ -188,6 +224,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     clearTokens()
     clearCryptoMaterial()
+    _autoUnlockVaultKey = null
     setState({
       user: null,
       isAuthenticated: false,

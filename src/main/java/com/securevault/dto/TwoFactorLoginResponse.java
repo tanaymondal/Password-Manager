@@ -1,5 +1,6 @@
 package com.securevault.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -27,6 +28,8 @@ public class TwoFactorLoginResponse {
     private Integer encryptionVersion;
 
     private String accessToken;
+
+    @JsonIgnore
     private String refreshToken;
 
     public static TwoFactorLoginResponse requireTwoFactor(String userId, String email, String challengeId, String authSalt, String encryptionSalt, String wrappedVaultKey, Integer encryptionVersion) {

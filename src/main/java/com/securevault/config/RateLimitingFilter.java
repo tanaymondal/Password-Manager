@@ -1,5 +1,7 @@
 package com.securevault.config;
 
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import jakarta.servlet.*;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -11,6 +13,9 @@ import org.springframework.stereotype.Component;
 import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 @Slf4j
@@ -19,9 +24,25 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class RateLimitingFilter implements Filter {
 
     private final Map<String, RateLimitBucket> buckets = new ConcurrentHashMap<>();
+    private final ScheduledExecutorService cleanupScheduler = Executors.newSingleThreadScheduledExecutor();
 
     @Value("${app.rate-limit.requests-per-minute:60}")
     private int maxRequestsPerMinute;
+
+    @PostConstruct
+    public void init() {
+        cleanupScheduler.scheduleAtFixedRate(this::evictStaleBuckets, 60, 60, TimeUnit.SECONDS);
+    }
+
+    @PreDestroy
+    public void destroy() {
+        cleanupScheduler.shutdownNow();
+    }
+
+    private void evictStaleBuckets() {
+        long now = System.currentTimeMillis();
+        buckets.values().removeIf(bucket -> now - bucket.getWindowStart() > 120_000);
+    }
 
     @Override
     public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
@@ -51,19 +72,7 @@ public class RateLimitingFilter implements Filter {
     }
 
     private String getClientIdentifier(HttpServletRequest request) {
-        String ip = request.getRemoteAddr();
-
-        String forwardedFor = request.getHeader("X-Forwarded-For");
-        if (forwardedFor != null && !forwardedFor.isEmpty()) {
-            ip = forwardedFor.split(",")[0].trim();
-        } else {
-            String realIp = request.getHeader("X-Real-IP");
-            if (realIp != null && !realIp.isEmpty()) {
-                ip = realIp.trim();
-            }
-        }
-
-        return ip;
+        return request.getRemoteAddr();
     }
 
     private static class RateLimitBucket {
@@ -73,6 +82,10 @@ public class RateLimitingFilter implements Filter {
 
         RateLimitBucket(int maxRequests) {
             this.maxRequests = maxRequests;
+        }
+
+        long getWindowStart() {
+            return windowStart;
         }
 
         synchronized boolean tryConsume() {

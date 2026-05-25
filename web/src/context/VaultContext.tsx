@@ -34,7 +34,7 @@ interface VaultContextType {
   isLoading: boolean
   error: string | null
   crossTabLocked: boolean
-  unlock: (password: string) => Promise<void>
+  unlock: (password: string, vaultKey?: CryptoKey) => Promise<void>
   lock: () => void
   clearError: () => void
 
@@ -88,7 +88,13 @@ export function VaultProvider({ children }: { children: ReactNode }) {
     setDecrypted({})
   }, [])
 
-  const unlock = useCallback(async (password: string) => {
+  const unlock = useCallback(async (password: string, vaultKey?: CryptoKey) => {
+    if (vaultKey) {
+      vaultKeyRef.current = vaultKey
+      setIsUnlocked(true)
+      return
+    }
+
     const salt = localStorage.getItem('encryptionSalt')
     const wrapped = localStorage.getItem('wrappedVaultKey')
     if (!salt || !wrapped) {
@@ -100,8 +106,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
     setError(null)
     try {
       const kek = await deriveKek(password, salt)
-      const vaultKey = await unwrapVaultKey(kek, wrapped)
-      vaultKeyRef.current = vaultKey
+      const vaultKeyDerived = await unwrapVaultKey(kek, wrapped)
+      vaultKeyRef.current = vaultKeyDerived
       setIsUnlocked(true)
     } catch {
       vaultKeyRef.current = null
@@ -279,7 +285,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       localStorage.setItem('encryptionSalt', res.encryptionSalt)
       localStorage.setItem('wrappedVaultKey', res.wrappedVaultKey)
       localStorage.setItem('encryptionVersion', String(res.encryptionVersion))
-      setTokens(res.accessToken, res.refreshToken)
+      setTokens(res.accessToken)
     },
     [],
   )

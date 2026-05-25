@@ -22,9 +22,12 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
+import java.util.Base64;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
@@ -65,6 +68,9 @@ public class AuthService {
     @Value("${app.jwt.refresh-expiration}")
     private long refreshTokenExpirationMs;
 
+    @Value("${app.jwt.secret}")
+    private String serverSecret;
+
     @Transactional
     public AuthResponse register(RegisterRequest request) {
         if (userRepository.existsByEmail(request.getEmail())) {
@@ -73,7 +79,7 @@ public class AuthService {
 
         User user = new User();
         user.setEmail(request.getEmail().toLowerCase().trim());
-        user.setPasswordHash(request.getAuthHash());
+        user.setPasswordHash(serverSideHash(request.getAuthHash()));
         user.setPasswordSalt(request.getAuthSalt());
         user.setEncryptionSalt(request.getEncryptionSalt());
         user.setWrappedVaultKey(request.getWrappedVaultKey());
@@ -103,7 +109,7 @@ public class AuthService {
             throw new BadCredentialsException("Account is temporarily locked. Please try again later.");
         }
 
-        if (!passwordService.constantTimeEquals(request.getAuthHash(), user.getPasswordHash())) {
+        if (!passwordService.constantTimeEquals(serverSideHash(request.getAuthHash()), user.getPasswordHash())) {
             loginRateLimiter.recordFailure(clientIp);
             handleFailedLogin(user);
             throw new BadCredentialsException("Invalid email or password");
@@ -119,9 +125,9 @@ public class AuthService {
                     user.getEmail(),
                     challengeId,
                     user.getPasswordSalt(),
-                    user.getEncryptionSalt(),
-                    user.getWrappedVaultKey(),
-                    user.getEncryptionVersion() != null ? user.getEncryptionVersion() : 2
+                    null,
+                    null,
+                    null
             );
         }
 
@@ -219,7 +225,7 @@ public class AuthService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
 
-        if (!passwordService.constantTimeEquals(currentAuthHash, user.getPasswordHash())) {
+        if (!passwordService.constantTimeEquals(serverSideHash(currentAuthHash), user.getPasswordHash())) {
             throw new BadCredentialsException("Current auth hash is incorrect");
         }
 
@@ -248,7 +254,7 @@ public class AuthService {
             }
         }
 
-        user.setPasswordHash(newAuthHash);
+        user.setPasswordHash(serverSideHash(newAuthHash));
         user.setPasswordSalt(newAuthSalt);
         user.setEncryptionSalt(saltToUse);
         user.setWrappedVaultKey(newWrappedVaultKey);
@@ -266,9 +272,38 @@ public class AuthService {
     }
 
     public String getAuthSalt(String email) {
-        return userRepository.findByEmail(email.toLowerCase().trim())
+        String normalizedEmail = email.toLowerCase().trim();
+        return userRepository.findByEmail(normalizedEmail)
                 .map(User::getPasswordSalt)
-                .orElseThrow(() -> new IllegalArgumentException("Email not found"));
+                .orElseGet(() -> generateFakeSalt(normalizedEmail));
+    }
+
+    private String serverSideHash(String clientAuthHash) {
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            SecretKeySpec keySpec = new SecretKeySpec(
+                serverSecret.getBytes(java.nio.charset.StandardCharsets.UTF_8), "HmacSHA256");
+            mac.init(keySpec);
+            byte[] hash = mac.doFinal(clientAuthHash.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            return Base64.getEncoder().encodeToString(hash);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to compute server-side auth hash", e);
+        }
+    }
+
+    private String generateFakeSalt(String email) {
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            SecretKeySpec keySpec = new SecretKeySpec(
+                serverSecret.getBytes(java.nio.charset.StandardCharsets.UTF_8), "HmacSHA256");
+            mac.init(keySpec);
+            byte[] hash = mac.doFinal(email.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            // Truncate to 16 bytes (same length as real salts)
+            byte[] truncated = java.util.Arrays.copyOf(hash, 16);
+            return Base64.getEncoder().encodeToString(truncated);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to generate salt", e);
+        }
     }
 
     private void handleFailedLogin(User user) {

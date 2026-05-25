@@ -8,39 +8,29 @@ interface ApiResponse<T> {
 
 interface TokenStore {
   accessToken: string | null
-  refreshToken: string | null
 }
 
-let store: TokenStore = { accessToken: null, refreshToken: null }
+let store: TokenStore = { accessToken: null }
 
 export function getAccessToken() {
   return store.accessToken
 }
 
-export function setTokens(access: string, refresh: string) {
-  store = { accessToken: access, refreshToken: refresh }
-  localStorage.setItem('accessToken', access)
-  localStorage.setItem('refreshToken', refresh)
+export function setTokens(access: string) {
+  store = { accessToken: access }
 }
 
 export function clearTokens() {
-  store = { accessToken: null, refreshToken: null }
-  localStorage.removeItem('accessToken')
-  localStorage.removeItem('refreshToken')
+  store = { accessToken: null }
 }
 
 export function loadTokens(): TokenStore {
-  const access = localStorage.getItem('accessToken')
-  const refresh = localStorage.getItem('refreshToken')
-  store = { accessToken: access, refreshToken: refresh }
   return store
 }
 
 let refreshPromise: Promise<string | null> | null = null
 
 async function refreshAccessToken(): Promise<string | null> {
-  if (!store.refreshToken) return null
-
   if (refreshPromise) return refreshPromise
 
   refreshPromise = (async () => {
@@ -48,17 +38,14 @@ async function refreshAccessToken(): Promise<string | null> {
       const res = await fetch(`${API_BASE}/auth/refresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken: store.refreshToken }),
+        credentials: 'include',
       })
       if (!res.ok) {
         clearTokens()
         return null
       }
-      const json: ApiResponse<{
-        accessToken: string
-        refreshToken: string
-      }> = await res.json()
-      setTokens(json.data.accessToken, json.data.refreshToken)
+      const json: ApiResponse<{ accessToken: string }> = await res.json()
+      setTokens(json.data.accessToken)
       return json.data.accessToken
     } catch {
       clearTokens()
@@ -83,13 +70,13 @@ export async function apiClient<T>(
     headers['Authorization'] = `Bearer ${store.accessToken}`
   }
 
-  let res = await fetch(`${API_BASE}${path}`, { ...options, headers })
+  let res = await fetch(`${API_BASE}${path}`, { ...options, headers, credentials: 'include' })
 
-  if (res.status === 401 && store.refreshToken) {
+  if (res.status === 401) {
     const newToken = await refreshAccessToken()
     if (newToken) {
       headers['Authorization'] = `Bearer ${newToken}`
-      res = await fetch(`${API_BASE}${path}`, { ...options, headers })
+      res = await fetch(`${API_BASE}${path}`, { ...options, headers, credentials: 'include' })
     } else {
       throw new Error('Session expired. Please login again.')
     }
