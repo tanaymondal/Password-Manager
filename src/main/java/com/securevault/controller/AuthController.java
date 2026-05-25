@@ -3,6 +3,7 @@ package com.securevault.controller;
 import com.securevault.dto.*;
 import com.securevault.service.AuditService;
 import com.securevault.service.AuthService;
+import com.securevault.service.BreachCheckService;
 import com.securevault.util.UserUtils;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
@@ -31,6 +32,7 @@ public class AuthController {
 
     private final AuthService authService;
     private final AuditService auditService;
+    private final BreachCheckService breachCheckService;
 
     @Value("${app.jwt.refresh-expiration}")
     private long refreshTokenExpirationMs;
@@ -40,6 +42,13 @@ public class AuthController {
             @Valid @RequestBody AuthSaltRequest request) {
         String authSalt = authService.getAuthSalt(request.getEmail());
         return ResponseEntity.ok(ApiResponse.success(Map.of("authSalt", authSalt)));
+    }
+
+    @PostMapping("/check-breach")
+    public ResponseEntity<ApiResponse<Map<String, Boolean>>> checkBreach(
+            @Valid @RequestBody BreachCheckRequest request) {
+        boolean breached = breachCheckService.isHashBreached(request.getSha1Hash());
+        return ResponseEntity.ok(ApiResponse.success(Map.of("breached", breached)));
     }
 
     @PostMapping("/register")

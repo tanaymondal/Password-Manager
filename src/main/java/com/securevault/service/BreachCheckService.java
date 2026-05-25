@@ -36,8 +36,15 @@ public class BreachCheckService {
             return true;
         }
 
+        return isHashBreached(sha1Hex(password));
+    }
+
+    public boolean isHashBreached(String sha1Hex) {
+        if (sha1Hex == null || sha1Hex.length() < 6) {
+            return false;
+        }
+
         try {
-            String sha1Hex = sha1Hex(password);
             String prefix = sha1Hex.substring(0, 5).toUpperCase();
             String suffix = sha1Hex.substring(5).toUpperCase();
 

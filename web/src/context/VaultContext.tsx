@@ -18,7 +18,7 @@ import {
   deleteVaultEntry,
   type VaultEntryResponse,
 } from '../api/vault'
-import { changePassword } from '../api/auth'
+import { changePassword, checkBreach } from '../api/auth'
 import { setTokens } from '../api/client'
 
 export interface EntryFields {
@@ -231,6 +231,9 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 
   const changeMasterPassword = useCallback(
     async (currentPassword: string, newPassword: string, onProgress?: (pct: number) => void) => {
+      if (await checkBreach(newPassword)) {
+        throw new Error('This password has been exposed in a data breach. Please choose a different password.')
+      }
       const currentSalt = localStorage.getItem('encryptionSalt')
       const wrapped = localStorage.getItem('wrappedVaultKey')
       if (!currentSalt || !wrapped) throw new Error('No vault key material')

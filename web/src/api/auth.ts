@@ -65,6 +65,16 @@ export function register(data: RegisterRequest) {
   })
 }
 
+export async function checkBreach(password: string): Promise<boolean> {
+  const sha1 = await crypto.subtle.digest('SHA-1', new TextEncoder().encode(password))
+  const hash = Array.from(new Uint8Array(sha1)).map(b => b.toString(16).padStart(2, '0')).join('')
+  const { breached } = await apiClient<{ breached: boolean }>('/auth/check-breach', {
+    method: 'POST',
+    body: JSON.stringify({ sha1Hash: hash }),
+  })
+  return breached
+}
+
 export function getAuthSalt(email: string) {
   return apiClient<{ authSalt: string }>('/auth/auth-salt', {
     method: 'POST',

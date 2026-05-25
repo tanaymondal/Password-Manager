@@ -12,6 +12,7 @@ import {
   logout as apiLogout,
   verifyTwoFactor as apiVerifyTwoFactor,
   getAuthSalt as apiGetAuthSalt,
+  checkBreach,
   type AuthResponse,
   type TwoFactorLoginResponse,
 } from '../api/auth'
@@ -185,6 +186,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const register = useCallback(async (email: string, password: string) => {
+    if (await checkBreach(password)) {
+      throw new Error('This password has been exposed in a data breach. Please choose a different password.')
+    }
     const authSalt = generateSalt()
     const encryptionSalt = generateSalt()
     const vaultKey = await generateVaultKey()
