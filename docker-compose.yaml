@@ -27,13 +27,13 @@ services:
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_NAME=securevault
-      - DB_USERNAME=postgres
-      - DB_PASSWORD=mg8Jn^#Cpe
-      - JWT_SECRET=AHGwDAAO4J/e0FrHjnh/9vHcrIJ1cOC785IhFM2FWIA=
-      - ENCRYPTION_KEY=+59gmDEjQeqWYmgZKA1OZaVWuFcyN+qN/J9R0xUsOWM=
+      - DB_USERNAME=${DB_USERNAME}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - JWT_SECRET=${JWT_SECRET}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - REDIS_PASSWORD=mg8Jn^#Cpe
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
       - SWAGGER_ENABLED=false
       - LOG_LEVEL=INFO
     depends_on:
@@ -48,13 +48,13 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=mg8Jn^#Cpe
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=securevault
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -64,7 +64,7 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    command: redis-server --requirepass mg8Jn^#Cpe
+    command: redis-server --requirepass ${REDIS_PASSWORD}
     networks:
       - securevault
 
