@@ -70,33 +70,32 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         if (StringUtils.hasText(token) && jwtTokenProvider.validateToken(token)) {
             UUID userId = jwtTokenProvider.getUserIdFromToken(token);
-            Object tokenPwdClaim = jwtTokenProvider.getClaim(token, "pwdUpdatedAt", Object.class);
 
             User user = userRepository.findById(userId).orElse(null);
             if (user != null) {
-                long tokenPwdUpdatedAt = (tokenPwdClaim instanceof Number)
-                    ? ((Number) tokenPwdClaim).longValue() : -1;
+                Object tokenPwdClaim = jwtTokenProvider.getClaim(token, "pwdUpdatedAt", Object.class);
                 LocalDateTime dbPwdUpdatedAt = user.getPasswordUpdatedAt();
-                boolean passwordUpToDate = dbPwdUpdatedAt == null || tokenPwdUpdatedAt == -1 ||
-                    tokenPwdUpdatedAt == dbPwdUpdatedAt.toEpochSecond(ZoneOffset.UTC);
 
-                if (passwordUpToDate) {
-                    String email = jwtTokenProvider.getEmailFromToken(token);
-                    UserDetails userDetails = userDetailsService.loadUserByUsername(email);
-
-                    UsernamePasswordAuthenticationToken authentication =
-                            new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
-                    authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-
-                    SecurityContextHolder.getContext().setAuthentication(authentication);
-                } else {
-                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                    response.setContentType("application/json");
-                    response.getWriter().write(
-                        "{\"success\":false,\"message\":\"Password changed on another device. Please re-login.\"}"
-                    );
-                    return;
+                if (dbPwdUpdatedAt != null && tokenPwdClaim instanceof Number) {
+                    long tokenPwdUpdatedAt = ((Number) tokenPwdClaim).longValue();
+                    if (tokenPwdUpdatedAt != dbPwdUpdatedAt.toEpochSecond(ZoneOffset.UTC)) {
+                        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                        response.setContentType("application/json");
+                        response.getWriter().write(
+                            "{\"success\":false,\"message\":\"Password changed on another device. Please re-login.\"}"
+                        );
+                        return;
+                    }
                 }
+
+                String email = jwtTokenProvider.getEmailFromToken(token);
+                UserDetails userDetails = userDetailsService.loadUserByUsername(email);
+
+                UsernamePasswordAuthenticationToken authentication =
+                        new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
+                authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+
+                SecurityContextHolder.getContext().setAuthentication(authentication);
             }
         }
 

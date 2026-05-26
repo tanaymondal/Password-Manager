@@ -35,13 +35,6 @@ public class AuthController {
     @Value("${app.jwt.refresh-expiration}")
     private long refreshTokenExpirationMs;
 
-    @PostMapping("/auth-salt")
-    public ResponseEntity<ApiResponse<Map<String, String>>> getAuthSalt(
-            @Valid @RequestBody AuthSaltRequest request) {
-        String authSalt = authService.getAuthSalt(request.getEmail());
-        return ResponseEntity.ok(ApiResponse.success(Map.of("authSalt", authSalt)));
-    }
-
     @PostMapping("/register")
     public ResponseEntity<ApiResponse<AuthResponse>> register(
             @Valid @RequestBody RegisterRequest request,
@@ -54,10 +47,11 @@ public class AuthController {
         AuthResponse response = authService.register(request);
         setRefreshTokenCookie(httpRequest, httpResponse, response.getRefreshToken());
         log.info("User registered successfully: {}", request.getEmail());
+        String clientIp = getClientIp(httpRequest);
         auditService.logAction(
                 UUID.fromString(response.getUserId()),
                 "REGISTER",
-                httpRequest.getRemoteAddr(),
+                clientIp,
                 httpRequest.getHeader("User-Agent"),
                 null
         );
@@ -72,7 +66,8 @@ public class AuthController {
             HttpServletResponse httpResponse) {
         log.info("Login attempt for email: {}", request.getEmail());
         String clientIp = getClientIp(httpRequest);
-        TwoFactorLoginResponse response = authService.login(request, clientIp);
+        String userAgent = httpRequest.getHeader("User-Agent");
+        TwoFactorLoginResponse response = authService.login(request, clientIp, userAgent);
         if (response.isTwoFactorRequired()) {
             log.info("2FA required for user: {}", request.getEmail());
             return ResponseEntity.ok(ApiResponse.success("2FA verification required", response));
@@ -81,8 +76,8 @@ public class AuthController {
         log.info("User logged in successfully: {}", request.getEmail());
         auditService.logLogin(
                 UUID.fromString(response.getUserId()),
-                httpRequest.getRemoteAddr(),
-                httpRequest.getHeader("User-Agent")
+                clientIp,
+                userAgent
         );
         return ResponseEntity.ok(ApiResponse.success("Login successful", response));
     }
@@ -93,13 +88,15 @@ public class AuthController {
             HttpServletRequest httpRequest,
             HttpServletResponse httpResponse) {
         log.info("2FA verification attempt for email: {}", request.getEmail());
-        AuthResponse response = authService.verifyTwoFactorLogin(request.getEmail(), request.getChallengeId(), request.getCode(), getClientIp(httpRequest));
+        String clientIp = getClientIp(httpRequest);
+        String userAgent = httpRequest.getHeader("User-Agent");
+        AuthResponse response = authService.verifyTwoFactorLogin(request.getEmail(), request.getChallengeId(), request.getCode(), clientIp, userAgent);
         setRefreshTokenCookie(httpRequest, httpResponse, response.getRefreshToken());
         log.info("User logged in with 2FA: {}", request.getEmail());
         auditService.logLogin(
                 UUID.fromString(response.getUserId()),
-                httpRequest.getRemoteAddr(),
-                httpRequest.getHeader("User-Agent")
+                clientIp,
+                userAgent
         );
         return ResponseEntity.ok(ApiResponse.success("Login successful", response));
     }
@@ -161,10 +158,8 @@ public class AuthController {
                 userId,
                 request.getCurrentAuthHash(),
                 request.getNewAuthHash(),
-                request.getNewAuthSalt(),
                 request.getWrappedVaultKey(),
-                request.getNewEncryptionSalt(),
-                request.getEntries()
+                request.getNewEncryptionSalt()
         );
         setRefreshTokenCookie(httpRequest, httpResponse, response.getRefreshToken());
         auditService.logAction(
@@ -210,13 +205,15 @@ public class AuthController {
     }
 
     private String getClientIp(HttpServletRequest request) {
+        String xff = request.getHeader("X-Forwarded-For");
+        if (xff != null && !xff.isBlank()) {
+            return xff.split(",")[0].trim();
+        }
+        String xRealIp = request.getHeader("X-Real-IP");
+        if (xRealIp != null && !xRealIp.isBlank()) {
+            return xRealIp.trim();
+        }
         return request.getRemoteAddr();
     }
 
-    @Data
-    private static class AuthSaltRequest {
-        @NotBlank(message = "Email is required")
-        @Email(message = "Invalid email format")
-        private String email;
-    }
 }

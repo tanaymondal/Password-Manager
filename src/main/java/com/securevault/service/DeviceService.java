@@ -140,10 +140,12 @@ public class DeviceService {
      * @param deviceId String ID of the device
      */
     @Transactional
-    public void updateLastAccessed(String deviceId) {
+    public void updateLastAccessed(UUID userId, String deviceId) {
         deviceRepository.findByDeviceId(deviceId).ifPresent(device -> {
-            device.updateLastAccessed();
-            deviceRepository.save(device);
+            if (device.getUserId().equals(userId)) {
+                device.updateLastAccessed();
+                deviceRepository.save(device);
+            }
         });
     }
 

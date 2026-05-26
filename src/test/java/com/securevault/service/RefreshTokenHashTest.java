@@ -21,7 +21,7 @@ class RefreshTokenHashTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        authService = new AuthService(null, null, null, null, null, null, null, null);
+        authService = new AuthService(null, null, null, null, null, null, null, null, null);
         hashTokenMethod = AuthService.class.getDeclaredMethod("hashToken", String.class);
         hashTokenMethod.setAccessible(true);
     }

@@ -5,16 +5,16 @@ import com.securevault.dto.ChangePasswordResponse;
 import com.securevault.dto.LoginRequest;
 import com.securevault.dto.RegisterRequest;
 import com.securevault.dto.TwoFactorLoginResponse;
-import com.securevault.dto.VaultEntryRequest;
+import com.securevault.entity.PasswordHistory;
 import com.securevault.entity.RefreshToken;
 import com.securevault.entity.User;
-import com.securevault.entity.VaultEntry;
+import com.securevault.repository.PasswordHistoryRepository;
 import com.securevault.repository.RefreshTokenRepository;
 import com.securevault.repository.UserRepository;
-import com.securevault.repository.VaultEntryRepository;
 import com.securevault.security.JwtTokenProvider;
 import com.securevault.security.LoginRateLimiter;
 import com.securevault.security.PendingLoginChallengeStore;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -22,32 +22,17 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
+import javax.crypto.SecretKeyFactory;
+import javax.crypto.spec.PBEKeySpec;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.security.spec.KeySpec;
 import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * Authentication service that handles user registration, login, and security operations.
- *
- * This service implements zero-knowledge architecture where:
- * - The server never receives the plaintext master password
- * - Auth proof is computed client-side (Argon2id hash) and sent to the server
- * - Vault keys are generated, derived, and wrapped entirely client-side
- * - Vault entries are encrypted client-side using the vault key (server stores only opaque blobs)
- * - The server can never decrypt vault data - only the client with the correct password can
- *
- * Security features:
- * - Account lockout after failed login attempts
- * - JWT-based authentication with refresh tokens
- * - TOTP two-factor authentication
- * - Pending login challenges for 2FA (password-verified)
- */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -55,32 +40,42 @@ public class AuthService {
 
     private static final int MAX_FAILED_ATTEMPTS = 5;
     private static final int LOCKOUT_MINUTES = 15;
+    private static final int PASSWORD_HISTORY_LIMIT = 10;
+    private static final int PBKDF2_ITERATIONS = 600_000;
 
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
-    private final VaultEntryRepository vaultEntryRepository;
+    private final PasswordHistoryRepository passwordHistoryRepository;
     private final PasswordService passwordService;
     private final JwtTokenProvider jwtTokenProvider;
     private final LoginRateLimiter loginRateLimiter;
     private final TwoFactorAuthService twoFactorAuthService;
     private final PendingLoginChallengeStore pendingLoginChallengeStore;
+    private final AuditService auditService;
 
     @Value("${app.jwt.refresh-expiration}")
     private long refreshTokenExpirationMs;
 
-    @Value("${app.jwt.secret}")
-    private String serverSecret;
+    @Value("${app.server-hash-secret}")
+    private String serverHashSecret;
+
+    @PostConstruct
+    public void init() {
+        if (serverHashSecret == null || serverHashSecret.isBlank()) {
+            throw new IllegalStateException("SERVER_HASH_SECRET environment variable is required");
+        }
+    }
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
         if (userRepository.existsByEmail(request.getEmail())) {
-            throw new IllegalArgumentException("Email already in use");
+            throw new IllegalArgumentException("Registration failed");
         }
 
         User user = new User();
         user.setEmail(request.getEmail().toLowerCase().trim());
         user.setPasswordHash(serverSideHash(request.getAuthHash()));
-        user.setPasswordSalt(request.getAuthSalt());
+        user.setPasswordSalt(request.getEmail().toLowerCase().trim());
         user.setEncryptionSalt(request.getEncryptionSalt());
         user.setWrappedVaultKey(request.getWrappedVaultKey());
         user.setEncryptionVersion(request.getEncryptionVersion());
@@ -95,13 +90,20 @@ public class AuthService {
     }
 
     @Transactional
-    public TwoFactorLoginResponse login(LoginRequest request, String clientIp) {
+    public TwoFactorLoginResponse login(LoginRequest request, String clientIp, String userAgent) {
         if (loginRateLimiter.isBlocked(clientIp)) {
             log.warn("Login blocked due to rate limit for IP: {}", clientIp);
             throw new BadCredentialsException("Too many login attempts. Please try again later.");
         }
 
-        User user = userRepository.findByEmail(request.getEmail().toLowerCase().trim())
+        String email = request.getEmail().toLowerCase().trim();
+
+        if (loginRateLimiter.isBlocked(email)) {
+            log.warn("Login blocked due to rate limit for email: {}", email);
+            throw new BadCredentialsException("Too many login attempts. Please try again later.");
+        }
+
+        User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new BadCredentialsException("Invalid email or password"));
 
         if (user.isLocked()) {
@@ -111,7 +113,8 @@ public class AuthService {
 
         if (!passwordService.constantTimeEquals(serverSideHash(request.getAuthHash()), user.getPasswordHash())) {
             loginRateLimiter.recordFailure(clientIp);
-            handleFailedLogin(user);
+            loginRateLimiter.recordFailure(email);
+            handleFailedLogin(user, clientIp, userAgent);
             throw new BadCredentialsException("Invalid email or password");
         }
 
@@ -124,7 +127,7 @@ public class AuthService {
                     user.getId().toString(),
                     user.getEmail(),
                     challengeId,
-                    user.getPasswordSalt(),
+                    user.getEmail(),
                     null,
                     null,
                     null
@@ -132,17 +135,19 @@ public class AuthService {
         }
 
         loginRateLimiter.recordSuccess(clientIp);
+        loginRateLimiter.recordSuccess(email);
         user.resetFailedAttempts();
         userRepository.save(user);
 
         log.info("User logged in successfully: {}", user.getEmail());
         AuthResponse authResponse = generateAuthResponse(user, deviceId);
+        auditService.logLogin(user.getId(), clientIp, userAgent);
         return TwoFactorLoginResponse.loginSuccess(
                 authResponse.getAccessToken(),
                 authResponse.getRefreshToken(),
                 authResponse.getUserId(),
                 authResponse.getEmail(),
-                authResponse.getAuthSalt(),
+                user.getEmail(),
                 authResponse.getEncryptionSalt(),
                 authResponse.getWrappedVaultKey(),
                 authResponse.getEncryptionVersion()
@@ -150,7 +155,7 @@ public class AuthService {
     }
 
     @Transactional
-    public AuthResponse verifyTwoFactorLogin(String email, String challengeId, String code, String clientIp) {
+    public AuthResponse verifyTwoFactorLogin(String email, String challengeId, String code, String clientIp, String userAgent) {
         PendingLoginChallengeStore.ChallengeResult challengeResult = pendingLoginChallengeStore.validateChallenge(challengeId, email);
         UUID userId = challengeResult.userId();
         String deviceId = challengeResult.deviceId();
@@ -164,36 +169,43 @@ public class AuthService {
 
         if (!twoFactorAuthService.verifyCode(user.getId(), code)) {
             loginRateLimiter.recordFailure(clientIp);
-            handleFailedLogin(user);
+            loginRateLimiter.recordFailure(email);
+            handleFailedLogin(user, clientIp, userAgent);
             throw new BadCredentialsException("Invalid 2FA code");
         }
 
         pendingLoginChallengeStore.consumeChallenge(challengeId);
         loginRateLimiter.recordSuccess(clientIp);
+        loginRateLimiter.recordSuccess(email);
         user.resetFailedAttempts();
         userRepository.save(user);
 
         log.info("User logged in with 2FA: {}", user.getEmail());
+        auditService.logLogin(user.getId(), clientIp, userAgent);
         return generateAuthResponse(user, deviceId);
     }
 
     @Transactional
     public AuthResponse refreshToken(String refreshToken) {
-        if (!jwtTokenProvider.validateToken(refreshToken)) {
+        if (!jwtTokenProvider.validateRefreshToken(refreshToken)) {
             throw new IllegalArgumentException("Invalid refresh token");
         }
 
-        RefreshToken storedToken = refreshTokenRepository.findByTokenHash(hashToken(refreshToken))
-                .orElseThrow(() -> new IllegalArgumentException("Refresh token not found"));
+        String tokenHash = hashToken(refreshToken);
+        RefreshToken storedToken = refreshTokenRepository.findByTokenHash(tokenHash)
+                .orElseThrow(() -> {
+                    log.warn("Refresh token reuse detected - hash not found in DB");
+                    return new IllegalArgumentException("Invalid refresh token");
+                });
 
         if (storedToken.isExpired()) {
             refreshTokenRepository.delete(storedToken);
             throw new IllegalArgumentException("Refresh token expired");
         }
 
-        UUID userId = jwtTokenProvider.getUserIdFromToken(refreshToken);
+        UUID userId = jwtTokenProvider.getUserIdFromRefreshToken(refreshToken);
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+                .orElseThrow(() -> new IllegalArgumentException("Invalid refresh token"));
 
         String deviceId = storedToken.getDeviceId();
         refreshTokenRepository.delete(storedToken);
@@ -211,7 +223,7 @@ public class AuthService {
     @Transactional
     public void logoutByRefreshToken(String refreshToken) {
         try {
-            if (jwtTokenProvider.validateToken(refreshToken)) {
+            if (jwtTokenProvider.validateRefreshToken(refreshToken)) {
                 String tokenHash = hashToken(refreshToken);
                 refreshTokenRepository.findByTokenHash(tokenHash).ifPresent(token ->
                     refreshTokenRepository.delete(token)
@@ -227,10 +239,8 @@ public class AuthService {
             UUID userId,
             String currentAuthHash,
             String newAuthHash,
-            String newAuthSalt,
             String newWrappedVaultKey,
-            String newEncryptionSalt,
-            List<VaultEntryRequest> newEntries) {
+            String newEncryptionSalt) {
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
@@ -239,34 +249,22 @@ public class AuthService {
             throw new BadCredentialsException("Current auth hash is incorrect");
         }
 
-        String saltToUse = (newEncryptionSalt != null && !newEncryptionSalt.isEmpty())
-                ? newEncryptionSalt : passwordService.generateSalt();
+        String newServerHash = serverSideHash(newAuthHash);
 
-        if (newEntries != null && !newEntries.isEmpty()) {
-            for (VaultEntryRequest entryReq : newEntries) {
-                if (entryReq.getId() != null && !entryReq.getId().isEmpty()) {
-                    VaultEntry existing = vaultEntryRepository.findById(UUID.fromString(entryReq.getId()))
-                            .filter(e -> e.getUserId().equals(userId))
-                            .orElse(null);
-                    if (existing != null) {
-                        existing.setEncryptedData(entryReq.getEncryptedData());
-                        existing.setIv(entryReq.getIv());
-                        vaultEntryRepository.save(existing);
-                    }
-                } else {
-                    VaultEntry newEntry = new VaultEntry();
-                    newEntry.setUserId(userId);
-                    newEntry.setEncryptedData(entryReq.getEncryptedData());
-                    newEntry.setIv(entryReq.getIv());
-                    newEntry.setVersion(1);
-                    vaultEntryRepository.save(newEntry);
-                }
+        checkPasswordHistory(user, newServerHash);
+
+        savePasswordHistory(user, user.getPasswordHash());
+
+        int historyCount = passwordHistoryRepository.findByUserIdOrderByCreatedAtDesc(userId).size();
+        if (historyCount > PASSWORD_HISTORY_LIMIT) {
+            List<PasswordHistory> history = passwordHistoryRepository.findByUserIdOrderByCreatedAtDesc(userId);
+            for (int i = PASSWORD_HISTORY_LIMIT; i < history.size(); i++) {
+                passwordHistoryRepository.delete(history.get(i));
             }
         }
 
-        user.setPasswordHash(serverSideHash(newAuthHash));
-        user.setPasswordSalt(newAuthSalt);
-        user.setEncryptionSalt(saltToUse);
+        user.setPasswordHash(newServerHash);
+        user.setEncryptionSalt(newEncryptionSalt);
         user.setWrappedVaultKey(newWrappedVaultKey);
         user.setEncryptionVersion(2);
         user.setPasswordUpdatedAt(LocalDateTime.now());
@@ -281,44 +279,40 @@ public class AuthService {
         return generateChangePasswordResponse(user, null);
     }
 
-    public String getAuthSalt(String email) {
-        String normalizedEmail = email.toLowerCase().trim();
-        return userRepository.findByEmail(normalizedEmail)
-                .map(User::getPasswordSalt)
-                .orElseGet(() -> generateFakeSalt(normalizedEmail));
+    private void checkPasswordHistory(User user, String newServerHash) {
+        List<PasswordHistory> history = passwordHistoryRepository.findByUserIdOrderByCreatedAtDesc(user.getId());
+        for (PasswordHistory entry : history) {
+            if (passwordService.constantTimeEquals(newServerHash, entry.getPasswordHash())) {
+                throw new IllegalArgumentException("Password has been used recently. Please choose a different password.");
+            }
+        }
+    }
+
+    private void savePasswordHistory(User user, String passwordHash) {
+        PasswordHistory history = new PasswordHistory();
+        history.setUserId(user.getId());
+        history.setPasswordHash(passwordHash);
+        history.setPasswordSalt(user.getPasswordSalt());
+        passwordHistoryRepository.save(history);
     }
 
     private String serverSideHash(String clientAuthHash) {
         try {
-            Mac mac = Mac.getInstance("HmacSHA256");
-            SecretKeySpec keySpec = new SecretKeySpec(
-                serverSecret.getBytes(java.nio.charset.StandardCharsets.UTF_8), "HmacSHA256");
-            mac.init(keySpec);
-            byte[] hash = mac.doFinal(clientAuthHash.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            byte[] salt = serverHashSecret.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            KeySpec spec = new PBEKeySpec(clientAuthHash.toCharArray(), salt, PBKDF2_ITERATIONS, 256);
+            SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
+            byte[] hash = factory.generateSecret(spec).getEncoded();
             return Base64.getEncoder().encodeToString(hash);
         } catch (Exception e) {
             throw new RuntimeException("Failed to compute server-side auth hash", e);
         }
     }
 
-    private String generateFakeSalt(String email) {
-        try {
-            Mac mac = Mac.getInstance("HmacSHA256");
-            SecretKeySpec keySpec = new SecretKeySpec(
-                serverSecret.getBytes(java.nio.charset.StandardCharsets.UTF_8), "HmacSHA256");
-            mac.init(keySpec);
-            byte[] hash = mac.doFinal(email.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-            // Truncate to 16 bytes (same length as real salts)
-            byte[] truncated = java.util.Arrays.copyOf(hash, 16);
-            return Base64.getEncoder().encodeToString(truncated);
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to generate salt", e);
-        }
-    }
-
-    private void handleFailedLogin(User user) {
+    private void handleFailedLogin(User user, String clientIp, String userAgent) {
         user.incrementFailedAttempts();
         log.warn("Failed login attempt {} for user: {}", user.getFailedLoginAttempts(), user.getEmail());
+
+        auditService.logFailedLogin(user.getEmail(), clientIp, userAgent);
 
         if (user.getFailedLoginAttempts() >= MAX_FAILED_ATTEMPTS) {
             user.lockAccount(LOCKOUT_MINUTES);
@@ -344,7 +338,7 @@ public class AuthService {
                 refreshToken,
                 user.getId().toString(),
                 user.getEmail(),
-                user.getPasswordSalt(),
+                user.getEmail(),
                 user.getEncryptionSalt(),
                 user.getWrappedVaultKey(),
                 user.getEncryptionVersion() != null ? user.getEncryptionVersion() : 2

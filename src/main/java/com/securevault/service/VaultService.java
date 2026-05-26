@@ -99,10 +99,10 @@ public class VaultService {
     public VaultEntryResponse getEntry(UUID userId, String entryId) {
         UUID uuid = UUID.fromString(entryId);
         VaultEntry entry = vaultEntryRepository.findById(uuid)
-                .orElseThrow(() -> new IllegalArgumentException("Entry not found"));
+                .orElseThrow(() -> new IllegalArgumentException("Entry not found or access denied"));
 
         if (!entry.getUserId().equals(userId)) {
-            throw new IllegalArgumentException("Access denied");
+            throw new IllegalArgumentException("Entry not found or access denied");
         }
 
         return toResponse(entry);
@@ -125,10 +125,10 @@ public class VaultService {
     public VaultEntryResponse updateEntry(UUID userId, String entryId, VaultEntryRequest request) {
         UUID uuid = UUID.fromString(entryId);
         VaultEntry entry = vaultEntryRepository.findById(uuid)
-                .orElseThrow(() -> new IllegalArgumentException("Entry not found"));
+                .orElseThrow(() -> new IllegalArgumentException("Entry not found or access denied"));
 
         if (!entry.getUserId().equals(userId)) {
-            throw new IllegalArgumentException("Access denied");
+            throw new IllegalArgumentException("Entry not found or access denied");
         }
 
         entry.setEncryptedData(request.getEncryptedData());
@@ -152,10 +152,10 @@ public class VaultService {
     public void deleteEntry(UUID userId, String entryId) {
         UUID uuid = UUID.fromString(entryId);
         VaultEntry entry = vaultEntryRepository.findById(uuid)
-                .orElseThrow(() -> new IllegalArgumentException("Entry not found"));
+                .orElseThrow(() -> new IllegalArgumentException("Entry not found or access denied"));
 
         if (!entry.getUserId().equals(userId)) {
-            throw new IllegalArgumentException("Access denied");
+            throw new IllegalArgumentException("Entry not found or access denied");
         }
 
         vaultEntryRepository.delete(entry);

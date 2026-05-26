@@ -72,13 +72,6 @@ export async function apiClient<T>(path: string, options: RequestInit = {}): Pro
   return json.data
 }
 
-export async function apiGetAuthSalt(email: string): Promise<{ authSalt: string }> {
-  return apiClient('/auth/auth-salt', {
-    method: 'POST',
-    body: JSON.stringify({ email }),
-  })
-}
-
 export async function apiLogin(data: {
   email: string
   authHash: string
@@ -90,7 +83,6 @@ export async function apiLogin(data: {
     userId: string
     email: string
     challengeId?: string
-    authSalt: string
     encryptionSalt: string
     wrappedVaultKey: string
     encryptionVersion: number
@@ -112,7 +104,6 @@ export async function verifyTwoFactor(email: string, challengeId: string, code: 
     refreshToken: string
     userId: string
     email: string
-    authSalt: string
     encryptionSalt: string
     wrappedVaultKey: string
     encryptionVersion: number

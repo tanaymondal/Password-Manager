@@ -79,8 +79,10 @@ public class TwoFactorController {
             HttpServletRequest httpRequest) {
         UUID userId = getUserId(userDetails);
         log.info("Enabling 2FA for user: {}", userId);
-        twoFactorAuthService.enable2FA(userId, request.getCode());
-        auditService.log2FAEnabled(userId, httpRequest.getRemoteAddr(), httpRequest.getHeader("User-Agent"));
+        twoFactorAuthService.enable2FA(userId, request.getCode(), request.getSecondCode());
+        String xff = httpRequest.getHeader("X-Forwarded-For");
+        String clientIp = (xff != null && !xff.isBlank()) ? xff.split(",")[0].trim() : httpRequest.getRemoteAddr();
+        auditService.log2FAEnabled(userId, clientIp, httpRequest.getHeader("User-Agent"));
         return ResponseEntity.ok(ApiResponse.success("2FA enabled successfully", ""));
     }
 
@@ -102,7 +104,9 @@ public class TwoFactorController {
         UUID userId = getUserId(userDetails);
         log.info("Disabling 2FA for user: {}", userId);
         twoFactorAuthService.disable2FA(userId, request.getCode());
-        auditService.log2FADisabled(userId, httpRequest.getRemoteAddr(), httpRequest.getHeader("User-Agent"));
+        String xff = httpRequest.getHeader("X-Forwarded-For");
+        String clientIp = (xff != null && !xff.isBlank()) ? xff.split(",")[0].trim() : httpRequest.getRemoteAddr();
+        auditService.log2FADisabled(userId, clientIp, httpRequest.getHeader("User-Agent"));
         return ResponseEntity.ok(ApiResponse.success("2FA disabled successfully", ""));
     }
 

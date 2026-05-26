@@ -15,9 +15,6 @@ public class RegisterRequest {
     @NotBlank(message = "Auth hash is required")
     private String authHash;
 
-    @NotBlank(message = "Auth salt is required")
-    private String authSalt;
-
     @NotBlank(message = "Encryption salt is required")
     private String encryptionSalt;
 

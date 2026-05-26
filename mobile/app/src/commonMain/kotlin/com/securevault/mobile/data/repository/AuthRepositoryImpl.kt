@@ -32,16 +32,15 @@ class AuthRepositoryImpl(
                 return Result.Error("This password has been exposed in a data breach. Please choose a different password.")
             }
 
-            val authSalt = cryptoEngine.generateSalt()
             val encryptionSalt = cryptoEngine.generateSalt()
             val vaultKey = cryptoEngine.generateVaultKey()
-            val authHash = cryptoEngine.generateAuthHash(password, authSalt)
+            val authHash = cryptoEngine.generateAuthHash(password, email)
             val kek = cryptoEngine.deriveKek(password, encryptionSalt)
             val wrappedVaultKey = cryptoEngine.wrapVaultKey(vaultKey, kek)
             val deviceId = getOrCreateDeviceId()
 
             val response = api.register(
-                RegisterRequest(email, authHash, authSalt, encryptionSalt, wrappedVaultKey, 2, deviceId)
+                RegisterRequest(email, authHash, encryptionSalt, wrappedVaultKey, 2, deviceId)
             )
             response.fold(
                 onSuccess = { authResponse ->
@@ -51,27 +50,26 @@ class AuthRepositoryImpl(
                         authResponse.refreshToken!!,
                         authResponse.encryptionSalt!!,
                         authResponse.userId!!,
-                        email,
+                        authResponse.email!!,
                         authResponse.encryptionVersion,
-                        authResponse.wrappedVaultKey,
-                        authResponse.authSalt
+                        authResponse.wrappedVaultKey
                     )
                     Result.Success(getCurrentAuthState())
                 },
-                onFailure = { Result.Error(it.message ?: "Registration failed", it) }
+                onFailure = {
+                    SessionManager.clearSession()
+                    _authState.value = AuthState.unauthenticated()
+                    Result.Error(it.message ?: "Token refresh failed")
+                }
             )
         } catch (e: Exception) {
-            Result.Error(e.message ?: "Registration failed", e)
+            Result.Error(e.message ?: "Token refresh failed", e)
         }
     }
 
     override suspend fun login(email: String, password: String): Result<LoginResponse> {
         return try {
-            val authSalt = api.getAuthSalt(email).getOrNull()
-                ?: getCachedAuthSalt(email)
-                ?: return Result.Error("Failed to retrieve authentication salt")
-
-            val authHash = cryptoEngine.generateAuthHash(password, authSalt)
+            val authHash = cryptoEngine.generateAuthHash(password, email)
             val deviceId = getOrCreateDeviceId()
             val response = api.login(LoginRequest(email, authHash, deviceName = "Mobile App", deviceId = deviceId))
 
@@ -82,7 +80,6 @@ class AuthRepositoryImpl(
                             userId = authResponse.userId!!,
                             email = authResponse.email!!,
                             challengeId = authResponse.challengeId!!,
-                            authSalt = authResponse.authSalt!!,
                             encryptionSalt = authResponse.encryptionSalt!!,
                             wrappedVaultKey = authResponse.wrappedVaultKey
                         )
@@ -103,8 +100,7 @@ class AuthRepositoryImpl(
                             authResponse.userId!!,
                             email,
                             authResponse.encryptionVersion,
-                            authResponse.wrappedVaultKey,
-                            authResponse.authSalt
+                            authResponse.wrappedVaultKey
                         )
                         Result.Success(LoginResponse.Success(getCurrentAuthState()))
                     }
@@ -141,8 +137,7 @@ class AuthRepositoryImpl(
                         authResponse.userId!!,
                         email,
                         authResponse.encryptionVersion,
-                        authResponse.wrappedVaultKey,
-                        authResponse.authSalt
+                        authResponse.wrappedVaultKey
                     )
                     Result.Success(getCurrentAuthState())
                 },
@@ -185,8 +180,7 @@ class AuthRepositoryImpl(
                         authResponse.userId!!,
                         authResponse.email!!,
                         authResponse.encryptionVersion,
-                        authResponse.wrappedVaultKey,
-                        authResponse.authSalt
+                        authResponse.wrappedVaultKey
                     )
                     Result.Success(getCurrentAuthState())
                 },
@@ -220,18 +214,6 @@ class AuthRepositoryImpl(
         }
     }
 
-    override suspend fun getAuthSalt(email: String): Result<String> {
-        return try {
-            val result = api.getAuthSalt(email)
-            result.fold(
-                onSuccess = { Result.Success(it) },
-                onFailure = { Result.Error(it.message ?: "Failed to get auth salt") }
-            )
-        } catch (e: Exception) {
-            Result.Error(e.message ?: "Failed to get auth salt")
-        }
-    }
-
     override fun getAuthState(): AuthState {
         return getCurrentAuthState()
     }
@@ -259,11 +241,6 @@ class AuthRepositoryImpl(
 
     private fun getAuthStateFromStorage(): AuthState = getCurrentAuthState()
 
-    private fun getCachedAuthSalt(email: String): String? {
-        val cached = SessionManager.getAuthSalt()
-        return if (cached.isNotEmpty()) cached else null
-    }
-
     private fun getOrCreateDeviceId(): String {
         val existing = SessionManager.getDeviceId()
         if (existing.isNotEmpty()) return existing
@@ -288,8 +265,7 @@ class AuthRepositoryImpl(
         userId: String,
         email: String,
         encryptionVersion: Int,
-        wrappedVaultKey: String? = null,
-        authSalt: String? = null
+        wrappedVaultKey: String? = null
     ) {
         SessionManager.setAccessToken(accessToken)
         SessionManager.setRefreshToken(refreshToken)
@@ -299,9 +275,6 @@ class AuthRepositoryImpl(
         SessionManager.setEncryptionVersion(encryptionVersion)
         if (wrappedVaultKey != null) {
             SessionManager.setWrappedVaultKey(wrappedVaultKey)
-        }
-        if (authSalt != null) {
-            SessionManager.setAuthSalt(authSalt)
         }
         _authState.value = AuthState(
             user = User(userId.hashCode().toLong(), email),

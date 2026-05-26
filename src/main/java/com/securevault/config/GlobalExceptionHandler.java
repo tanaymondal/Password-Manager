@@ -50,10 +50,17 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiResponse<String>> handleIllegalArgument(IllegalArgumentException ex) {
         log.warn("Bad request: {}", ex.getMessage());
+        String message = ex.getMessage();
+        if (message == null || message.contains("not found") || message.contains("already in use")
+                || message.contains("already registered") || message.contains("already enabled")
+                || message.contains("not enabled") || message.contains("not started")
+                || message.contains("Invalid 2FA")) {
+            message = "Invalid request";
+        }
         return ResponseEntity.badRequest()
                 .body(ApiResponse.<String>builder()
                         .success(false)
-                        .message(ex.getMessage())
+                        .message(message)
                         .timestamp(java.time.LocalDateTime.now())
                         .build());
     }

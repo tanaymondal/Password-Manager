@@ -51,12 +51,6 @@ public class RateLimitingFilter implements Filter {
         HttpServletRequest httpRequest = (HttpServletRequest) request;
         HttpServletResponse httpResponse = (HttpServletResponse) response;
 
-        String path = httpRequest.getRequestURI();
-        if (path.startsWith("/swagger-ui") || path.startsWith("/v3/api-docs") || path.equals("/swagger-ui.html")) {
-            chain.doFilter(request, response);
-            return;
-        }
-
         String clientId = getClientIdentifier(httpRequest);
         RateLimitBucket bucket = buckets.computeIfAbsent(clientId, k -> new RateLimitBucket(maxRequestsPerMinute));
 
@@ -72,6 +66,14 @@ public class RateLimitingFilter implements Filter {
     }
 
     private String getClientIdentifier(HttpServletRequest request) {
+        String xff = request.getHeader("X-Forwarded-For");
+        if (xff != null && !xff.isBlank()) {
+            return xff.split(",")[0].trim();
+        }
+        String xRealIp = request.getHeader("X-Real-IP");
+        if (xRealIp != null && !xRealIp.isBlank()) {
+            return xRealIp.trim();
+        }
         return request.getRemoteAddr();
     }
 

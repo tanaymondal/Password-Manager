@@ -1,5 +1,7 @@
 package com.securevault.security;
 
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.stereotype.Component;
@@ -8,6 +10,9 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Component
@@ -16,6 +21,23 @@ public class PendingLoginChallengeStore {
     private static final long CHALLENGE_TTL_SECONDS = 300;
 
     private final Map<String, Challenge> challenges = new ConcurrentHashMap<>();
+    private final ScheduledExecutorService cleanupScheduler = Executors.newSingleThreadScheduledExecutor();
+
+    @PostConstruct
+    public void init() {
+        cleanupScheduler.scheduleAtFixedRate(this::evictExpired, 60, 60, TimeUnit.SECONDS);
+    }
+
+    @PreDestroy
+    public void destroy() {
+        cleanupScheduler.shutdownNow();
+    }
+
+    private void evictExpired() {
+        Instant now = Instant.now();
+        challenges.entrySet().removeIf(entry ->
+            now.isAfter(entry.getValue().createdAt().plusSeconds(CHALLENGE_TTL_SECONDS)));
+    }
 
     public String createChallenge(UUID userId, String email, String deviceId) {
         String challengeId = UUID.randomUUID().toString();

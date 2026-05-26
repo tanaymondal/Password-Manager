@@ -30,6 +30,7 @@ public class CustomUserDetails implements UserDetails {
     private final UUID id;
     private final String email;
     private final String password;
+    private final boolean accountNonLocked;
 
     /**
      * Creates CustomUserDetails from a User entity.
@@ -40,6 +41,7 @@ public class CustomUserDetails implements UserDetails {
         this.id = user.getId();
         this.email = user.getEmail();
         this.password = user.getPasswordHash();
+        this.accountNonLocked = !user.isLocked();
     }
 
     /**
@@ -74,12 +76,9 @@ public class CustomUserDetails implements UserDetails {
         return true;
     }
 
-    /**
-     * Account is not locked (lock status is checked separately in AuthService).
-     */
     @Override
     public boolean isAccountNonLocked() {
-        return true;
+        return accountNonLocked;
     }
 
     /**

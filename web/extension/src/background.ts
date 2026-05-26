@@ -7,7 +7,7 @@ import {
   setVaultKeyBytes, getVaultKeyBytes, clearVaultKeyBytes,
   type CryptoMaterial,
 } from './lib/storage'
-import { apiGetAuthSalt, apiLogin, apiGetVaultEntries, apiLogout, verifyTwoFactor } from './lib/api'
+import { apiLogin, apiGetVaultEntries, apiLogout, verifyTwoFactor } from './lib/api'
 
 let vaultKey: CryptoKey | null = null
 let cachedEntries: { id: string; fields: EntryFields }[] = []
@@ -63,8 +63,7 @@ async function handleMessage(message: any, sender: chrome.runtime.MessageSender)
     case 'login': {
       try {
         const { email, password } = message
-        const saltRes = await apiGetAuthSalt(email)
-        const authHash = await derivePasswordHash(password, saltRes.authSalt)
+        const authHash = await derivePasswordHash(password, email)
         const res = await apiLogin({
           email,
           authHash,
@@ -77,7 +76,6 @@ async function handleMessage(message: any, sender: chrome.runtime.MessageSender)
         }
 
         const cm: CryptoMaterial = {
-          authSalt: saltRes.authSalt,
           encryptionSalt: res.encryptionSalt,
           wrappedVaultKey: res.wrappedVaultKey,
           encryptionVersion: res.encryptionVersion,
@@ -110,7 +108,6 @@ async function handleMessage(message: any, sender: chrome.runtime.MessageSender)
         const res = await verifyTwoFactor(email, challengeId, code)
 
         const cm: CryptoMaterial = {
-          authSalt: res.authSalt,
           encryptionSalt: res.encryptionSalt,
           wrappedVaultKey: res.wrappedVaultKey,
           encryptionVersion: res.encryptionVersion,

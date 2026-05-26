@@ -15,15 +15,10 @@ public class ChangePasswordRequest {
     @JsonProperty("new_auth_hash")
     private String newAuthHash;
 
-    @NotBlank(message = "New auth salt is required")
-    @JsonProperty("new_auth_salt")
-    private String newAuthSalt;
-
+    @NotBlank(message = "New encryption salt is required")
     @JsonProperty("new_encryption_salt")
     private String newEncryptionSalt;
 
     @JsonProperty("wrapped_vault_key")
     private String wrappedVaultKey;
-
-    private java.util.List<VaultEntryRequest> entries;
 }

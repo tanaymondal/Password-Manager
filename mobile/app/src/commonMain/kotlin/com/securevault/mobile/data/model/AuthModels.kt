@@ -15,7 +15,6 @@ data class LoginRequest(
 data class RegisterRequest(
     val email: String,
     val authHash: String,
-    val authSalt: String,
     val encryptionSalt: String,
     val wrappedVaultKey: String,
     val encryptionVersion: Int,
@@ -26,7 +25,6 @@ data class RegisterRequest(
 data class AuthResponse(
     val accessToken: String? = null,
     val refreshToken: String? = null,
-    @SerialName("authSalt") val authSalt: String? = null,
     @SerialName("encryptionSalt") val encryptionSalt: String? = null,
     val userId: String? = null,
     val email: String? = null,

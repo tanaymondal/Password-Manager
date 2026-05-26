@@ -7,7 +7,7 @@ import {
   useEffect,
   type ReactNode,
 } from 'react'
-import { deriveKek, derivePasswordHash, generateSalt, generateVaultKey } from '../crypto/argon2'
+import { deriveKek, derivePasswordHash } from '../crypto/argon2'
 import { unwrapVaultKey, wrapVaultKey } from '../crypto/vaultKey'
 import { encryptEntry, decryptEntry } from '../crypto/entries'
 import { bytesToBase64, generateRandomBytes } from '../crypto/util'
@@ -246,48 +246,27 @@ export function VaultProvider({ children }: { children: ReactNode }) {
         oldVaultKey = await unwrapVaultKey(kek, material.wrappedVaultKey)
       }
 
-      onProgress?.(0.25)
-      const entriesRes = await getVaultEntries()
-      const existingEntries = entriesRes.entries
-
       onProgress?.(0.4)
-      const newVaultKey = await generateVaultKey()
-
-      onProgress?.(0.55)
-      const reEncryptedEntries = await Promise.all(
-        existingEntries.map(async (entry) => {
-          const plaintext = await decryptEntry(oldVaultKey, entry.encryptedData, entry.iv)
-          const encrypted = await encryptEntry(newVaultKey, plaintext)
-          return { id: entry.id, ...encrypted }
-        }),
-      )
-
-      onProgress?.(0.75)
       const newSalt = bytesToBase64(generateRandomBytes(16))
       const newKek = await deriveKek(newPassword, newSalt)
-      const newWrapped = await wrapVaultKey(newKek, newVaultKey)
+      const newWrapped = await wrapVaultKey(newKek, oldVaultKey)
 
-      onProgress?.(0.85)
-      const currentAuthSalt = material.authSalt
-      if (!currentAuthSalt) throw new Error('No auth salt found. Please log in again.')
-      const newAuthSalt = generateSalt()
-      const currentAuthHash = await derivePasswordHash(currentPassword, currentAuthSalt)
-      const newAuthHash = await derivePasswordHash(newPassword, newAuthSalt)
+      onProgress?.(0.6)
+      const email = material.authSalt
+      if (!email) throw new Error('No auth salt found. Please log in again.')
+      const currentAuthHash = await derivePasswordHash(currentPassword, email)
+      const newAuthHash = await derivePasswordHash(newPassword, email)
 
-      onProgress?.(0.95)
+      onProgress?.(0.8)
       const res = await changePassword({
         current_auth_hash: currentAuthHash,
         new_auth_hash: newAuthHash,
-        new_auth_salt: newAuthSalt,
         wrapped_vault_key: newWrapped,
         new_encryption_salt: newSalt,
-        entries: reEncryptedEntries,
       })
 
-      vaultKeyRef.current = newVaultKey
-
       setCryptoMaterial({
-        authSalt: newAuthSalt,
+        authSalt: email,
         encryptionSalt: res.encryptionSalt,
         wrappedVaultKey: res.wrappedVaultKey,
         encryptionVersion: res.encryptionVersion,

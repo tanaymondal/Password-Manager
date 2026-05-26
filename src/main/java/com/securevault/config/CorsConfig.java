@@ -18,10 +18,12 @@ public class CorsConfig {
             "http://localhost:3000",
             "http://localhost:8080",
             "https://vault.tanay.pro",
-            "chrome-extension://*"
+            "chrome-extension://ongcojnhfkmcblnjbbkpbjmgffdcmkbe"
         ));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("*"));
+        configuration.setAllowedHeaders(List.of(
+            "Authorization", "Content-Type", "X-Requested-With", "Accept", "Origin"
+        ));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
 

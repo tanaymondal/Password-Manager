@@ -5,91 +5,65 @@ import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import javax.crypto.Mac;
 import javax.crypto.SecretKey;
+import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.Base64;
 import java.util.Date;
 import java.util.UUID;
 
-/**
- * Provides JWT token generation and validation for authentication.
- *
- * Implements a dual-token system:
- * - Access Token: Short-lived (15 min default), used for API authentication
- * - Refresh Token: Long-lived (1 day default), used to obtain new access tokens
- *
- * TOKEN STRUCTURE:
- * Access tokens contain: userId (subject), email claim, issuedAt, expiration
- * Refresh tokens contain: userId (subject), issuedAt, expiration
- *
- * SECURITY:
- * - Tokens are signed with HMAC-SHA256
- * - Secret key is configured via app.jwt.secret
- * - Token validation checks signature and expiration
- * - Invalid tokens are rejected (prevents tampering)
- *
- * @see JwtAuthenticationFilter for token extraction and validation in requests
- */
 @Component
 public class JwtTokenProvider {
 
-    private final SecretKey key;
+    private final SecretKey accessKey;
+    private final SecretKey refreshKey;
     private final long jwtExpiration;
     private final long refreshExpiration;
 
-    /**
-     * Initializes the JWT provider with secret and expiration settings.
-     *
-     * @param secret HMAC-SHA256 secret (must be at least 256 bits / 32 bytes)
-     * @param jwtExpiration Access token lifetime in milliseconds
-     * @param refreshExpiration Refresh token lifetime in milliseconds
-     */
     public JwtTokenProvider(
             @Value("${app.jwt.secret}") String secret,
             @Value("${app.jwt.expiration}") long jwtExpiration,
             @Value("${app.jwt.refresh-expiration}") long refreshExpiration) {
-        if (secret == null || secret.length() < 32) {
-            throw new IllegalArgumentException("JWT secret must be at least 32 characters. Set the JWT_SECRET environment variable.");
+        byte[] secretBytes = secret.getBytes(StandardCharsets.UTF_8);
+        if (secretBytes.length < 32) {
+            throw new IllegalArgumentException("JWT secret must be at least 32 bytes. Set the JWT_SECRET environment variable.");
         }
-        this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+        this.accessKey = Keys.hmacShaKeyFor(secretBytes);
+        this.refreshKey = deriveKey(secretBytes, "refresh-token-key");
         this.jwtExpiration = jwtExpiration;
         this.refreshExpiration = refreshExpiration;
     }
 
-    /**
-     * Generates a short-lived access token for API authentication.
-     *
-     * Contains user ID as subject and email as a claim.
-     * Used in the Authorization header: "Bearer <token>"
-     *
-     * @param userId UUID of the user
-     * @param email Email of the user
-     * @return Signed JWT access token
-     */
+    private static SecretKey deriveKey(byte[] masterSecret, String context) {
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            SecretKeySpec keySpec = new SecretKeySpec(masterSecret, "HmacSHA256");
+            mac.init(keySpec);
+            byte[] derived = mac.doFinal(context.getBytes(StandardCharsets.UTF_8));
+            return Keys.hmacShaKeyFor(derived);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to derive key", e);
+        }
+    }
+
     public String generateAccessToken(UUID userId, String email, LocalDateTime passwordUpdatedAt) {
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + jwtExpiration);
 
         return Jwts.builder()
+                .id(UUID.randomUUID().toString())
                 .subject(userId.toString())
                 .claim("email", email)
                 .claim("pwdUpdatedAt", passwordUpdatedAt.toEpochSecond(ZoneOffset.UTC))
                 .issuedAt(now)
                 .expiration(expiryDate)
-                .signWith(key)
+                .signWith(accessKey)
                 .compact();
     }
 
-    /**
-     * Generates a long-lived refresh token for obtaining new access tokens.
-     *
-     * Contains only user ID as subject (email not needed for refresh).
-     * Should be stored securely by the client and used to get new access tokens.
-     *
-     * @param userId UUID of the user
-     * @return Signed JWT refresh token
-     */
     public String generateRefreshToken(UUID userId) {
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + refreshExpiration);
@@ -98,51 +72,40 @@ public class JwtTokenProvider {
                 .subject(userId.toString())
                 .issuedAt(now)
                 .expiration(expiryDate)
-                .signWith(key)
+                .signWith(refreshKey)
                 .compact();
     }
 
-    /**
-     * Extracts the user ID from a JWT token.
-     *
-     * @param token Valid JWT token
-     * @return UUID of the user
-     * @throws JwtException if token is invalid
-     */
     public UUID getUserIdFromToken(String token) {
         Claims claims = Jwts.parser()
-                .verifyWith(key)
+                .verifyWith(accessKey)
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
         return UUID.fromString(claims.getSubject());
     }
 
-    /**
-     * Extracts the email from a JWT token.
-     *
-     * @param token Valid JWT token
-     * @return Email address stored in the token
-     * @throws JwtException if token is invalid
-     */
+    public UUID getUserIdFromRefreshToken(String token) {
+        Claims claims = Jwts.parser()
+                .verifyWith(refreshKey)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
+        return UUID.fromString(claims.getSubject());
+    }
+
     public String getEmailFromToken(String token) {
         Claims claims = Jwts.parser()
-                .verifyWith(key)
+                .verifyWith(accessKey)
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
         return claims.get("email", String.class);
     }
 
-    /**
-     * Validates a JWT token's signature and checks expiration.
-     *
-     * @param token JWT token to validate
-     * @return true if valid, false otherwise
-     */
     public <T> T getClaim(String token, String claimName, Class<T> type) {
         Claims claims = Jwts.parser()
-                .verifyWith(key)
+                .verifyWith(accessKey)
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
@@ -151,7 +114,16 @@ public class JwtTokenProvider {
 
     public boolean validateToken(String token) {
         try {
-            Jwts.parser().verifyWith(key).build().parseSignedClaims(token);
+            Jwts.parser().verifyWith(accessKey).build().parseSignedClaims(token);
+            return true;
+        } catch (JwtException | IllegalArgumentException e) {
+            return false;
+        }
+    }
+
+    public boolean validateRefreshToken(String token) {
+        try {
+            Jwts.parser().verifyWith(refreshKey).build().parseSignedClaims(token);
             return true;
         } catch (JwtException | IllegalArgumentException e) {
             return false;

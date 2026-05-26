@@ -104,7 +104,13 @@ public class AuditService {
      * @param userAgent User-Agent from the client
      */
     public void logFailedLogin(String email, String ipAddress, String userAgent) {
-        logAction(null, "LOGIN_FAILED", ipAddress, userAgent, "{\"email\": \"" + email + "\"}");
+        String escapedEmail = email
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r")
+                .replace("\t", "\\t");
+        logAction(null, "LOGIN_FAILED", ipAddress, userAgent, "{\"email\":\"" + escapedEmail + "\"}");
     }
 
     /**

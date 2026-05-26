@@ -32,7 +32,6 @@ export interface LoginRequest {
 export interface RegisterRequest {
   email: string
   authHash: string
-  authSalt: string
   encryptionSalt: string
   wrappedVaultKey: string
   encryptionVersion: number
@@ -77,13 +76,6 @@ export async function checkBreach(password: string): Promise<boolean> {
   return body.split('\n').some(line => line.startsWith(suffix))
 }
 
-export function getAuthSalt(email: string) {
-  return apiClient<{ authSalt: string }>('/auth/auth-salt', {
-    method: 'POST',
-    body: JSON.stringify({ email }),
-  })
-}
-
 export async function logout() {
   try {
     await fetch(`${import.meta.env.VITE_API_URL || '/api/v1'}/auth/logout`, {
@@ -99,10 +91,8 @@ export async function logout() {
 export interface ChangePasswordRequest {
   current_auth_hash: string
   new_auth_hash: string
-  new_auth_salt: string
   wrapped_vault_key: string
   new_encryption_salt: string
-  entries: { id?: string; encryptedData: string; iv: string }[]
 }
 
 export interface ChangePasswordResponse {

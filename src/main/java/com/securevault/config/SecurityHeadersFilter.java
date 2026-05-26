@@ -36,11 +36,8 @@ public class SecurityHeadersFilter implements Filter {
         httpResponse.setHeader("Permissions-Policy",
                 "camera=(), microphone=(), geolocation=(), payment=()");
 
-        if (!httpRequest.getRequestURI().startsWith("/swagger-ui")
-                && !httpRequest.getRequestURI().startsWith("/v3/api-docs")) {
-            httpResponse.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
-            httpResponse.setHeader("Pragma", "no-cache");
-        }
+        httpResponse.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+        httpResponse.setHeader("Pragma", "no-cache");
 
         chain.doFilter(request, response);
     }

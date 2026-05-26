@@ -1,11 +1,11 @@
 import { argon2id } from 'hash-wasm'
 import { base64ToBytes, bytesToBase64 } from './util'
 
-export async function derivePasswordHash(password: string, saltBase64: string): Promise<string> {
-  const salt = base64ToBytes(saltBase64)
+export async function derivePasswordHash(password: string, salt: string): Promise<string> {
+  const saltBytes = new TextEncoder().encode(salt)
   const hashBytes = await argon2id({
     password,
-    salt,
+    salt: saltBytes,
     parallelism: 4,
     iterations: 4,
     memorySize: 65536,

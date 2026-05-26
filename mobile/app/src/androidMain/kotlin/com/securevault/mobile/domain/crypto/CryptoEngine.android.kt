@@ -25,7 +25,7 @@ actual class CryptoEngine {
     }
 
     actual fun generateAuthHash(password: String, salt: String): String {
-        val saltBytes = Base64.getDecoder().decode(salt)
+        val saltBytes = salt.toByteArray(Charsets.UTF_8)
         val hash = argon2Kt.hash(
             mode = Argon2Mode.ARGON2_ID,
             password = password.toByteArray(Charsets.UTF_8),

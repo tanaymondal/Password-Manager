@@ -6,9 +6,11 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.Cipher;
+import javax.crypto.SecretKey;
+import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.GCMParameterSpec;
+import javax.crypto.spec.PBEKeySpec;
 import javax.crypto.spec.SecretKeySpec;
-import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.Base64;
@@ -20,13 +22,20 @@ public class TwoFactorSecretConverter implements AttributeConverter<String, Stri
     private static final String ALGORITHM = "AES/GCM/NoPadding";
     private static final int GCM_IV_LENGTH = 12;
     private static final int GCM_TAG_LENGTH = 128;
+    private static final int PBKDF2_ITERATIONS = 600_000;
 
     private final SecretKeySpec secretKey;
 
     public TwoFactorSecretConverter(@Value("${app.encryption.key}") String encryptionKey) {
         try {
-            MessageDigest sha = MessageDigest.getInstance("SHA-256");
-            byte[] key = sha.digest(encryptionKey.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            PBEKeySpec spec = new PBEKeySpec(
+                encryptionKey.toCharArray(),
+                "2fa-key-derivation".getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                PBKDF2_ITERATIONS,
+                256
+            );
+            SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
+            byte[] key = factory.generateSecret(spec).getEncoded();
             this.secretKey = new SecretKeySpec(key, "AES");
         } catch (Exception e) {
             throw new RuntimeException("Failed to initialize 2FA secret encryption key", e);
@@ -39,7 +48,7 @@ public class TwoFactorSecretConverter implements AttributeConverter<String, Stri
         try {
             Cipher cipher = Cipher.getInstance(ALGORITHM);
             byte[] iv = new byte[GCM_IV_LENGTH];
-            SecureRandom.getInstanceStrong().nextBytes(iv);
+            new SecureRandom().nextBytes(iv);
             cipher.init(Cipher.ENCRYPT_MODE, secretKey, new GCMParameterSpec(GCM_TAG_LENGTH, iv));
             byte[] ciphertext = cipher.doFinal(attribute.getBytes(java.nio.charset.StandardCharsets.UTF_8));
             byte[] combined = new byte[GCM_IV_LENGTH + ciphertext.length];

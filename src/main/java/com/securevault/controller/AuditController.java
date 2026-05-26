@@ -13,6 +13,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
+import jakarta.validation.constraints.Max;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -63,7 +64,7 @@ public class AuditController {
     public ResponseEntity<ApiResponse<Map<String, Object>>> getAuditLogs(
             @AuthenticationPrincipal UserDetails userDetails,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(defaultValue = "20") @Max(100) int size) {
         UUID userId = getUserId(userDetails);
         log.debug("Fetching audit logs for user: {}, page: {}, size: {}", userId, page, size);
 
