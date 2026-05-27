@@ -29,9 +29,14 @@ export interface LoginRequest {
   deviceId: string
 }
 
+export interface PreLoginResponse {
+  authSalt: string
+}
+
 export interface RegisterRequest {
   email: string
   authHash: string
+  authSalt: string
   encryptionSalt: string
   wrappedVaultKey: string
   encryptionVersion: number
@@ -42,6 +47,13 @@ export function login(data: LoginRequest) {
   return apiClient<TwoFactorLoginResponse>('/auth/login', {
     method: 'POST',
     body: JSON.stringify(data),
+  })
+}
+
+export function prelogin(email: string) {
+  return apiClient<PreLoginResponse>('/auth/prelogin', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
   })
 }
 
@@ -97,6 +109,7 @@ export interface ChangePasswordRequest {
 
 export interface ChangePasswordResponse {
   accessToken: string
+  authSalt: string
   encryptionSalt: string
   wrappedVaultKey: string
   encryptionVersion: number

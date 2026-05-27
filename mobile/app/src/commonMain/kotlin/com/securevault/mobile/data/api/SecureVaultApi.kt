@@ -33,6 +33,21 @@ class SecureVaultApi(
         return response
     }
 
+    suspend fun prelogin(request: PreLoginRequest): Result<PreLoginResponse> {
+        return try {
+            val response: HttpResponse = httpClient.post("$baseUrl/api/v1/auth/prelogin") {
+                contentType(ContentType.Application.Json)
+                setBody(request)
+            }
+            val body = response.bodyAsText()
+            val apiResponse = Json.decodeFromString<ApiResponse<PreLoginResponse>>(body)
+            apiResponse.data?.let { Result.success(it) }
+                ?: Result.failure(Exception(apiResponse.message ?: "Prelogin failed"))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun register(request: RegisterRequest): Result<AuthResponse> {
         return try {
             val response: HttpResponse = httpClient.post("$baseUrl/api/v1/auth/register") {

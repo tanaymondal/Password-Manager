@@ -8,6 +8,7 @@ import {
 } from 'react'
 import {
   login as apiLogin,
+  prelogin as apiPrelogin,
   register as apiRegister,
   logout as apiLogout,
   verifyTwoFactor as apiVerifyTwoFactor,
@@ -118,9 +119,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const login = useCallback(async (email: string, password: string): Promise<TwoFactorLoginResponse> => {
+    const pre = await apiPrelogin(email)
     const res = await apiLogin({
       email,
-      authHash: await derivePasswordHash(password, email),
+      authHash: await derivePasswordHash(password, pre.authSalt),
       deviceName: 'Web Browser',
       deviceId: getDeviceId(),
     })
@@ -177,9 +179,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (await checkBreach(password)) {
       throw new Error('This password has been exposed in a data breach. Please choose a different password.')
     }
+    const authSalt = generateSalt()
     const encryptionSalt = generateSalt()
     const vaultKey = await generateVaultKey()
-    const authHash = await derivePasswordHash(password, email)
+    const authHash = await derivePasswordHash(password, authSalt)
     const kek = await deriveKek(password, encryptionSalt)
     const wrappedVaultKey = await wrapVaultKey(kek, vaultKey)
     setAutoUnlockVaultKey(vaultKey)
@@ -187,6 +190,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const res = await apiRegister({
       email,
       authHash,
+      authSalt,
       encryptionSalt,
       wrappedVaultKey,
       encryptionVersion: 2,
@@ -194,7 +198,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
     setTokens(res.accessToken)
     setCryptoMaterial({
-      authSalt: email,
+      authSalt: res.authSalt,
       encryptionSalt: res.encryptionSalt,
       wrappedVaultKey: res.wrappedVaultKey,
       encryptionVersion: res.encryptionVersion,

@@ -15,6 +15,7 @@ data class LoginRequest(
 data class RegisterRequest(
     val email: String,
     val authHash: String,
+    val authSalt: String,
     val encryptionSalt: String,
     val wrappedVaultKey: String,
     val encryptionVersion: Int,
@@ -60,4 +61,14 @@ data class TwoFactorVerifyRequest(
     val email: String,
     val challengeId: String,
     val code: String
+)
+
+@Serializable
+data class PreLoginRequest(
+    val email: String
+)
+
+@Serializable
+data class PreLoginResponse(
+    val authSalt: String
 )

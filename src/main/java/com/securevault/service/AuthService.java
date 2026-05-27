@@ -3,6 +3,7 @@ package com.securevault.service;
 import com.securevault.dto.AuthResponse;
 import com.securevault.dto.ChangePasswordResponse;
 import com.securevault.dto.LoginRequest;
+import com.securevault.dto.PreLoginResponse;
 import com.securevault.dto.RegisterRequest;
 import com.securevault.dto.TwoFactorLoginResponse;
 import com.securevault.entity.PasswordHistory;
@@ -99,6 +100,7 @@ public class AuthService {
         user.setEmail(request.getEmail().toLowerCase().trim());
         user.setPasswordHash(serverSideHash(request.getAuthHash(), userSalt));
         user.setPasswordSalt(userSalt);
+        user.setAuthSalt(request.getAuthSalt());
         user.setEncryptionSalt(request.getEncryptionSalt());
         user.setWrappedVaultKey(request.getWrappedVaultKey());
         user.setEncryptionVersion(request.getEncryptionVersion());
@@ -110,6 +112,17 @@ public class AuthService {
 
         log.info("User registered successfully: {}", user.getEmail());
         return generateAuthResponse(user, request.getDeviceId());
+    }
+
+    public PreLoginResponse prelogin(String email) {
+        String normalizedEmail = email.toLowerCase().trim();
+        return userRepository.findByEmail(normalizedEmail)
+                .map(user -> new PreLoginResponse(user.getAuthSalt()))
+                .orElseGet(() -> {
+                    byte[] randomSalt = new byte[16];
+                    new java.security.SecureRandom().nextBytes(randomSalt);
+                    return new PreLoginResponse(java.util.Base64.getEncoder().encodeToString(randomSalt));
+                });
     }
 
     @Transactional
@@ -150,7 +163,7 @@ public class AuthService {
                     user.getId().toString(),
                     user.getEmail(),
                     challengeId,
-                    user.getEmail(),
+                    user.getAuthSalt(),
                     null,
                     null,
                     null
@@ -170,7 +183,7 @@ public class AuthService {
                 authResponse.getRefreshToken(),
                 authResponse.getUserId(),
                 authResponse.getEmail(),
-                user.getEmail(),
+                user.getAuthSalt(),
                 authResponse.getEncryptionSalt(),
                 authResponse.getWrappedVaultKey(),
                 authResponse.getEncryptionVersion()
@@ -428,7 +441,7 @@ public class AuthService {
                 refreshToken,
                 user.getId().toString(),
                 user.getEmail(),
-                user.getEmail(),
+                user.getAuthSalt(),
                 user.getEncryptionSalt(),
                 user.getWrappedVaultKey(),
                 user.getEncryptionVersion() != null ? user.getEncryptionVersion() : com.securevault.config.EncryptionConstants.CURRENT_ENCRYPTION_VERSION
@@ -449,6 +462,7 @@ public class AuthService {
         return new ChangePasswordResponse(
                 accessToken,
                 refreshToken,
+                user.getAuthSalt(),
                 user.getEncryptionSalt(),
                 user.getId().toString(),
                 user.getEmail(),

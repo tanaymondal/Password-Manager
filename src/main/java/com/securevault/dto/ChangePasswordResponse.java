@@ -11,6 +11,9 @@ public class ChangePasswordResponse {
 
     private String refreshToken;
 
+    @JsonProperty("authSalt")
+    private String authSalt;
+
     @JsonProperty("encryptionSalt")
     private String encryptionSalt;
 

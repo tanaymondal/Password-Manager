@@ -252,10 +252,10 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       const newWrapped = await wrapVaultKey(newKek, oldVaultKey)
 
       onProgress?.(0.6)
-      const email = material.authSalt
-      if (!email) throw new Error('No auth salt found. Please log in again.')
-      const currentAuthHash = await derivePasswordHash(currentPassword, email)
-      const newAuthHash = await derivePasswordHash(newPassword, email)
+      const authSalt = material.authSalt
+      if (!authSalt) throw new Error('No auth salt found. Please log in again.')
+      const currentAuthHash = await derivePasswordHash(currentPassword, authSalt)
+      const newAuthHash = await derivePasswordHash(newPassword, authSalt)
 
       onProgress?.(0.8)
       const res = await changePassword({
@@ -266,7 +266,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       })
 
       setCryptoMaterial({
-        authSalt: email,
+        authSalt: res.authSalt,
         encryptionSalt: res.encryptionSalt,
         wrappedVaultKey: res.wrappedVaultKey,
         encryptionVersion: res.encryptionVersion,

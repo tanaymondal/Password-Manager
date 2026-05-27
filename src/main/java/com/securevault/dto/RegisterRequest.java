@@ -17,6 +17,10 @@ public class RegisterRequest {
     @Size(max = 1024, message = "Auth hash must not exceed 1024 characters")
     private String authHash;
 
+    @NotBlank(message = "Auth salt is required")
+    @Size(max = 1024, message = "Auth salt must not exceed 1024 characters")
+    private String authSalt;
+
     @NotBlank(message = "Encryption salt is required")
     @Size(max = 1024, message = "Encryption salt must not exceed 1024 characters")
     private String encryptionSalt;

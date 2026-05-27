@@ -67,6 +67,15 @@ public class User {
     private String passwordSalt;
 
     /**
+     * Random salt used by the client for Argon2id auth hash derivation.
+     * Sent to client via prelogin endpoint so the client can compute
+     * Argon2id(password, authSalt) before sending the auth hash to the server.
+     * Unique per user, set during registration.
+     */
+    @Column(name = "auth_salt", nullable = false)
+    private String authSalt;
+
+    /**
      * Salt for deriving the Key Encryption Key (KEK) from the user's password.
      * Sent to client after login for vault key unwrapping.
      * Unique per user, regenerated when password changes.

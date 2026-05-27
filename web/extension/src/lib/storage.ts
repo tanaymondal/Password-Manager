@@ -3,6 +3,7 @@ const TOKENS_KEY = 'auth_tokens'
 const VAULT_KEY_SESSION = 'vault_key_bytes'
 
 export interface CryptoMaterial {
+  authSalt: string
   encryptionSalt: string
   wrappedVaultKey: string
   encryptionVersion: number

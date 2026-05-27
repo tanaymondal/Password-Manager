@@ -42,6 +42,13 @@ public class AuthController {
         this.clientIpResolver = clientIpResolver;
     }
 
+    @PostMapping("/prelogin")
+    public ResponseEntity<ApiResponse<PreLoginResponse>> prelogin(
+            @Valid @RequestBody PreLoginRequest request) {
+        PreLoginResponse response = authService.prelogin(request.getEmail());
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
     @PostMapping("/register")
     public ResponseEntity<ApiResponse<AuthResponse>> register(
             @Valid @RequestBody RegisterRequest request,

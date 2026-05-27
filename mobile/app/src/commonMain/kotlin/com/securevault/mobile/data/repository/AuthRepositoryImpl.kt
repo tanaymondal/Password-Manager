@@ -3,6 +3,7 @@ package com.securevault.mobile.data.repository
 import com.securevault.mobile.data.api.SecureVaultApi
 import com.securevault.mobile.data.breach.BreachChecker
 import com.securevault.mobile.data.model.LoginRequest
+import com.securevault.mobile.data.model.PreLoginRequest
 import com.securevault.mobile.data.model.RefreshTokenRequest
 import com.securevault.mobile.data.model.RegisterRequest
 import com.securevault.mobile.domain.crypto.CryptoEngine
@@ -32,15 +33,16 @@ class AuthRepositoryImpl(
                 return Result.Error("This password has been exposed in a data breach. Please choose a different password.")
             }
 
+            val authSalt = cryptoEngine.generateSalt()
             val encryptionSalt = cryptoEngine.generateSalt()
             val vaultKey = cryptoEngine.generateVaultKey()
-            val authHash = cryptoEngine.generateAuthHash(password, email)
+            val authHash = cryptoEngine.generateAuthHash(password, authSalt)
             val kek = cryptoEngine.deriveKek(password, encryptionSalt)
             val wrappedVaultKey = cryptoEngine.wrapVaultKey(vaultKey, kek)
             val deviceId = getOrCreateDeviceId()
 
             val response = api.register(
-                RegisterRequest(email, authHash, encryptionSalt, wrappedVaultKey, 2, deviceId)
+                RegisterRequest(email, authHash, authSalt, encryptionSalt, wrappedVaultKey, 2, deviceId)
             )
             response.fold(
                 onSuccess = { authResponse ->
@@ -69,7 +71,9 @@ class AuthRepositoryImpl(
 
     override suspend fun login(email: String, password: String): Result<LoginResponse> {
         return try {
-            val authHash = cryptoEngine.generateAuthHash(password, email)
+            val preloginResult = api.prelogin(PreLoginRequest(email))
+            val authSalt = preloginResult.getOrNull()?.authSalt ?: email
+            val authHash = cryptoEngine.generateAuthHash(password, authSalt)
             val deviceId = getOrCreateDeviceId()
             val response = api.login(LoginRequest(email, authHash, deviceName = "Mobile App", deviceId = deviceId))
 
