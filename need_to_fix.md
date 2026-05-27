@@ -194,6 +194,51 @@ The web app stores access token, refresh token, `encryptionSalt`, and `wrappedVa
 
 ---
 
+### 1.11 CAPTCHA + email verification on registration and login
+
+**Problem**: Anyone with API access can register accounts and attempt login without any proof of humanness or email ownership. No bot protection, no verification of email ownership, and unknown devices can log in freely.
+
+**Proposed flow**:
+
+**Registration:**
+- CAPTCHA check (reCAPTCHA v3 / hCaptcha / Turnstile)
+- Create user as `email_verified = false`
+- Send 6-digit email verification code (Redis, 10min TTL)
+- User must verify code → account activated
+
+**Login (known device — `deviceId` exists in `devices` table for user):**
+- CAPTCHA check
+- Proceed with normal login (no email verification)
+
+**Login (unknown device — `deviceId` not found for user):**
+- CAPTCHA check
+- Send 6-digit email verification code
+- User must verify code before login completes
+
+**Files to create/modify:**
+- `EmailService.java` — SMTP email sending (JavaMailSender)
+- `CaptchaService.java` — CAPTCHA token validation
+- `User.java` — add `email_verified` boolean column
+- `AuthController.java` / `AuthService.java` — add verification steps to register and login flows
+- `application.properties` / `application-prod.properties` — SMTP + CAPTCHA provider config
+- `pom.xml` — add `spring-boot-starter-mail`
+
+**Status**: 🔲 Not started
+
+---
+
+### 1.12 `token.getBytes()` without explicit charset in `hashToken()`
+
+**Files**: `JwtTokenProvider.java` or wherever `hashToken()` is defined
+
+`token.getBytes()` uses the JVM's default charset (`Charset.defaultCharset()`). On systems where the default charset is not UTF-8 (e.g., Windows cp1252), the byte representation of the token will differ, producing a different hash and breaking token validation.
+
+**Fix**: Use `token.getBytes(StandardCharsets.UTF_8)` explicitly.
+
+**Status**: ✅ Fixed — `AuthService.java:390` and `BreachCheckService.java:81` now pass `StandardCharsets.UTF_8` explicitly.
+
+---
+
 ## Phase 2 — Important hardening
 
 ### 2.1 Hardcoded production secrets in docker-compose.yaml
@@ -355,6 +400,59 @@ Raw IP stored (GDPR concern). No integrity protection.
 
 ---
 
+### 2.16 Legacy dead `vaultKeyIv` field on User entity
+
+**Files**: `User.java` — check for unused `vaultKeyIv` field
+
+A `vaultKeyIv` column exists on the `users` table but is no longer used by the current DEK/wrapped-vault-key model. Dead fields add confusion, increase row size, and may cause silent data assumptions in future refactors.
+
+**Fix**: Remove the field from `User.java` entity and add a Flyway migration to drop the column.
+
+**Status**: ✅ Fixed — field removed from `User.java`, `V7__drop_vault_key_iv.sql` migration created.
+
+---
+
+### 2.17 Swagger not explicitly locked down in `SecurityConfig`
+
+**Files**: `SecurityConfig.java`, `OpenApiConfig.java`
+
+Swagger endpoints (`/swagger-ui/**`, `/v3/api-docs/**`) are not explicitly restricted in the `SecurityFilterChain`. They inherit the default `permitAll` catch from `/api/v1/auth/**` or may be implicitly accessible. Production exposure leaks API schema.
+
+**Fix**: Add explicit `requestMatchers("/swagger-ui/**", "/v3/api-docs/**").denyAll()` or gate behind an admin role/profile.
+
+**Status**: ✅ Fixed — `SecurityConfig.java:34` now has `.requestMatchers("/swagger-ui/**", "/v3/api-docs/**").denyAll()` before `anyRequest().authenticated()`.
+
+---
+
+### 2.18 `encryptionVersion` hardcoded to `2` in multiple places
+
+**Files**: `AuthService.java`, `RegisterRequest.java`, client registration code
+
+`encryptionVersion` is set as a literal `2` in the register DTO default, the service layer, and the client. If the version ever needs to change (e.g., breaking algorithm upgrade), all hardcoded values must be found and updated individually — high risk of inconsistency.
+
+**Fix**: Define a single source of truth (e.g., `public static final int CURRENT_ENCRYPTION_VERSION = 2` in a constants class or `EncryptionConfig`). Reference it everywhere.
+
+**Status**: ✅ Fixed — `EncryptionConstants.java` created with `CURRENT_ENCRYPTION_VERSION = 2`. All 3 hardcoded references in `AuthService.java` now use the constant.
+
+---
+
+### 2.19 No account deletion endpoint (GDPR concern)
+
+**Files**: All layers — controller, service, repository
+
+Users cannot delete their account and associated data. GDPR Article 17 ("Right to erasure") requires that users be able to request deletion of their personal data. Without this endpoint, the application is not compliant for EU users.
+
+**Fix**:
+- Add `DELETE /api/v1/auth/account` endpoint
+- Cascade-delete vault entries, devices, refresh tokens, audit logs, password history
+- Require re-authentication (2FA step-up if enabled) before deletion
+- Return 204 No Content on success
+- Consider a soft-delete with a grace period (e.g., 30 days) before hard deletion
+
+**Status**: ✅ Fixed — `DELETE /api/v1/auth/account` endpoint added to `AuthController`. Requires re-authentication (`currentAuthHash`). Cascades deletion via FK constraints + explicit audit log cleanup. Redis keys cleared. Returns 200 with success message.
+
+---
+
 ## Phase 3 — Defense in depth
 
 ### 3.1 Argon2id parameter tuning
@@ -451,11 +549,11 @@ Semgrep/CodeQL in CI with security ruleset. Gitleaks as pre-commit hook + CI che
 | Phase | Total items | ✅ Fixed | ❌ Remaining |
 |-------|-------------|----------|--------------|
 | Phase 0 — Stop the bleeding | 5 | 1 | 4 |
-| Phase 1 — Critical hardening | 10 | 4 | 6 |
-| Phase 2 — Important hardening | 15 | 0 | 15 |
+| Phase 1 — Critical hardening | 12 | 5 | 7 |
+| Phase 2 — Important hardening | 19 | 4 | 15 |
 | Phase 3 — Defense in depth | 10 | 0 | 10 |
 | Phase 4 — Operational maturity | 12 | 0 | 12 |
-| **Total** | **52** | **5** | **47** |
+| **Total** | **58** | **10** | **48** |
 
 ### Already fixed ✅
 - 0.1 DEK/wrapped vault key model
@@ -463,6 +561,11 @@ Semgrep/CodeQL in CI with security ruleset. Gitleaks as pre-commit hook + CI che
 - 1.2 Password reuse prevention (salt-aware comparison)
 - 1.6 JWT secret fallback removed (startup validation enforces ≥ 32 chars)
 - 1.7 Breach-corpus validation (HIBP k-anonymity + offline common-passwords set)
+- 1.12 `token.getBytes()` charset fix (explicit UTF-8)
+- 2.16 Legacy `vaultKeyIv` field removed (User entity + V7 migration)
+- 2.17 Swagger locked down in SecurityConfig (denyAll)
+- 2.18 `encryptionVersion` centralized in `EncryptionConstants`
+- 2.19 Account deletion endpoint added (`DELETE /api/v1/auth/account`)
 
 ### Latest review verification
 - Backend `mvn -q test`: passed.

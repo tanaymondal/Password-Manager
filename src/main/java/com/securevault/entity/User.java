@@ -117,12 +117,6 @@ public class User {
     private String wrappedVaultKey;
 
     /**
-     * Legacy field (now part of wrappedVaultKey format).
-     */
-    @Column(name = "vault_key_iv", length = 64)
-    private String vaultKeyIv;
-
-    /**
      * Encryption version for migration support.
      * Version 2 uses current encryption scheme.
      */

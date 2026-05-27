@@ -11,4 +11,6 @@ import java.util.UUID;
 public interface PasswordHistoryRepository extends JpaRepository<PasswordHistory, UUID> {
 
     List<PasswordHistory> findByUserIdOrderByCreatedAtDesc(UUID userId);
+
+    void deleteByUserId(UUID userId);
 }

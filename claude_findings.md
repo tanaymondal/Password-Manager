@@ -1,7 +1,10 @@
 # SecureVault — Security Review
 
 **Date:** 2026-05-27
+**Last updated:** 2026-05-27 (fixes applied)
 **Scope:** Backend (Spring Boot), Web (React/Vite), Chrome Extension, Mobile (Kotlin Multiplatform Android/iOS), Deployment (Docker/Nginx), DB schema.
+
+> **Legend:** ✅ = Fixed & deployed. Items without marker are still open.
 
 The zero-knowledge foundation is well-designed (Argon2id KEK, AES-256-GCM with random per-entry IVs, server stores only opaque ciphertext, refresh tokens stored as SHA-256 hashes, 2FA secret encrypted at rest, PBKDF2 600k pepper on the server). However, multiple client-side issues persistently leak plaintext outside the server, undermining the model end-to-end.
 
@@ -9,12 +12,13 @@ The zero-knowledge foundation is well-designed (Argon2id KEK, AES-256-GCM with r
 
 ## Summary of Severity Counts
 
-| Severity | Count |
-|----------|-------|
-| Critical | 8     |
-| High     | 13    |
-| Medium   | 18    |
-| Low      | 20    |
+| Severity | Total | ✅ Fixed | ❌ Remaining |
+|----------|-------|----------|--------------|
+| Critical | 8     | 1        | 7            |
+| High     | 13    | 2        | 11           |
+| Medium   | 18    | 0        | 18           |
+| Low      | 20    | 1        | 19           |
+| **Total**| **59**| **4**    | **55**       |
 
 ---
 
@@ -35,7 +39,7 @@ The zero-knowledge foundation is well-designed (Argon2id KEK, AES-256-GCM with r
 - The controller relies on `@AuthenticationPrincipal UserDetails userDetails` being non-null; `UserUtils.getUserId(null)` currently throws NPE → 500 so the endpoint isn't directly exploitable today. But it is **one accidental refactor away from a critical auth bypass**.
 - Fix: scope `permitAll` to the explicit endpoints (`/auth/register`, `/auth/login`, `/auth/verify-2fa`, `/auth/refresh`, `/auth/logout`) and require auth for `/auth/change-password`.
 
-### C4. `Thread.sleep(30000)` in 2FA enable path = trivial DoS
+### C4. `Thread.sleep(30000)` in 2FA enable path = trivial DoS ✅
 - `TwoFactorAuthService.enable2FA:102` blocks the request thread for 30 seconds whenever a user submits a `secondCode` that differs from `code`. With default Tomcat thread pool (~200), 200 such requests exhaust the pool and the service becomes unresponsive to every other user — at only ~7 requests per second.
 - Fix: do not sleep. Require the second code to be from a different 30-second TOTP window via a non-blocking timestamp check, or drop the second-code feature entirely.
 
@@ -66,11 +70,11 @@ The zero-knowledge foundation is well-designed (Argon2id KEK, AES-256-GCM with r
 - Same issue in mobile: `cryptoEngine.generateAuthHash(password, email)` in `AuthRepositoryImpl.kt:37,72`.
 - Fix: store and serve a random `authSalt` (already plumbed in the API!) and use it client-side instead of the email. Migrate existing users on next login or password change.
 
-### H2. No TOTP code rate-limit; 2FA challenge not consumed on failed code
+### H2. No TOTP code rate-limit; 2FA challenge not consumed on failed code ✅
 - `verifyTwoFactorLogin` does not consume the challenge on failure (intentional per commit `88f7fa4`). Only the generic per-IP/email login rate limiter applies. The challenge lives for 5 minutes (`PendingLoginChallengeStore.CHALLENGE_TTL_SECONDS = 300`). With 60 req/min, an attacker who has stolen the password can submit up to ~300 codes per challenge window before the global IP limit kicks in.
 - Fix: track per-challenge attempt count; consume the challenge after N (e.g., 5) failed attempts; tighten per-IP/email rate limit for `/verify-2fa` to ~5/min.
 
-### H3. Spoofable client IP → rate-limit and audit bypass
+### H3. Spoofable client IP → rate-limit and audit bypass ✅
 - `RateLimitingFilter.getClientIdentifier:68` and `AuthController.getClientIp:207` trust `X-Forwarded-For` / `X-Real-IP` unconditionally. The app is configured with `server.forward-headers-strategy=framework` only in the prod profile, but if deployed without a stripping reverse proxy, **any client can spoof its IP via a header**, defeating rate limiting and poisoning audit logs.
 - Fix: use Spring's `ForwardedHeaderFilter` with an allow-list of trusted proxy IPs (`server.tomcat.remoteip.internal-proxies`); never trust the headers for direct connections.
 
@@ -185,7 +189,7 @@ The zero-knowledge foundation is well-designed (Argon2id KEK, AES-256-GCM with r
 
 ## LOW
 
-### L1. Static salt for PBKDF2 in 2FA secret encryption
+### L1. Static salt for PBKDF2 in 2FA secret encryption ✅
 - `TwoFactorSecretConverter.java:33` derives the AES key with PBKDF2 from `ENCRYPTION_KEY` using literal string `"2fa-key-derivation"` as the salt. Acceptable with a high-entropy `ENCRYPTION_KEY` but provides no per-user separation; if `ENCRYPTION_KEY` ever leaks, every user's 2FA secret is decryptable.
 - Fix: use a random per-row salt stored alongside the ciphertext, and/or use HKDF.
 
@@ -280,8 +284,31 @@ The server-side zero-knowledge model is well-designed. The **client side persist
 
 ---
 
+## Already fixed ✅
+
+| Finding | Fix |
+|---------|-----|
+| C4 — Thread.sleep DoS | Removed `Thread.sleep(30000)` from `TwoFactorAuthService.enable2FA()` |
+| H2 — 2FA brute force | Added per-challenge attempt limit (5) in `PendingLoginChallengeStore` |
+| H3 — IP spoofing | Created `ClientIpResolver` with `app.proxy.trusted` toggle; replaced all 3 inline X-Forwarded-For parsing sites |
+| L1 — Static PBKDF2 salt in 2FA encryption | `TwoFactorSecretConverter` now decodes `ENCRYPTION_KEY` directly as AES key instead of PBKDF2 with static salt |
+
+Additional fixes not in this review:
+- PBKDF2 salt → per-user random 32-byte salt + serverHashSecret as pepper
+- `LoginRateLimiter` (ConcurrentHashMap → Redis)
+- `RateLimitingFilter` (ConcurrentHashMap + ScheduledExecutorService → Redis)
+- Vault audit logs now include real IP and User-Agent (were null)
+- `AuthController` IP resolution via `ClientIpResolver`
+- `VaultService` entry count limit (10,000 max per user)
+- `PendingLoginChallengeStore` + `TwoFactorAuthService.pendingSetups` → Redis (removed ScheduledExecutorService cleanup)
+- Explicit UTF-8 charset in `getBytes()` calls
+- Legacy `vaultKeyIv` field removed (User entity + V7 migration)
+- Swagger endpoints locked down in `SecurityConfig` (`.denyAll()`)
+- `encryptionVersion` centralized in `EncryptionConstants`
+- `DELETE /api/v1/auth/account` endpoint added (GDPR)
+
 ## Suggested Fix Priority
 
-1. **Fix C1–C8 immediately** — these are exploitable today against the deployed `vault.tanay.pro` / shipped APK.
-2. Then **H1–H13** — H1 (email as salt), H2 (2FA brute force), H3 (XFF spoofing), H4 (refresh reuse detection), H5 (extension key storage), H6 (audit JSON), H8 (cert pinning), H9 (FLAG_SECURE), H11 (SecureRandom for device ID), H12 (delete unencrypted DB overload).
+1. **Fix C1–C8 immediately** — C4 is fixed; C1 (refresh in JSON), C2 (email enumeration), C3 (permitAll scope), C5–C8 (Android) remain.
+2. Then **H1–H13** — H2, H3 fixed; H1 (email as salt), H4 (refresh reuse detection), H5 (extension key storage), H6 (audit JSON), H8 (cert pinning), H9 (FLAG_SECURE), H11 (SecureRandom for device ID), H12 (delete unencrypted DB overload) remain.
 3. Mediums and lows as time allows.

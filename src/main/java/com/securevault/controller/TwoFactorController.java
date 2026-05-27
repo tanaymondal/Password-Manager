@@ -5,10 +5,10 @@ import com.securevault.dto.Enable2FARequest;
 import com.securevault.dto.TwoFactorSetupResponse;
 import com.securevault.service.AuditService;
 import com.securevault.service.TwoFactorAuthService;
+import com.securevault.util.ClientIpResolver;
 import com.securevault.util.UserUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -37,11 +37,18 @@ import java.util.UUID;
 @Slf4j
 @RestController
 @RequestMapping("/api/v1/2fa")
-@RequiredArgsConstructor
 public class TwoFactorController {
 
     private final TwoFactorAuthService twoFactorAuthService;
     private final AuditService auditService;
+    private final ClientIpResolver clientIpResolver;
+
+    public TwoFactorController(TwoFactorAuthService twoFactorAuthService, AuditService auditService,
+                                ClientIpResolver clientIpResolver) {
+        this.twoFactorAuthService = twoFactorAuthService;
+        this.auditService = auditService;
+        this.clientIpResolver = clientIpResolver;
+    }
 
     /**
      * Generates setup data for enabling two-factor authentication.
@@ -80,8 +87,7 @@ public class TwoFactorController {
         UUID userId = getUserId(userDetails);
         log.info("Enabling 2FA for user: {}", userId);
         twoFactorAuthService.enable2FA(userId, request.getCode(), request.getSecondCode());
-        String xff = httpRequest.getHeader("X-Forwarded-For");
-        String clientIp = (xff != null && !xff.isBlank()) ? xff.split(",")[0].trim() : httpRequest.getRemoteAddr();
+        String clientIp = clientIpResolver.getClientIp(httpRequest);
         auditService.log2FAEnabled(userId, clientIp, httpRequest.getHeader("User-Agent"));
         return ResponseEntity.ok(ApiResponse.success("2FA enabled successfully", ""));
     }
@@ -104,8 +110,7 @@ public class TwoFactorController {
         UUID userId = getUserId(userDetails);
         log.info("Disabling 2FA for user: {}", userId);
         twoFactorAuthService.disable2FA(userId, request.getCode());
-        String xff = httpRequest.getHeader("X-Forwarded-For");
-        String clientIp = (xff != null && !xff.isBlank()) ? xff.split(",")[0].trim() : httpRequest.getRemoteAddr();
+        String clientIp = clientIpResolver.getClientIp(httpRequest);
         auditService.log2FADisabled(userId, clientIp, httpRequest.getHeader("User-Agent"));
         return ResponseEntity.ok(ApiResponse.success("2FA disabled successfully", ""));
     }

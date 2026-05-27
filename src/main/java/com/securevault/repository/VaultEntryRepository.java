@@ -11,6 +11,8 @@ public interface VaultEntryRepository extends JpaRepository<VaultEntry, UUID> {
 
     List<VaultEntry> findByUserIdOrderByCreatedAtAsc(UUID userId);
 
+    long countByUserId(UUID userId);
+
     void deleteByUserId(UUID userId);
 
     List<VaultEntry> findByIdIn(List<UUID> ids);

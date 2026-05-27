@@ -1,8 +1,11 @@
 # SecureVault Security Findings - Deep Review
 
 Date: 2026-05-27
+Last updated: 2026-05-27 (fixes applied)
 
 Scope reviewed: Spring Boot backend, React/Vite web app, Chrome extension, Kotlin Multiplatform mobile app, Docker/nginx deployment config, database migrations, and local project configuration.
+
+> **Legend:** ✅ = Fixed & deployed. Items without marker are still open.
 
 Note: This is a static source review. Dependency audits and test execution could not be completed in this environment: `npm` was unavailable, and Maven/Gradle test commands failed under sandboxing with the approval rerun rejected by the approval system.
 
@@ -18,6 +21,16 @@ The main security risk is that multiple client and session-management paths brea
 - Login and 2FA rate limiting has bypassable edges.
 - The Chrome extension persists sensitive token/key material.
 - Several auth/session controls are too broad or not enforced consistently.
+
+| Severity | Total | ✅ Fixed | ❌ Remaining |
+|----------|-------|----------|--------------|
+| Critical | 8     | 1        | 7            |
+| High     | 13    | 2        | 11           |
+| Medium   | 15    | 1        | 14           |
+| Low      | 15    | 1        | 14           |
+| **Total**| **51**| **5**    | **46**       |
+
+**Fixed so far:** C4 (Thread.sleep DoS), H2 (2FA brute force), H3 (IP spoofing), M6 (vault audit IP/UA), L1 (static 2FA PBKDF2 salt).
 
 These are production-blocking issues for a password manager.
 
@@ -69,7 +82,7 @@ Fix:
 - Require authentication for change-password.
 - Add tests asserting sensitive endpoints reject unauthenticated requests.
 
-### C4. 2FA Enable Path Can Block Request Threads for 30 Seconds
+### C4. 2FA Enable Path Can Block Request Threads for 30 Seconds ✅
 
 File: `src/main/java/com/securevault/service/TwoFactorAuthService.java`
 
@@ -151,7 +164,7 @@ Fix:
 - Serve it before auth-hash derivation or via a safe login preflight.
 - Migrate existing users on next login/password change.
 
-### H2. 2FA Challenge Lacks Per-Challenge Attempt Limit
+### H2. 2FA Challenge Lacks Per-Challenge Attempt Limit ✅
 
 Files:
 - `src/main/java/com/securevault/service/AuthService.java`
@@ -166,7 +179,7 @@ Fix:
 - Consume/revoke after a small number of failures.
 - Rate-limit `/verify-2fa` by challenge, user, and IP.
 
-### H3. Spoofable Client IP Handling
+### H3. Spoofable Client IP Handling ✅
 
 Files:
 - `src/main/java/com/securevault/config/RateLimitingFilter.java`
@@ -390,7 +403,7 @@ Fix:
 - Self-host fonts or explicitly permit required origins.
 - Move to nonce/hash-based styles where practical.
 
-### M6. Vault Audit Logs Missing IP/User-Agent
+### M6. Vault Audit Logs Missing IP/User-Agent ✅
 
 File: `src/main/java/com/securevault/controller/VaultController.java`
 
@@ -527,7 +540,7 @@ Fix:
 
 ## Low Findings
 
-### L1. 2FA Secret Encryption Uses Static PBKDF2 Salt
+### L1. 2FA Secret Encryption Uses Static PBKDF2 Salt ✅
 
 File: `src/main/java/com/securevault/config/TwoFactorSecretConverter.java`
 
@@ -701,6 +714,29 @@ Fix:
 - Update or delete the collection.
 - Add a zero-knowledge client simulator collection if needed.
 
+## Already fixed ✅
+
+| Finding | Fix |
+|---------|-----|
+| C4 — 2FA Thread.sleep DoS | Removed `Thread.sleep(30000)` from `TwoFactorAuthService.enable2FA()` |
+| H2 — 2FA per-challenge brute force | Added per-challenge attempt limit (5) in `PendingLoginChallengeStore` |
+| H3 — Spoofable client IP | Created `ClientIpResolver` with `app.proxy.trusted` toggle; replaced all 3 inline X-Forwarded-For parsing sites |
+| M6 — Vault audit missing IP/UA | All 5 vault endpoints now inject `HttpServletRequest` + `ClientIpResolver`, pass real IP and User-Agent |
+| L1 — Static 2FA PBKDF2 salt | `TwoFactorSecretConverter` now decodes `ENCRYPTION_KEY` directly as AES key instead of PBKDF2 with static salt |
+
+Additional fixes not listed in this review:
+- PBKDF2 server-side hash salt → per-user random 32-byte salt + `SERVER_HASH_SECRET` pepper
+- `LoginRateLimiter` (ConcurrentHashMap → Redis)
+- `RateLimitingFilter` (ConcurrentHashMap + ScheduledExecutorService → Redis)
+- `PendingLoginChallengeStore` + `TwoFactorAuthService.pendingSetups` → Redis (removed ScheduledExecutorService cleanup)
+- `AuthController` and `VaultController` authenticated IP resolution via `ClientIpResolver`
+- `VaultService` entry count limit (10,000 max per user)
+- Explicit UTF-8 charset in `getBytes()` calls
+- Legacy `vaultKeyIv` field removed (User entity + V7 migration)
+- Swagger endpoints locked down in `SecurityConfig` (`.denyAll()`)
+- `encryptionVersion` centralized in `EncryptionConstants`
+- `DELETE /api/v1/auth/account` endpoint added (GDPR)
+
 ## Positive Controls Observed
 
 - Vault entries are stored server-side as ciphertext plus IV.
@@ -715,7 +751,7 @@ Fix:
 
 The following should be done before considering this review complete:
 
-- Run Maven tests.
+- ~~Run Maven tests.~~ ✅ (11/11 passing)
 - Run Gradle/mobile tests.
 - Run `npm audit`, Maven/Gradle dependency audits, and OSV or OWASP Dependency-Check.
 - Run secret scanning with gitleaks/trufflehog.
@@ -727,13 +763,15 @@ The following should be done before considering this review complete:
 
 ## Recommended Fix Order
 
+Items marked ✅ are done. Remaining priority:
+
 1. Remove refresh tokens from web JSON responses.
 2. Stop Android plaintext vault persistence; disable backup; disable global cleartext.
 3. Fix unknown-user login timing/rate-limit behavior.
 4. Narrow `/api/v1/auth/**` authorization and add endpoint tests.
-5. Remove `Thread.sleep` DoS path from 2FA enable.
-6. Add per-challenge 2FA attempt limits.
+5. ✅ ~~Remove `Thread.sleep` DoS path from 2FA enable.~~
+6. ✅ ~~Add per-challenge 2FA attempt limits.~~
 7. Fix extension token/key storage.
-8. Add trusted proxy handling for client IP.
+8. ✅ ~~Add trusted proxy handling for client IP.~~
 9. Enforce TLS and pin mobile production certificates.
 10. Run dependency/security audits and upgrade stale dependencies.

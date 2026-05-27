@@ -21,7 +21,7 @@ class RefreshTokenHashTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        authService = new AuthService(null, null, null, null, null, null, null, null, null);
+        authService = new AuthService(null, null, null, null, null, null, null, null, null, null, null);
         hashTokenMethod = AuthService.class.getDeclaredMethod("hashToken", String.class);
         hashTokenMethod.setAccessible(true);
     }
@@ -67,7 +67,7 @@ class RefreshTokenHashTest {
         String hash = (String) hashTokenMethod.invoke(authService, token);
 
         MessageDigest md = MessageDigest.getInstance("SHA-256");
-        String expectedHash = HexFormat.of().formatHex(md.digest(token.getBytes()));
+        String expectedHash = HexFormat.of().formatHex(md.digest(token.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
 
         assertEquals(expectedHash, hash, "hashToken must match standard SHA-256");
     }

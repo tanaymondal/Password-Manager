@@ -6,7 +6,9 @@ import com.securevault.dto.VaultEntryRequest;
 import com.securevault.dto.VaultEntryResponse;
 import com.securevault.service.AuditService;
 import com.securevault.service.VaultService;
+import com.securevault.util.ClientIpResolver;
 import com.securevault.util.UserUtils;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,28 +20,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
 
-/**
- * REST controller for vault (password entry) management.
- *
- * This controller handles CRUD operations on encrypted vault entries.
- * It implements ZERO-KNOWLEDGE storage - the server never processes
- * or stores plaintext vault data.
- *
- * SECURITY:
- * - All endpoints require JWT authentication
- * - Users can only access their own vault entries
- * - Entry ownership is verified on every operation
- *
- * DATA FLOW:
- * - Client encrypts vault data using AES-256-GCM with vault key
- * - Client sends encryptedData (ciphertext) and iv to server
- * - Server stores these as opaque blobs
- * - Server never has access to plaintext (title, username, password, etc.)
- * - Client decrypts on retrieval using vault key
- *
- * @see VaultService for business logic
- * @see com.securevault.entity.VaultEntry for entity definition
- */
 @Slf4j
 @RestController
 @RequestMapping("/api/v1/vault")
@@ -48,6 +28,7 @@ public class VaultController {
 
     private final VaultService vaultService;
     private final AuditService auditService;
+    private final ClientIpResolver clientIpResolver;
 
     /**
      * Creates a new vault entry.
@@ -62,11 +43,13 @@ public class VaultController {
     @PostMapping
     public ResponseEntity<ApiResponse<VaultEntryResponse>> createEntry(
             @AuthenticationPrincipal UserDetails userDetails,
-            @Valid @RequestBody VaultEntryRequest request) {
+            @Valid @RequestBody VaultEntryRequest request,
+            HttpServletRequest httpRequest) {
         UUID userId = getUserId(userDetails);
         log.debug("Creating vault entry for user: {}", userId);
         VaultEntryResponse response = vaultService.createEntry(userId, request);
-        auditService.logVaultAccess(userId, "CREATE", null, null);
+        auditService.logVaultAccess(userId, "CREATE", clientIpResolver.getClientIp(httpRequest),
+                httpRequest.getHeader("User-Agent"));
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Entry created successfully", response));
     }
@@ -101,11 +84,13 @@ public class VaultController {
     @GetMapping("/{entryId}")
     public ResponseEntity<ApiResponse<VaultEntryResponse>> getEntry(
             @AuthenticationPrincipal UserDetails userDetails,
-            @PathVariable String entryId) {
+            @PathVariable String entryId,
+            HttpServletRequest httpRequest) {
         UUID userId = getUserId(userDetails);
         log.debug("Fetching vault entry: {} for user: {}", entryId, userId);
         VaultEntryResponse response = vaultService.getEntry(userId, entryId);
-        auditService.logVaultAccess(userId, "READ", null, null);
+        auditService.logVaultAccess(userId, "READ", clientIpResolver.getClientIp(httpRequest),
+                httpRequest.getHeader("User-Agent"));
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
@@ -124,11 +109,13 @@ public class VaultController {
     public ResponseEntity<ApiResponse<VaultEntryResponse>> updateEntry(
             @AuthenticationPrincipal UserDetails userDetails,
             @PathVariable String entryId,
-            @Valid @RequestBody VaultEntryRequest request) {
+            @Valid @RequestBody VaultEntryRequest request,
+            HttpServletRequest httpRequest) {
         UUID userId = getUserId(userDetails);
         log.debug("Updating vault entry: {} for user: {}", entryId, userId);
         VaultEntryResponse response = vaultService.updateEntry(userId, entryId, request);
-        auditService.logVaultAccess(userId, "UPDATE", null, null);
+        auditService.logVaultAccess(userId, "UPDATE", clientIpResolver.getClientIp(httpRequest),
+                httpRequest.getHeader("User-Agent"));
         return ResponseEntity.ok(ApiResponse.success("Entry updated successfully", response));
     }
 
@@ -144,29 +131,25 @@ public class VaultController {
     @DeleteMapping("/{entryId}")
     public ResponseEntity<ApiResponse<String>> deleteEntry(
             @AuthenticationPrincipal UserDetails userDetails,
-            @PathVariable String entryId) {
+            @PathVariable String entryId,
+            HttpServletRequest httpRequest) {
         UUID userId = getUserId(userDetails);
         log.debug("Deleting vault entry: {} for user: {}", entryId, userId);
         vaultService.deleteEntry(userId, entryId);
-        auditService.logVaultAccess(userId, "DELETE", null, null);
+        auditService.logVaultAccess(userId, "DELETE", clientIpResolver.getClientIp(httpRequest),
+                httpRequest.getHeader("User-Agent"));
         return ResponseEntity.ok(ApiResponse.success("Entry deleted successfully", ""));
     }
 
-    /**
-     * Deletes all vault entries for the authenticated user.
-     *
-     * Used for vault reset. Permanently removes all entries.
-     *
-     * @param userDetails Injected from JWT authentication
-     * @return Success response
-     */
     @DeleteMapping
     public ResponseEntity<ApiResponse<String>> deleteAllEntries(
-            @AuthenticationPrincipal UserDetails userDetails) {
+            @AuthenticationPrincipal UserDetails userDetails,
+            HttpServletRequest httpRequest) {
         UUID userId = getUserId(userDetails);
         log.warn("Deleting all vault entries for user: {}", userId);
         vaultService.deleteAllEntries(userId);
-        auditService.logVaultAccess(userId, "DELETE_ALL", null, null);
+        auditService.logVaultAccess(userId, "DELETE_ALL", clientIpResolver.getClientIp(httpRequest),
+                httpRequest.getHeader("User-Agent"));
         return ResponseEntity.ok(ApiResponse.success("All entries deleted successfully", ""));
     }
 

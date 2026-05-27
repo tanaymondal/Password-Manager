@@ -78,7 +78,7 @@ public class BreachCheckService {
     private String sha1Hex(String input) {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-1");
-            byte[] hash = md.digest(input.getBytes());
+            byte[] hash = md.digest(input.getBytes(java.nio.charset.StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(hash);
         } catch (NoSuchAlgorithmException e) {
             throw new RuntimeException("SHA-1 not available", e);

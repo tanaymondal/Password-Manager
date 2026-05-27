@@ -39,21 +39,16 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class VaultService {
 
+    private static final int MAX_ENTRIES_PER_USER = 10_000;
+
     private final VaultEntryRepository vaultEntryRepository;
 
-    /**
-     * Creates a new vault entry for a user.
-     *
-     * The entry contains encrypted data that the server cannot decrypt.
-     * Only the IV (initialization vector) and ciphertext are stored.
-     *
-     * @param userId UUID of the user creating the entry
-     * @param request Contains encryptedData and iv from client-side encryption
-     * @return VaultEntryResponse with the created entry's metadata and ID
-     * @throws IllegalArgumentException if data is invalid
-     */
     @Transactional
     public VaultEntryResponse createEntry(UUID userId, VaultEntryRequest request) {
+        long count = vaultEntryRepository.countByUserId(userId);
+        if (count >= MAX_ENTRIES_PER_USER) {
+            throw new IllegalArgumentException("Vault entry limit reached (" + MAX_ENTRIES_PER_USER + " entries)");
+        }
         VaultEntry entry = new VaultEntry();
         entry.setUserId(userId);
         entry.setEncryptedData(request.getEncryptedData());

@@ -8,9 +8,11 @@ import com.securevault.dto.TwoFactorLoginResponse;
 import com.securevault.entity.PasswordHistory;
 import com.securevault.entity.RefreshToken;
 import com.securevault.entity.User;
+import com.securevault.repository.AuditLogRepository;
 import com.securevault.repository.PasswordHistoryRepository;
 import com.securevault.repository.RefreshTokenRepository;
 import com.securevault.repository.UserRepository;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import com.securevault.security.JwtTokenProvider;
 import com.securevault.security.LoginRateLimiter;
 import com.securevault.security.PendingLoginChallengeStore;
@@ -53,6 +55,8 @@ public class AuthService {
     private final TwoFactorAuthService twoFactorAuthService;
     private final PendingLoginChallengeStore pendingLoginChallengeStore;
     private final AuditService auditService;
+    private final AuditLogRepository auditLogRepository;
+    private final StringRedisTemplate redisTemplate;
 
     @Value("${app.jwt.refresh-expiration}")
     private long refreshTokenExpirationMs;
@@ -170,6 +174,7 @@ public class AuthService {
         }
 
         if (!twoFactorAuthService.verifyCode(user.getId(), code)) {
+            pendingLoginChallengeStore.recordFailedAttempt(challengeId);
             loginRateLimiter.recordFailure(clientIp);
             loginRateLimiter.recordFailure(email);
             handleFailedLogin(user, clientIp, userAgent);
@@ -270,7 +275,7 @@ public class AuthService {
         user.setPasswordSalt(newSalt);
         user.setEncryptionSalt(newEncryptionSalt);
         user.setWrappedVaultKey(newWrappedVaultKey);
-        user.setEncryptionVersion(2);
+        user.setEncryptionVersion(com.securevault.config.EncryptionConstants.CURRENT_ENCRYPTION_VERSION);
         user.setPasswordUpdatedAt(LocalDateTime.now());
         user.setFailedLoginAttempts(0);
         user.setLockedUntil(null);
@@ -281,6 +286,24 @@ public class AuthService {
 
         log.info("Password changed for user: {}", user.getEmail());
         return generateChangePasswordResponse(user, null);
+    }
+
+    @Transactional
+    public void deleteAccount(UUID userId, String currentAuthHash) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BadCredentialsException("User not found"));
+
+        if (!passwordService.constantTimeEquals(serverSideHash(currentAuthHash, user.getPasswordSalt()), user.getPasswordHash())) {
+            throw new BadCredentialsException("Invalid credentials");
+        }
+
+        redisTemplate.delete("login:fail:" + user.getEmail());
+        redisTemplate.delete("login:fail:" + user.getId());
+
+        auditLogRepository.deleteByUserId(userId);
+        userRepository.delete(user);
+
+        log.info("Account deleted for user: {}", user.getEmail());
     }
 
     private void checkPasswordHistory(User user, String newAuthHash) {
@@ -353,7 +376,7 @@ public class AuthService {
                 user.getEmail(),
                 user.getEncryptionSalt(),
                 user.getWrappedVaultKey(),
-                user.getEncryptionVersion() != null ? user.getEncryptionVersion() : 2
+                user.getEncryptionVersion() != null ? user.getEncryptionVersion() : com.securevault.config.EncryptionConstants.CURRENT_ENCRYPTION_VERSION
         );
     }
 
@@ -375,7 +398,7 @@ public class AuthService {
                 user.getId().toString(),
                 user.getEmail(),
                 user.getWrappedVaultKey(),
-                user.getEncryptionVersion() != null ? user.getEncryptionVersion() : 2
+                user.getEncryptionVersion() != null ? user.getEncryptionVersion() : com.securevault.config.EncryptionConstants.CURRENT_ENCRYPTION_VERSION
         );
     }
 
@@ -386,7 +409,7 @@ public class AuthService {
     private String hashToken(String token) {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
-            byte[] hash = md.digest(token.getBytes());
+            byte[] hash = md.digest(token.getBytes(java.nio.charset.StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(hash);
         } catch (NoSuchAlgorithmException e) {
             throw new RuntimeException("SHA-256 not available", e);

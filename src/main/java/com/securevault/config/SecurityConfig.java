@@ -31,6 +31,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> {
                     auth.requestMatchers("/api/v1/auth/**").permitAll();
                     auth.requestMatchers("/api/v1/health").permitAll();
+                    auth.requestMatchers("/swagger-ui/**", "/v3/api-docs/**").denyAll();
                     auth.anyRequest().authenticated();
                 })
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)

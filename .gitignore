@@ -58,3 +58,6 @@ target/
 # Logs
 logs/
 server.log
+dump.rdb
+.antigravitycli/
+.opencode/

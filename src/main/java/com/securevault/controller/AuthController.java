@@ -3,6 +3,7 @@ package com.securevault.controller;
 import com.securevault.dto.*;
 import com.securevault.service.AuditService;
 import com.securevault.service.AuthService;
+import com.securevault.util.ClientIpResolver;
 import com.securevault.util.UserUtils;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
@@ -11,7 +12,6 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -26,28 +26,32 @@ import java.util.UUID;
 @Slf4j
 @RestController
 @RequestMapping("/api/v1/auth")
-@RequiredArgsConstructor
 public class AuthController {
 
     private final AuthService authService;
     private final AuditService auditService;
+    private final ClientIpResolver clientIpResolver;
 
     @Value("${app.jwt.refresh-expiration}")
     private long refreshTokenExpirationMs;
+
+    public AuthController(AuthService authService, AuditService auditService,
+                          ClientIpResolver clientIpResolver) {
+        this.authService = authService;
+        this.auditService = auditService;
+        this.clientIpResolver = clientIpResolver;
+    }
 
     @PostMapping("/register")
     public ResponseEntity<ApiResponse<AuthResponse>> register(
             @Valid @RequestBody RegisterRequest request,
             HttpServletRequest httpRequest,
             HttpServletResponse httpResponse) {
-        log.info("Registration attempt for email: {}", request.getEmail());
-        if (request.getDeviceId() == null) {
-            request.setDeviceId(UUID.randomUUID().toString());
-        }
+        log.info("Registering user: {}", request.getEmail());
         AuthResponse response = authService.register(request);
         setRefreshTokenCookie(httpRequest, httpResponse, response.getRefreshToken());
         log.info("User registered successfully: {}", request.getEmail());
-        String clientIp = getClientIp(httpRequest);
+        String clientIp = clientIpResolver.getClientIp(httpRequest);
         auditService.logAction(
                 UUID.fromString(response.getUserId()),
                 "REGISTER",
@@ -65,7 +69,7 @@ public class AuthController {
             HttpServletRequest httpRequest,
             HttpServletResponse httpResponse) {
         log.info("Login attempt for email: {}", request.getEmail());
-        String clientIp = getClientIp(httpRequest);
+        String clientIp = clientIpResolver.getClientIp(httpRequest);
         String userAgent = httpRequest.getHeader("User-Agent");
         TwoFactorLoginResponse response = authService.login(request, clientIp, userAgent);
         if (response.isTwoFactorRequired()) {
@@ -88,7 +92,7 @@ public class AuthController {
             HttpServletRequest httpRequest,
             HttpServletResponse httpResponse) {
         log.info("2FA verification attempt for email: {}", request.getEmail());
-        String clientIp = getClientIp(httpRequest);
+        String clientIp = clientIpResolver.getClientIp(httpRequest);
         String userAgent = httpRequest.getHeader("User-Agent");
         AuthResponse response = authService.verifyTwoFactorLogin(request.getEmail(), request.getChallengeId(), request.getCode(), clientIp, userAgent);
         setRefreshTokenCookie(httpRequest, httpResponse, response.getRefreshToken());
@@ -132,7 +136,7 @@ public class AuthController {
         if (userDetails != null) {
             UUID userId = UserUtils.getUserId(userDetails);
             log.info("User logged out: {}", userId);
-            auditService.logLogout(userId, httpRequest.getRemoteAddr(), httpRequest.getHeader("User-Agent"));
+            auditService.logLogout(userId, clientIpResolver.getClientIp(httpRequest), httpRequest.getHeader("User-Agent"));
             authService.logout(userId);
         } else {
             String refreshToken = extractRefreshToken(httpRequest);
@@ -165,11 +169,22 @@ public class AuthController {
         auditService.logAction(
                 userId,
                 "PASSWORD_CHANGE",
-                httpRequest.getRemoteAddr(),
+                clientIpResolver.getClientIp(httpRequest),
                 httpRequest.getHeader("User-Agent"),
                 null
         );
         return ResponseEntity.ok(ApiResponse.success("Password changed successfully", response));
+    }
+
+    @DeleteMapping("/account")
+    public ResponseEntity<ApiResponse<String>> deleteAccount(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @Valid @RequestBody DeleteAccountRequest request) {
+        UUID userId = UserUtils.getUserId(userDetails);
+        log.info("Account deletion request for user: {}", userId);
+        authService.deleteAccount(userId, request.getCurrentAuthHash());
+        log.info("Account deleted: {}", userId);
+        return ResponseEntity.ok(ApiResponse.success("Account deleted successfully", ""));
     }
 
     private void setRefreshTokenCookie(HttpServletRequest request, HttpServletResponse response, String refreshToken) {
@@ -202,18 +217,6 @@ public class AuthController {
             }
         }
         return null;
-    }
-
-    private String getClientIp(HttpServletRequest request) {
-        String xff = request.getHeader("X-Forwarded-For");
-        if (xff != null && !xff.isBlank()) {
-            return xff.split(",")[0].trim();
-        }
-        String xRealIp = request.getHeader("X-Real-IP");
-        if (xRealIp != null && !xRealIp.isBlank()) {
-            return xRealIp.trim();
-        }
-        return request.getRemoteAddr();
     }
 
 }

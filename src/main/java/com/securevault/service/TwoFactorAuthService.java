@@ -10,17 +10,12 @@ import dev.samstevens.totp.code.HashingAlgorithm;
 import dev.samstevens.totp.secret.DefaultSecretGenerator;
 import dev.samstevens.totp.secret.SecretGenerator;
 import dev.samstevens.totp.time.SystemTimeProvider;
-import jakarta.annotation.PostConstruct;
-import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
-import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 @Service
@@ -28,31 +23,14 @@ import java.util.concurrent.TimeUnit;
 public class TwoFactorAuthService {
 
     private static final long PENDING_SETUP_TTL_SECONDS = 600;
+    private static final String KEY_PREFIX = "2fa_setup:";
 
     private final UserRepository userRepository;
+    private final StringRedisTemplate redisTemplate;
     private final SecretGenerator secretGenerator = new DefaultSecretGenerator();
     private final SystemTimeProvider timeProvider = new SystemTimeProvider();
     private final DefaultCodeGenerator codeGenerator = new DefaultCodeGenerator(HashingAlgorithm.SHA256, 6);
     private final CodeVerifier codeVerifier = new DefaultCodeVerifier(codeGenerator, timeProvider);
-
-    private final Map<UUID, PendingSetup> pendingSetups = new ConcurrentHashMap<>();
-    private final ScheduledExecutorService cleanupScheduler = Executors.newSingleThreadScheduledExecutor();
-
-    @PostConstruct
-    public void init() {
-        cleanupScheduler.scheduleAtFixedRate(this::evictExpired, 60, 60, TimeUnit.SECONDS);
-    }
-
-    @PreDestroy
-    public void destroy() {
-        cleanupScheduler.shutdownNow();
-    }
-
-    private void evictExpired() {
-        Instant now = Instant.now();
-        pendingSetups.entrySet().removeIf(entry ->
-            now.isAfter(entry.getValue().createdAt().plusSeconds(PENDING_SETUP_TTL_SECONDS)));
-    }
 
     public TwoFactorSetupResponse generateSetupSecret(UUID userId) {
         User user = userRepository.findById(userId)
@@ -63,7 +41,10 @@ public class TwoFactorAuthService {
         }
 
         String secret = secretGenerator.generate();
-        pendingSetups.put(userId, new PendingSetup(secret, Instant.now()));
+        String key = KEY_PREFIX + userId;
+        redisTemplate.opsForHash().put(key, "secret", secret);
+        redisTemplate.opsForHash().put(key, "createdAt", String.valueOf(Instant.now().toEpochMilli()));
+        redisTemplate.expire(key, PENDING_SETUP_TTL_SECONDS, TimeUnit.SECONDS);
 
         String qrCodeUrl = "otpauth://totp/SecureVault:" + user.getEmail() +
                 "?secret=" + secret +
@@ -88,30 +69,26 @@ public class TwoFactorAuthService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
 
-        PendingSetup pending = pendingSetups.get(userId);
-        if (pending == null) {
+        String key = KEY_PREFIX + userId;
+        String pendingSecret = (String) redisTemplate.opsForHash().get(key, "secret");
+        if (pendingSecret == null) {
             throw new IllegalArgumentException("2FA setup not started. Call generateSetupSecret first.");
         }
 
-        if (!codeVerifier.isValidCode(pending.secret(), code)) {
+        if (!codeVerifier.isValidCode(pendingSecret, code)) {
             throw new IllegalArgumentException("Invalid verification code");
         }
 
         if (secondCode != null && !secondCode.isEmpty() && !secondCode.equals(code)) {
-            try {
-                Thread.sleep(30000);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-            if (!codeVerifier.isValidCode(pending.secret(), secondCode)) {
+            if (!codeVerifier.isValidCode(pendingSecret, secondCode)) {
                 throw new IllegalArgumentException("Invalid second verification code");
             }
         }
 
-        user.setTwoFactorSecret(pending.secret());
+        user.setTwoFactorSecret(pendingSecret);
         user.setTwoFactorEnabled(true);
         userRepository.save(user);
-        pendingSetups.remove(userId);
+        redisTemplate.delete(key);
     }
 
     public void disable2FA(UUID userId, String code) {
@@ -136,6 +113,4 @@ public class TwoFactorAuthService {
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
         return user.getTwoFactorEnabled();
     }
-
-    private record PendingSetup(String secret, Instant createdAt) {}
 }

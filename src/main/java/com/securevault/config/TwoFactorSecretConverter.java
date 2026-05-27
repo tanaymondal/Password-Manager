@@ -6,10 +6,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.Cipher;
-import javax.crypto.SecretKey;
-import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.GCMParameterSpec;
-import javax.crypto.spec.PBEKeySpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.security.SecureRandom;
 import java.util.Arrays;
@@ -22,24 +19,15 @@ public class TwoFactorSecretConverter implements AttributeConverter<String, Stri
     private static final String ALGORITHM = "AES/GCM/NoPadding";
     private static final int GCM_IV_LENGTH = 12;
     private static final int GCM_TAG_LENGTH = 128;
-    private static final int PBKDF2_ITERATIONS = 600_000;
 
     private final SecretKeySpec secretKey;
 
     public TwoFactorSecretConverter(@Value("${app.encryption.key}") String encryptionKey) {
-        try {
-            PBEKeySpec spec = new PBEKeySpec(
-                encryptionKey.toCharArray(),
-                "2fa-key-derivation".getBytes(java.nio.charset.StandardCharsets.UTF_8),
-                PBKDF2_ITERATIONS,
-                256
-            );
-            SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
-            byte[] key = factory.generateSecret(spec).getEncoded();
-            this.secretKey = new SecretKeySpec(key, "AES");
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to initialize 2FA secret encryption key", e);
+        byte[] keyBytes = Base64.getDecoder().decode(encryptionKey);
+        if (keyBytes.length != 32) {
+            throw new IllegalArgumentException("Encryption key must be 32 bytes (256-bit) base64-encoded");
         }
+        this.secretKey = new SecretKeySpec(keyBytes, "AES");
     }
 
     @Override
