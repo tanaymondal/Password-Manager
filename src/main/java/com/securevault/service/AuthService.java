@@ -174,7 +174,6 @@ public class AuthService {
         }
 
         if (!twoFactorAuthService.verifyCode(user.getId(), code)) {
-            pendingLoginChallengeStore.recordFailedAttempt(challengeId);
             loginRateLimiter.recordFailure(clientIp);
             loginRateLimiter.recordFailure(email);
             handleFailedLogin(user, clientIp, userAgent);

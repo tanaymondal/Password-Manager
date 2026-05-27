@@ -6,7 +6,6 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
-import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -55,9 +54,8 @@ public class PendingLoginChallengeStore {
             redisTemplate.delete(key);
             throw new BadCredentialsException("Invalid login challenge");
         }
-        String attemptsStr = (String) redisTemplate.opsForHash().get(key, "failedAttempts");
-        int attempts = attemptsStr != null ? Integer.parseInt(attemptsStr) : 0;
-        if (attempts >= MAX_ATTEMPTS_PER_CHALLENGE) {
+        Long attempts = redisTemplate.opsForHash().increment(key, "failedAttempts", 1);
+        if (attempts > MAX_ATTEMPTS_PER_CHALLENGE) {
             log.warn("Login challenge exhausted for user: {}", email);
             redisTemplate.delete(key);
             throw new BadCredentialsException("Too many 2FA attempts. Please re-enter your password.");
@@ -65,11 +63,6 @@ public class PendingLoginChallengeStore {
         String userIdStr = (String) redisTemplate.opsForHash().get(key, "userId");
         String deviceId = (String) redisTemplate.opsForHash().get(key, "deviceId");
         return new ChallengeResult(UUID.fromString(userIdStr), deviceId);
-    }
-
-    public void recordFailedAttempt(String challengeId) {
-        String key = KEY_PREFIX + challengeId;
-        redisTemplate.opsForHash().increment(key, "failedAttempts", 1);
     }
 
     public void consumeChallenge(String challengeId) {
