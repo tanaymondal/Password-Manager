@@ -65,10 +65,13 @@ public class VaultController {
      */
     @GetMapping
     public ResponseEntity<ApiResponse<VaultEntriesResponse>> getAllEntries(
-            @AuthenticationPrincipal UserDetails userDetails) {
+            @AuthenticationPrincipal UserDetails userDetails,
+            HttpServletRequest httpRequest) {
         UUID userId = getUserId(userDetails);
         log.debug("Fetching all vault entries for user: {}", userId);
         VaultEntriesResponse response = vaultService.getAllEntries(userId);
+        auditService.logVaultAccess(userId, "READ_ALL", clientIpResolver.getClientIp(httpRequest),
+                httpRequest.getHeader("User-Agent"));
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 

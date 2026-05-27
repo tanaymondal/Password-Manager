@@ -210,6 +210,16 @@ public class AuthService {
         }
 
         UUID userId = jwtTokenProvider.getUserIdFromRefreshToken(refreshToken);
+
+        String rateLimitKey = "refresh:user:" + userId;
+        Long refreshCount = redisTemplate.opsForValue().increment(rateLimitKey);
+        if (refreshCount != null && refreshCount == 1) {
+            redisTemplate.expire(rateLimitKey, 60, java.util.concurrent.TimeUnit.SECONDS);
+        }
+        if (refreshCount != null && refreshCount > 5) {
+            log.warn("Refresh rate limit exceeded for user: {}", userId);
+            throw new IllegalArgumentException("Too many refresh attempts. Please log in again.");
+        }
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("Invalid refresh token"));
 
@@ -290,16 +300,19 @@ public class AuthService {
     @Transactional
     public void deleteAccount(UUID userId, String currentAuthHash) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new BadCredentialsException("User not found"));
+                .orElseThrow(() -> new BadCredentialsException("Invalid credentials"));
 
         if (!passwordService.constantTimeEquals(serverSideHash(currentAuthHash, user.getPasswordSalt()), user.getPasswordHash())) {
             throw new BadCredentialsException("Invalid credentials");
         }
 
-        redisTemplate.delete("login:fail:" + user.getEmail());
-        redisTemplate.delete("login:fail:" + user.getId());
+        auditService.logAction(userId, "ACCOUNT_DELETED", null, null, null);
 
-        auditLogRepository.deleteByUserId(userId);
+        redisTemplate.delete("login:fail:" + user.getEmail());
+        redisTemplate.opsForValue().set("deleted_user:" + userId, "1",
+                java.time.Duration.ofHours(1));
+
+        refreshTokenRepository.deleteByUserId(userId);
         userRepository.delete(user);
 
         log.info("Account deleted for user: {}", user.getEmail());
