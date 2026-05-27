@@ -22,6 +22,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import javax.crypto.SecretKeyFactory;
@@ -44,7 +45,9 @@ public class AuthService {
     private static final int MAX_FAILED_ATTEMPTS = 5;
     private static final int LOCKOUT_MINUTES = 15;
     private static final int PASSWORD_HISTORY_LIMIT = 10;
-    private static final int PBKDF2_ITERATIONS = 600_000;
+
+    @Value("${app.pbkdf2.iterations}")
+    private int pbkdf2Iterations;
 
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
@@ -57,6 +60,10 @@ public class AuthService {
     private final AuditService auditService;
     private final AuditLogRepository auditLogRepository;
     private final StringRedisTemplate redisTemplate;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    @org.springframework.context.annotation.Lazy
+    private AuthService self;
 
     @Value("${app.jwt.refresh-expiration}")
     private long refreshTokenExpirationMs;
@@ -72,7 +79,17 @@ public class AuthService {
     }
 
     @Transactional
-    public AuthResponse register(RegisterRequest request) {
+    public AuthResponse register(RegisterRequest request, String clientIp) {
+        String rateLimitKey = "register:ip:" + clientIp;
+        Long count = redisTemplate.opsForValue().increment(rateLimitKey);
+        if (count != null && count == 1) {
+            redisTemplate.expire(rateLimitKey, 60, java.util.concurrent.TimeUnit.SECONDS);
+        }
+        if (count != null && count > 3) {
+            log.warn("Register rate limit exceeded for IP: {}", clientIp);
+            throw new RateLimitExceededException("Too many registration attempts. Please try again later.");
+        }
+
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new IllegalArgumentException("Registration failed");
         }
@@ -120,7 +137,7 @@ public class AuthService {
         if (!passwordService.constantTimeEquals(serverSideHash(request.getAuthHash(), user.getPasswordSalt()), user.getPasswordHash())) {
             loginRateLimiter.recordFailure(clientIp);
             loginRateLimiter.recordFailure(email);
-            handleFailedLogin(user, clientIp, userAgent);
+            self.recordFailedChangePasswordAttempt(user.getId(), clientIp, userAgent);
             throw new BadCredentialsException("Invalid email or password");
         }
 
@@ -197,6 +214,18 @@ public class AuthService {
             throw new IllegalArgumentException("Invalid refresh token");
         }
 
+        UUID userId = jwtTokenProvider.getUserIdFromRefreshToken(refreshToken);
+
+        String rateLimitKey = "refresh:user:" + userId;
+        Long refreshCount = redisTemplate.opsForValue().increment(rateLimitKey);
+        if (refreshCount != null && refreshCount == 1) {
+            redisTemplate.expire(rateLimitKey, 60, java.util.concurrent.TimeUnit.SECONDS);
+        }
+        if (refreshCount != null && refreshCount > 5) {
+            log.warn("Refresh rate limit exceeded for user: {}", userId);
+            throw new RateLimitExceededException("Too many refresh attempts. Please log in again.");
+        }
+
         String tokenHash = hashToken(refreshToken);
         RefreshToken storedToken = refreshTokenRepository.findByTokenHash(tokenHash)
                 .orElseThrow(() -> {
@@ -209,17 +238,6 @@ public class AuthService {
             throw new IllegalArgumentException("Refresh token expired");
         }
 
-        UUID userId = jwtTokenProvider.getUserIdFromRefreshToken(refreshToken);
-
-        String rateLimitKey = "refresh:user:" + userId;
-        Long refreshCount = redisTemplate.opsForValue().increment(rateLimitKey);
-        if (refreshCount != null && refreshCount == 1) {
-            redisTemplate.expire(rateLimitKey, 60, java.util.concurrent.TimeUnit.SECONDS);
-        }
-        if (refreshCount != null && refreshCount > 5) {
-            log.warn("Refresh rate limit exceeded for user: {}", userId);
-            throw new IllegalArgumentException("Too many refresh attempts. Please log in again.");
-        }
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("Invalid refresh token"));
 
@@ -256,12 +274,29 @@ public class AuthService {
             String currentAuthHash,
             String newAuthHash,
             String newWrappedVaultKey,
-            String newEncryptionSalt) {
+            String newEncryptionSalt,
+            String clientIp,
+            String userAgent) {
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
 
+        if (user.isLocked()) {
+            log.warn("Account locked for user: {}", user.getEmail());
+            throw new BadCredentialsException("Account is temporarily locked. Please try again later.");
+        }
+
         if (!passwordService.constantTimeEquals(serverSideHash(currentAuthHash, user.getPasswordSalt()), user.getPasswordHash())) {
+            String failKey = "changepw:fail:" + userId;
+            Long failCount = redisTemplate.opsForValue().increment(failKey);
+            if (failCount != null && failCount == 1) {
+                redisTemplate.expire(failKey, 60, java.util.concurrent.TimeUnit.SECONDS);
+            }
+            log.warn("Change-password failure {} for user: {}", failCount, userId);
+            self.recordFailedChangePasswordAttempt(userId, clientIp, userAgent);
+            if (failCount != null && failCount >= MAX_FAILED_ATTEMPTS) {
+                log.warn("Account locked for user: {} due to {} failed change-password attempts", userId, MAX_FAILED_ATTEMPTS);
+            }
             throw new BadCredentialsException("Current auth hash is incorrect");
         }
 
@@ -346,7 +381,7 @@ public class AuthService {
         try {
             String combinedSalt = serverHashSecret + ":" + userSalt;
             byte[] salt = combinedSalt.getBytes(java.nio.charset.StandardCharsets.UTF_8);
-            KeySpec spec = new PBEKeySpec(clientAuthHash.toCharArray(), salt, PBKDF2_ITERATIONS, 256);
+            KeySpec spec = new PBEKeySpec(clientAuthHash.toCharArray(), salt, pbkdf2Iterations, 256);
             SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
             byte[] hash = factory.generateSecret(spec).getEncoded();
             return Base64.getEncoder().encodeToString(hash);
@@ -367,6 +402,14 @@ public class AuthService {
         }
 
         userRepository.save(user);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void recordFailedChangePasswordAttempt(UUID userId, String clientIp, String userAgent) {
+        User user = userRepository.findById(userId).orElse(null);
+        if (user != null) {
+            handleFailedLogin(user, clientIp, userAgent);
+        }
     }
 
     private AuthResponse generateAuthResponse(User user, String deviceId) {

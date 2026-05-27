@@ -1,6 +1,7 @@
 package com.securevault.config;
 
 import com.securevault.dto.ApiResponse;
+import com.securevault.service.RateLimitExceededException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -43,6 +44,18 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.<String>builder()
                         .success(false)
                         .message("Invalid email or password")
+                        .timestamp(java.time.LocalDateTime.now())
+                        .build());
+    }
+
+    @ExceptionHandler(RateLimitExceededException.class)
+    public ResponseEntity<ApiResponse<String>> handleRateLimit(RateLimitExceededException ex) {
+        log.warn("Rate limit exceeded: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header("Retry-After", "60")
+                .body(ApiResponse.<String>builder()
+                        .success(false)
+                        .message(ex.getMessage())
                         .timestamp(java.time.LocalDateTime.now())
                         .build());
     }

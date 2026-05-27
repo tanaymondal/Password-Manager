@@ -1,573 +1,1130 @@
-# SecureVault — Security Fix Plan
+# SecureVault — Consolidated Security Issues
 
-A comprehensive roadmap to make SecureVault a robust, production-grade password manager. Ordered by **risk × user-impact**. Items marked ✅ are already fixed.
+Single source of truth merging `need_to_fix.md`, `claude_findings.md`, `codex_findings.md`, plus issues found during fix sessions. Tagged with source IDs for traceability.
+
+**Legend:**
+- ✅ = Fixed & deployed
+- ❌ = Open
+- ⏳ = In progress
 
 ---
 
 ## Phase 0 — Stop the bleeding (ship-blocking)
 
-These cause **data loss, false security claims, or trivial compromise**. Nothing else ships until fixed.
-
 ### 0.1 Fix encryption-salt rotation that destroys vault data ✅
+[source: need_to_fix 0.1]
 
-**Problem**: `AuthService.changePassword()` used to generate a new `encryptionSalt`, making every existing vault entry permanently undecryptable.
+`AuthService.changePassword()` generated a new `encryptionSalt`, making every existing vault entry permanently undecryptable.
 
-**Fix**: Wrapped Data Encryption Key (DEK) model — vault key is wrapped with KEK derived from password. Password change re-wraps the same vault key with new KEK. Vault entries untouched.
+**Fix**: Wrapped Data Encryption Key (DEK) model — vault key wrapped with KEK derived from password. Password change re-wraps same vault key with new KEK.
 
-**Status**: ✅ Already implemented. `wrappedVaultKey` + KEK model in place.
+**Status**: ✅ Fixed.
 
 ---
 
-### 0.2 Fix 2FA login challenge binding
+### 0.2 Fix 2FA login challenge binding ❌
+[source: need_to_fix 0.2]
+
+`POST /api/v1/auth/verify-2fa` accepts only `{email, code}` and issues full tokens if TOTP is valid. Not bound to password-authenticated login attempt, challenge token, session nonce, device, IP, or expiration. Possession of a current TOTP code is enough to log in as any email with 2FA enabled.
 
 **Files**: `AuthController.java:108-120`, `AuthService.java:193-210`, `TwoFactorVerifyRequest.java:7-12`, `TwoFactorLoginResponse.java:28-33`
 
-`POST /api/v1/auth/verify-2fa` accepts only `{email, code}` and then issues full access/refresh tokens if the TOTP code is valid. It is not bound to a password-authenticated login attempt, challenge token, session nonce, device, IP, or expiration. Possession of a current TOTP code is enough to log in as any email with 2FA enabled.
-
-**Fix**:
-- `POST /auth/login` verifies password first.
-- If 2FA is enabled, return `{twoFactorRequired: true, challengeToken}` only.
-- `challengeToken` must be short-lived, signed, single-purpose, and include user id, issued time, and nonce/jti.
-- `POST /auth/verify-2fa` must require `{challengeToken, code}` and reject email-only verification.
-- Store challenge nonce in Redis and invalidate on success/failure threshold.
-- Rate-limit TOTP attempts per challenge, user, and IP.
+**Status**: ❌ Open.
 
 ---
 
-### 0.3 Actually enforce 2FA at login
+### 0.3 Actually enforce 2FA at login ❌
+[source: need_to_fix 0.3, claude H2/H3/H10, codex H2/H12]
 
-**Files**: `AuthService.java:166-174`, `TwoFactorLoginResponse.java:28-33`
+Password login no longer issues full JWT tokens when `twoFactorEnabled=true`, but still returns `encryptionSalt` and `wrappedVaultKey` before 2FA completes — exposing key-wrapping material to anyone with correct password but without second factor. Mobile 2FA flow also broken due to response contract mismatch (mobile parser expects `encryptionSalt` in first step but backend nulls it).
 
-Current password login no longer issues full JWT tokens when `twoFactorEnabled=true`, but it returns `encryptionSalt` and `wrappedVaultKey` before 2FA completes. That exposes key-wrapping material to anyone with the correct password but without the second factor, and it keeps the 2FA flow split from the challenge-binding fix above.
+**Files**: `AuthService.java:166-174`, `TwoFactorLoginResponse.java:28-33`, `SecureVaultApi.kt`, `AuthRepositoryImpl.kt`
 
-**Fix**: During the first login step, return only `twoFactorRequired`, `challengeToken`, and safe display metadata. Return tokens, `encryptionSalt`, and `wrappedVaultKey` only after challenge-bound 2FA verification succeeds. Add backup recovery codes (10 single-use, hashed at rest).
+**Status**: ❌ Open.
 
 ---
 
-### 0.4 TOTP secret stored in plaintext
+### 0.4 TOTP secret stored in plaintext ❌
+[source: need_to_fix 0.4]
+
+`twoFactorSecret` stored unencrypted in `User.java`. DB breach → attacker can generate valid TOTP codes for any user.
 
 **File**: `User.java:80-81`
 
-`twoFactorSecret` stored unencrypted. DB breach → attacker can generate valid TOTP codes for any user.
-
 **Fix**: Encrypt TOTP secret at rest using AES-256-GCM with a server-side key. Decrypt only during code verification.
+
+**Status**: ❌ Open.
 
 ---
 
-### 0.5 Upgrade client-side KDF (mobile)
+### 0.5 Upgrade client-side KDF (mobile) ❌
+[source: need_to_fix 0.5]
 
-**File**: `IosEntryEncryptor.kt` (throws `NotImplementedError`), `AndroidEntryEncryptor.kt:24-49`
+Android already uses Argon2id matching backend. iOS is not implemented at all — throws `NotImplementedError`. No per-user KDF params stored for future upgrades.
 
-Android already uses **Argon2id** (`t=3, m=64MB, p=4`) matching the backend. iOS is not implemented at all — throws `NotImplementedError`. No per-user KDF params stored for future upgrades.
+**Files**: `IosEntryEncryptor.kt`, `AndroidEntryEncryptor.kt:24-49`
 
-**Fix**:
-- Implement iOS KDF — use `argon2kt` (KMP) or iOS `CommonCrypto` PBKDF2 (600k iterations) as stopgap
-- Store `kdf_type`, `kdf_iterations`, `kdf_memory_kb` in `User` entity, return in login response so client uses stored params instead of hardcoded ones
+**Status**: ❌ Open.
+
+---
+
+### 0.6 Android local cache stores vault entries in PLAINTEXT ❌
+[source: claude C5, codex C5]
+
+Room table with plaintext `title, username, password, url, notes` columns. `CachedVaultRepository` writes decrypted entries on every API success. SQLCipher passphrase is stored alongside in `EncryptedSharedPreferences` — both can be exfiltrated together on rooted device or via backup.
+
+**Files**: `VaultEntryEntity.kt`, `CachedVaultRepository.kt`, `DatabaseKeyManager.kt:60`
+
+**Status**: ❌ Open.
+
+---
+
+### 0.7 Plaintext DataStore vault cache ❌
+[source: claude C6, codex C6]
+
+`VaultCache.kt` JSON-serializes full plaintext entries (including passwords) and writes to unencrypted Preferences DataStore. No encryption at rest. Combined with enabled backup, trivially extractable.
+
+**Files**: `VaultCache.kt`, `vault_cache.preferences_pb`
+
+**Status**: ❌ Open (file appears unused but still present).
+
+---
+
+### 0.8 Android `allowBackup="true"` on a password manager ❌
+[source: claude C7, codex C7]
+
+Allows `adb backup` and Google Auto Backup to copy app data including plaintext caches, encrypted preferences, and database. Should be `android:allowBackup="false"` with strict extraction rules.
+
+**File**: `AndroidManifest.xml:9`
+
+**Status**: ❌ Open.
+
+---
+
+### 0.9 Android cleartext traffic permitted globally ❌
+[source: claude C8, codex C8]
+
+`<base-config cleartextTrafficPermitted="true">` applies to every host, not just localhost. Downgrade attacks against production domain succeed silently — leaking tokens and auth hashes on the network.
+
+**File**: `network_security_config.xml`
+
+**Status**: ❌ Open.
 
 ---
 
 ## Phase 1 — Critical hardening
 
 ### 1.1 Hash refresh tokens at rest ✅
-
-**File**: `RefreshToken.java:48-49` (previously)
+[source: need_to_fix 1.1]
 
 Raw JWT stored in DB. DB leak = all sessions hijackable.
 
 **Fix**: Store SHA-256 hash instead. Lookup by hash.
 
-**Status**: ✅ Fixed — `V5` migration, `tokenHash` field, `hashToken()` method in `AuthService`.
+**Status**: ✅ Fixed — `V5` migration, `tokenHash` field, `hashToken()` method.
 
 ---
 
 ### 1.2 Password reuse prevention ✅
+[source: need_to_fix 1.2]
 
-**File**: `AuthService.java:256-262` (previously)
+History check re-hashed with freshly generated salt, making comparison always fail.
 
-History check re-hashed with a freshly generated salt, making comparison always fail. Users could reuse their last password.
-
-**Fix**: Store salt alongside hash in password_history. Re-hash candidate with each entry's original salt before comparing.
+**Fix**: Store salt alongside hash in password_history. Re-hash candidate with each entry's original salt.
 
 **Status**: ✅ Fixed — `V4` migration, `passwordSalt` in `PasswordHistory`, correct comparison.
 
 ---
 
-### 1.3 Per-endpoint, distributed rate limiting + trusted proxy handling
+### 1.3 Per-endpoint distributed rate limiting + trusted proxy ❌
+[source: need_to_fix 1.3, claude H3, codex H3]
 
-**Files**: `LoginRateLimiter.java:41-71`, `RateLimitingFilter.java:21-66`, `AuthController.java:208-214`
+RateLimitingFilter and LoginRateLimiter migrated to Redis, and ClientIpResolver created. But remaining gaps:
+- No per-endpoint granular limits (single 60/min default)
+- `RequestLoggingInterceptor` still uses `request.getRemoteAddr()` instead of `ClientIpResolver` → logs show proxy IP behind nginx
+- `RateLimitingFilter` counts CORS preflight (OPTIONS) requests — attacker exhausts limit with OPTIONS alone
 
-In-memory `ConcurrentHashMap` — all state lost on restart. Single global limit (60/min). Trusts `X-Forwarded-For` without validation — attackers spoof IP to bypass.
+**New issues found**:
+- `RequestLoggingInterceptor.java:29`: not using `ClientIpResolver`
+- `RateLimitingFilter.java:36-59`: OPTIONS counted against rate limit
 
-**Fix**:
-- Move to Redis-backed token buckets
-- Define per-endpoint limits:
-  - `/auth/login`, `/auth/register`, `/auth/refresh`: 5/min per IP **and** per email
-  - `/auth/verify-2fa`: 5/min per challenge token, user, and IP
-  - `/auth/change-password`: 5/min per user
-  - `/vault/**`: 120/min per user
-  - default: 60/min per user
-- Trust `X-Forwarded-For` / `X-Real-IP` only when `RemoteAddr` is a known reverse proxy; otherwise ignore forwarded headers
-- Return `Retry-After` header on 429
+**Status**: ⏳ Partially fixed — Redis migration and ClientIpResolver done. Remaining: per-endpoint granularity, Interceptor IP fix, OPTIONS exclusion.
 
 ---
 
-### 1.4 Failed logins not audit-logged
+### 1.4 Failed logins not audit-logged ✅
+[source: need_to_fix 1.4]
 
-**File**: `AuditService.java:106`, `AuthController.java:88-101`
+`logFailedLogin()` defined but never called. Brute-force attempts leave zero trace.
 
-`logFailedLogin()` is defined but never called anywhere. Failed brute-force attempts leave zero trace.
+**Fix**: Call `auditService.logFailedLogin()` from `AuthService.login()` catch path.
 
-**Fix**: Call `auditService.logFailedLogin()` from `AuthService.login()` catch path before exception propagates.
+**Status**: ✅ Fixed.
 
 ---
 
-### 1.5 Vault audit logs missing IP and User-Agent
+### 1.5 Vault audit logs missing IP and User-Agent ✅
+[source: need_to_fix 1.5, codex M6]
 
-**File**: `VaultController.java:69,108,131,151,169`
+Every `logVaultAccess()` call passed `null, null` for IP and UA.
 
-Every `logVaultAccess()` call passes `null, null` for IP and User-Agent. All vault CRUD audit entries lack forensic data.
+**Fix**: Pass `httpRequest` via `ClientIpResolver` to all vault audit calls.
 
-**Fix**: Pass `httpRequest.getRemoteAddr()` and `httpRequest.getHeader("User-Agent")` to all vault audit log calls.
+**Status**: ✅ Fixed — including `getAllEntries` which was initially missed.
 
 ---
 
 ### 1.6 Weak JWT secret fallback ✅
+[source: need_to_fix 1.6]
 
-**Files**: `.env:11`, `application.properties:20`, `application-prod.properties:20`
+Default secret `SecureVaultSecretKeyForJWTTokenGeneration2024` not random. Falls back if env var not set.
 
-Default secret `SecureVaultSecretKeyForJWTTokenGeneration2024` is not random. Falls back to this string if env var not set.
+**Fix**: Remove fallback defaults. Validate at startup JWT_SECRET ≥ 32 bytes.
 
-**Fix**: Remove fallback defaults. Validate at startup that `JWT_SECRET` is ≥ 32 bytes. Generate using `openssl rand -base64 32`.
-
-**Status**: ✅ Fixed — fallback removed from both property files. `JwtTokenProvider` now throws `IllegalArgumentException` at startup if `JWT_SECRET` is null or shorter than 32 chars.
+**Status**: ✅ Fixed — fallback removed from property files, startup validation in `JwtTokenProvider`.
 
 ---
 
 ### 1.7 Breach-corpus password validation ✅
+[source: need_to_fix 1.7]
 
-**File**: `PasswordService.java:336-356`
+`calculatePasswordStrength()` used basic scoring. No breach list check.
 
-`calculatePasswordStrength()` uses basic scoring (`Password1!` passes). NIST SP 800-63B requires breach-list checks.
+**Fix**: Integrate HIBP k-anonymity API + offline common-passwords set.
 
-**Fix**: Integrate HaveIBeenPwned k-anonymity API. Reject any password in breach corpus regardless of score. Optionally supplement with zxcvbn for entropy estimation.
-
-**Status**: ✅ Fixed — `BreachCheckService` with HIBP k-anonymity API + offline common-passwords set (~200 entries). Wired into `register()` and `changePassword()`.
-
----
-
-### 1.8 Short access-token TTL + revocation list
-
-**Files**: `JwtTokenProvider.java:68-99`, `JwtAuthenticationFilter.java:65-74`, `AuthService.java:258-262`
-
-Access tokens not revocable. Current TTL 1 hour. No `jti` claim. No blacklist.
-
-**Fix**:
-- Set access token TTL to 15 minutes
-- Add `jti` (token ID) claim
-- On security events (password change, logout-all), push `jti`s to Redis revocation list
-- `JwtAuthenticationFilter` checks list on every request
+**Status**: ✅ Was fixed initially with `BreachCheckService`. Later **removed entirely** — HIBP server-side is inappropriate for zero-knowledge model (server only sees auth hash, not raw password). Breach check now happens client-side only.
 
 ---
 
-### 1.9 Master password lifecycle in mobile memory
+### 1.8 Short access-token TTL + revocation list ⏳
+[source: need_to_fix 1.8, claude M5, codex M4, claude H11, codex H11]
 
-**Files**: `AndroidEntryEncryptor.kt:27-114`, mobile auth view models
+Access tokens: current TTL 1 hour, `jti` exists but no denylist, logout doesn't revoke active tokens, locked user's tokens still work. Refresh tokens: lack `jti`, `email`, `pwdUpdatedAt` claims — missing `jti` prevents token-family tracking from JWT claims alone (though DB-level hash lookup compensates). JWT also lacks `iss`/`aud` validation.
 
-The current Android implementation caches the vault key as a Base64 `String` in `AndroidEntryEncryptor.cachedVaultKey`. Login and unlock flows pass master passwords through immutable Kotlin `String`s in UI/view-model/repository layers. Immutable strings cannot be wiped and may remain in memory after lock/logout.
+**New issue found**: `JwtTokenProvider.java:67-77` — `generateRefreshToken()` only sets `sub`, `iat`, `exp`; no `jti`, `email`, or `pwdUpdatedAt` claims.
 
-**Fix**: Derive KEK at unlock, hold raw key bytes or `SecretKey` only as long as necessary, discard password input immediately, and explicitly zero byte arrays where possible. Auto-lock on background after N minutes. Avoid Base64 strings for cached secrets. Use Android Keystore where possible.
-
----
-
-### 1.10 Browser token and key-material storage
-
-**Files**: `web/src/api/client.ts:20-35`, `web/src/context/AuthContext.tsx:49-58`, `web/src/context/VaultContext.tsx:72-85`
-
-The web app stores access token, refresh token, `encryptionSalt`, and `wrappedVaultKey` in `localStorage`. Any XSS or malicious extension can steal long-lived session credentials and key-wrapping material. Even if vault contents remain encrypted, attackers can keep refreshing sessions and run offline guessing against the wrapped vault key.
-
-**Fix**:
-- Store refresh tokens in `HttpOnly; Secure; SameSite=Strict` cookies.
-- Keep access tokens in memory only and use short TTLs.
-- Keep `wrappedVaultKey` out of persistent browser storage where possible; re-fetch after authenticated login or keep only in session memory.
-- Harden CSP and remove inline/script injection surfaces.
-- Add automated XSS/static checks for React rendering paths.
+**Status**: ⏳ Partially fixed — `jti` added to access tokens, deactivated-user denylist added in Redis (`deleted_user:{userId}` checked before DB lookup in `JwtAuthenticationFilter`). Remaining: shorten TTL to 15min, add iss/aud, refresh token jti, active token revocation on logout/lockout.
 
 ---
 
-### 1.11 CAPTCHA + email verification on registration and login
+### 1.9 Master password lifecycle in mobile memory ❌
+[source: need_to_fix 1.9, claude M14, codex M12]
 
-**Problem**: Anyone with API access can register accounts and attempt login without any proof of humanness or email ownership. No bot protection, no verification of email ownership, and unknown devices can log in freely.
+Android caches vault key as Base64 String in `AndroidEntryEncryptor.cachedVaultKey`. Passwords flow through immutable Kotlin Strings — cannot be wiped. No inactivity auto-lock on mobile. Session/vault key material is durable (persists in EncryptedSharedPreferences).
 
-**Proposed flow**:
+**Files**: `AndroidEntryEncryptor.kt:27-114`, `SessionManager.kt`, view models
 
-**Registration:**
-- CAPTCHA check (reCAPTCHA v3 / hCaptcha / Turnstile)
-- Create user as `email_verified = false`
-- Send 6-digit email verification code (Redis, 10min TTL)
-- User must verify code → account activated
-
-**Login (known device — `deviceId` exists in `devices` table for user):**
-- CAPTCHA check
-- Proceed with normal login (no email verification)
-
-**Login (unknown device — `deviceId` not found for user):**
-- CAPTCHA check
-- Send 6-digit email verification code
-- User must verify code before login completes
-
-**Files to create/modify:**
-- `EmailService.java` — SMTP email sending (JavaMailSender)
-- `CaptchaService.java` — CAPTCHA token validation
-- `User.java` — add `email_verified` boolean column
-- `AuthController.java` / `AuthService.java` — add verification steps to register and login flows
-- `application.properties` / `application-prod.properties` — SMTP + CAPTCHA provider config
-- `pom.xml` — add `spring-boot-starter-mail`
-
-**Status**: 🔲 Not started
+**Status**: ❌ Open.
 
 ---
 
-### 1.12 `token.getBytes()` without explicit charset in `hashToken()`
+### 1.10 Browser token and key-material storage ❌
+[source: need_to_fix 1.10, claude C1, codex C1, claude H5, codex H5]
 
-**Files**: `JwtTokenProvider.java` or wherever `hashToken()` is defined
+Web app stores tokens and vault key material in browser memory/localStorage. Refresh token returned in JSON body (defeats HttpOnly cookie). Extension persists raw vault key bytes in `chrome.storage.session` — holds raw key bytes outside non-extractable `CryptoKey`, eliminating WebCrypto isolation.
 
-`token.getBytes()` uses the JVM's default charset (`Charset.defaultCharset()`). On systems where the default charset is not UTF-8 (e.g., Windows cp1252), the byte representation of the token will differ, producing a different hash and breaking token validation.
+**Files**: `AuthResponse.java:12`, `ChangePasswordResponse.java:12`, `TwoFactorLoginResponse.java:31`, `AuthService.java:385,408`, `AuthContext.tsx:49-58`, `VaultContext.tsx:72-85`, `background.ts:93-94`, `storage.ts:48-50`
 
-**Fix**: Use `token.getBytes(StandardCharsets.UTF_8)` explicitly.
+**Status**: ❌ Open — refresh token still serialized in JSON body (3 DTOs). Extension key persistence not addressed.
 
-**Status**: ✅ Fixed — `AuthService.java:390` and `BreachCheckService.java:81` now pass `StandardCharsets.UTF_8` explicitly.
+---
+
+### 1.11 CAPTCHA + email verification on registration and login ❌
+[source: need_to_fix 1.11]
+
+No bot protection, no email ownership verification, no new-device confirmation. Anyone with API access can register and attempt login freely.
+
+**Status**: ❌ Not started.
+
+---
+
+### 1.12 `token.getBytes()` without explicit charset ✅
+[source: need_to_fix 1.12]
+
+`token.getBytes()` uses JVM default charset. Non-UTF-8 systems produce different hash.
+
+**Fix**: `token.getBytes(StandardCharsets.UTF_8)`.
+
+**Status**: ✅ Fixed — `AuthService.java:390` and formerly `BreachCheckService.java:81`.
+
+---
+
+### 1.13 Email enumeration via timing ❌
+[source: claude C2, codex C2]
+
+`AuthService.login()` throws `BadCredentialsException` immediately on `findByEmail().orElseThrow()`. Existing-user requests run PBKDF2 + Argon2id; non-existing users skip all crypto. Timing delta (ms vs sub-ms) is trivially measurable. Additionally, `loginRateLimiter.recordFailure()` only called inside password-mismatch branch — attempts against non-existent emails don't increment failure counter.
+
+**File**: `AuthService.java:112-113`
+
+**Status**: ❌ Open.
+
+---
+
+### 1.14 `permitAll` for `/api/v1/auth/**` exposes change-password ❌
+[source: claude C3, codex C3]
+
+Spring Security grants `permitAll` to everything under `/api/v1/auth/**`, including `POST /api/v1/auth/change-password`. Only saved by NPE in null principal handling — one refactor away from auth bypass.
+
+**File**: `SecurityConfig.java:32`
+
+**Status**: ❌ Open.
+
+---
+
+### 1.15 No refresh token family / reuse detection ❌
+[source: claude H4, codex H4]
+
+Token rotation provides no family binding. Reuse of old token throws generic failure but doesn't revoke the entire session family. Attacker who uses stolen token first rolls the session forward; victim silently loses access.
+
+**File**: `AuthService.java:189` (refresh token path)
+
+**Status**: ❌ Open.
+
+---
+
+### 1.16 Auth audit JSON built with manual escaping ❌
+[source: claude H6]
+
+`AuditService.logFailedLogin()` constructs `details` JSON by hand-escaping only `\, ", \n, \r, \t`. Does not escape other control chars (U+0000–U+001F). PostgreSQL JSONB rejects these → audit insert fails → attacker can suppress audit by supplying control chars in email field.
+
+**File**: `AuditService.java:106`
+
+**Status**: ❌ Open.
+
+---
+
+### 1.17 Mobile API client has no certificate pinning ❌
+[source: claude H8, codex H7, need_to_fix 2.11]
+
+Ktor's default `HttpClient` has no SSL pinning. User-installed or compromised public CA can MITM the connection.
+
+**Files**: `SecureVaultApi.kt`, `network_security_config.xml`
+
+**Status**: ❌ Open.
+
+---
+
+### 1.18 Android `FLAG_SECURE` not set ❌
+[source: claude H9, codex H8]
+
+MainActivity does not set `FLAG_SECURE`. Vault content visible in task-switcher preview, screenshots, screen recording, screen casting.
+
+**File**: `MainActivity.kt`
+
+**Status**: ❌ Open.
+
+---
+
+### 1.19 Mobile device IDs use non-cryptographic random ❌
+[source: claude H11, codex H9]
+
+Device ID generation uses `kotlin.random.Random` instead of `SecureRandom`. Predictable/correlatable device identifiers.
+
+**File**: `AuthRepositoryImpl.getOrCreateDeviceId:248`
+
+**Status**: ❌ Open.
+
+---
+
+### 1.20 Credentialed CORS uses origin patterns ❌
+[source: claude H7, codex H10]
+
+`setAllowedOriginPatterns` + `allowCredentials(true)`. Current values are exact but API silently allows wildcards — footgun for future `https://*.tanay.pro` entries.
+
+**File**: `CorsConfig.java:17`
+
+**Status**: ❌ Open.
+
+---
+
+### 1.21 Unencrypted Room DB overload exists ❌
+[source: claude H12]
+
+`SecureVaultDatabase.kt` ships `getInstance(context)` overload that builds Room WITHOUT SQLCipher. Currently unreferenced but one typo away from writing plaintext (C5) to unencrypted SQLite.
+
+**File**: `SecureVaultDatabase.kt:40`
+
+**Status**: ❌ Open.
+
+---
+
+### 1.22 `fallbackToDestructiveMigration()` on cache DB ❌
+[source: claude H13]
+
+On any schema upgrade, entire local cache wiped. A corrupt DB also silently destroys data — offline user with stale state could lose unsynced changes.
+
+**File**: `SecureVaultDatabase.kt:33,47`
+
+**Status**: ❌ Open.
+
+---
+
+### 1.23 `TwoFactorVerifyRequest.email` lacks `@Email` validation 💡NEW
+[source: discovered during fix session]
+
+Has `@NotBlank` but no `@Email` annotation. Both `LoginRequest` and `RegisterRequest` have `@Email`. Non-email strings like `"<script>"` reach the service layer.
+
+**File**: `TwoFactorVerifyRequest.java:8-9`
+
+**Status**: ❌ Open.
+
+---
+
+### 1.24 No device registration rate limit or maximum count 💡NEW
+[source: discovered during fix session]
+
+Authenticated user can register unlimited devices. `DeviceRequest.publicKey` (TEXT column) has no size validation. A malicious user could fill the `devices` table with large blob data.
+
+**File**: `DeviceService.java:63-89`
+
+**Status**: ❌ Open.
+
+---
+
+### 1.25 `verifyTwoFactorLogin` does not check `isBlocked()` before challenge ❌
+[source: claude M10]
+
+`AuthService.verifyTwoFactorLogin()` skips the `isBlocked(clientIp)` / `isBlocked(email)` checks that `login()` performs. First ~5 attempts always go through regardless of IP being blocked.
+
+**File**: `AuthService.java:158`
+
+**Status**: ❌ Open.
 
 ---
 
 ## Phase 2 — Important hardening
 
-### 2.1 Hardcoded production secrets in docker-compose.yaml
-
-**File**: `docker-compose.yaml:24-28,43,57`
+### 2.1 Hardcoded production secrets in docker-compose.yaml ❌
+[source: need_to_fix 2.1]
 
 DB password, JWT secret, Redis password hardcoded in plaintext and committed.
 
-**Fix**: Treat the committed values as compromised. Rotate DB password, Redis password, and JWT secret. Replace with `${VAR}` references. Inject via Dockploy env vars, Docker secrets, or a secret manager. If this repo was pushed/shared, purge secrets from Git history and invalidate old tokens.
+**Status**: ❌ Open.
 
 ---
 
-### 2.2 `.env` not in `.gitignore`
-
-**File**: `.gitignore`
+### 2.2 `.env` not in `.gitignore` ✅
+[source: need_to_fix 2.2]
 
 `.env` is untracked but not ignored. One `git add .` commits all secrets.
 
-**Fix**: Already added to `.gitignore` in this session — verify it's pushed.
+**Status**: ✅ Fixed — added to `.gitignore`.
 
 ---
 
-### 2.3 Empty default DB password
+### 2.3 Empty default DB password ❌
+[source: need_to_fix 2.3]
 
-**Files**: `application.properties:6`, `application-prod.properties:6`
+`spring.datasource.password=${DB_PASSWORD:}` defaults to empty string.
 
-`spring.datasource.password=${DB_PASSWORD:}` — defaults to empty string. Username defaults to `tanay`.
-
-**Fix**: Remove empty default. Add startup check that fails if `DB_PASSWORD` is not set.
-
----
-
-### 2.4 SSL/TLS not enforced
-
-**Files**: `application.properties:34-40`, `application-prod.properties:34-40`, `web/nginx.conf:1-20`, `mobile/app/src/androidMain/kotlin/com/securevault/mobile/di/AppModule.kt:31`, `mobile/app/src/androidMain/res/xml/network_security_config.xml:3-10`
-
-Backend SSL defaults to disabled and `security.require-ssl` defaults to false. The web container listens on port 80 behind a presumed reverse proxy. The Android app hardcodes `http://192.168.1.38:8080` and the network security config permits cleartext traffic globally.
-
-**Fix**:
-- Enforce HTTPS at Traefik/reverse proxy with HTTP-to-HTTPS redirects and HSTS.
-- Set production `REQUIRE_SSL=true` and document the required proxy TLS setup.
-- Move mobile base URL to environment/flavor config.
-- Make Android cleartext traffic debug-only; release builds must use HTTPS.
-- Consider mobile certificate pinning after stable production TLS is in place.
+**Status**: ❌ Open.
 
 ---
 
-### 2.5 Swagger enabled in `.env` defaults
+### 2.4 SSL/TLS not enforced ❌
+[source: need_to_fix 2.4, claude M1, codex M1]
 
-**File**: `.env:18`
+Backend SSL disabled by default. `security.require-ssl` defaults to false. Android app hardcodes `http://192.168.1.38:8080`. No startup assertion that TLS is in front of app in prod.
+
+**Status**: ❌ Open.
+
+---
+
+### 2.5 Swagger enabled in `.env` defaults ✅
+[source: need_to_fix 2.5]
 
 `SWAGGER_ENABLED=true` in checked-in `.env`. Risk of deploying with public API docs.
 
-**Fix**: Set default to `false`. Enable only in dev profiles.
+**Status**: ✅ Fixed — Swagger endpoints also locked down in `SecurityConfig` with `.denyAll()`.
 
 ---
 
-### 2.6 No size and format limits on vault entry payloads
+### 2.6 No size/format limits on vault entry payloads ❌
+[source: need_to_fix 2.6, claude M4, codex M3]
 
-**File**: `VaultEntryRequest.java`
+`VaultEntryRequest.encryptedData` and `iv` have `@NotBlank` but no `@Size`, Base64 validation, or IV length validation. Many other DTOs also lack `@Size` constraints.
 
-`encryptedData` and `iv` have `@NotBlank` but no `@Size` constraint, Base64 validation, or IV length validation. Invalid ciphertext can be stored indefinitely and oversized payloads can be used for storage exhaustion.
+**Files**: `VaultEntryRequest.java`, `RegisterRequest.java`, `ChangePasswordRequest.java`, `DeviceRequest.java`, `RefreshTokenRequest.java`, `Enable2FARequest.java`
 
-**Fix**: Add `@Size(max = ...)` constraints (for example 64KB encrypted data), Base64 validators, exact 12-byte decoded IV validation for AES-GCM, and server request body limits.
-
----
-
-### 2.7 No 2FA enforcement on sensitive operations
-
-**Files**: `TwoFactorController.java:97-105`, `VaultController.java:163-170`, `AuthController.java:183-205`, device controller
-
-Password changes, 2FA disable, device registration/removal, and `DELETE /vault` have no recent re-auth or 2FA re-verification. A stolen bearer token can disable protections or destructively delete vault data.
-
-**Fix**: Require recent re-auth or TOTP re-verification for sensitive operations. Issue a 5-minute elevated/sudo token after successful step-up and require it for destructive/security-sensitive endpoints.
+**Status**: ❌ Open.
 
 ---
 
-### 2.8 JWT signing key rotation
+### 2.7 No 2FA enforcement on sensitive operations ❌
+[source: need_to_fix 2.7, claude M9, codex M9]
+
+Password changes, 2FA disable, device removal, and full vault deletion have no step-up (sudo) requirement. Stolen bearer token can disable protections or destructively delete data.
+
+**Files**: `TwoFactorController.java:97-105`, `VaultController.java:163-170`, `AuthController.java:183-205`, `DeviceController.java`
+
+**Status**: ❌ Open.
+
+---
+
+### 2.8 JWT signing key rotation ❌
+[source: need_to_fix 2.8]
+
+Single static HMAC secret. No rotation, no `kid` header. No JWKS.
 
 **File**: `JwtTokenProvider.java`
 
-Single static HMAC secret. No rotation, no `kid` header.
-
-**Fix**: Add `kid` header. Maintain JWKS with overlapping validity windows. Build rotation runbook. Optionally migrate to RS256/EdDSA for multi-service deployments.
+**Status**: ❌ Open.
 
 ---
 
-### 2.9 Move secrets to secret manager
-
-**Files**: `.env`, docker-compose.yaml
+### 2.9 Move secrets to secret manager ❌
+[source: need_to_fix 2.9]
 
 Secrets in env vars. No rotation, no audit, leak-prone in container inspection.
 
-**Fix**: Integrate AWS Secrets Manager / GCP Secret Manager / HashiCorp Vault. Load at startup via Spring Cloud Config. Rotate JWT secret 90d, DB password 180d.
+**Status**: ❌ Open.
 
 ---
 
-### 2.10 Structured entry encoding (mobile)
+### 2.10 Structured entry encoding (mobile) ❌
+[source: need_to_fix 2.10]
 
-**Files**: `AndroidEntryEncryptor.kt:117-149`, web crypto entry format
+Server stores no encrypted-payload schema/version beyond `VaultEntry.version=1`. Clients parse independently — drift risk.
 
-Older docs mention pipe-delimited payloads. Current Android and web clients encrypt JSON payloads, which is better, but the server stores no explicit encrypted-payload schema/version beyond `VaultEntry.version=1`, and clients parse independently.
-
-**Fix**: Standardize encrypted plaintext schema (`{"v":1,"name":...}`), document it, and keep a clear migration path. Ensure Android, iOS, and web use the same schema and validation expectations.
-
----
-
-### 2.11 Certificate pinning (mobile)
-
-**File**: Mobile network layer
-
-No pinning. Rogue CA or user-installed root CA can MitM TLS.
-
-**Fix**: Pin production server certificate via Ktor `CertificatePinner` (Android) and `URLSession` pinning (iOS). Pin two certs for rotation. Provide kill-switch config endpoint.
+**Status**: ❌ Open.
 
 ---
 
-### 2.12 Android backup and local database hardening
+### 2.11 Certificate pinning (mobile) ❌
+[source: need_to_fix 2.11, claude H8/M15, codex H7]
 
-**Files**: `AndroidManifest.xml:6-10`, `SecureVaultDatabase.kt:24-48`, `DatabaseKeyManager.kt`
+No pinning on Android or iOS. Rogue/user-installed CA can MITM.
 
-`android:allowBackup="true"` is enabled for a vault app. Android Auto Backup or device-transfer paths can copy app data. The encrypted SQLCipher path exists, but `SecureVaultDatabase.getInstance(context)` can create the database without SQLCipher if used accidentally. Destructive migrations are enabled for both encrypted and unencrypted builders.
-
-**Fix**:
-- Set `android:allowBackup="false"` for release builds, or define strict `dataExtractionRules` that exclude vault/session data.
-- Remove or restrict the no-passphrase database builder.
-- Avoid `fallbackToDestructiveMigration()` for production vault data; provide explicit migrations.
-- Add tests that assert SQLCipher is always used in production wiring.
+**Status**: ❌ Open.
 
 ---
 
-### 2.13 TOTP secret lifecycle during setup
+### 2.12 Android backup and local database hardening ❌
+[source: need_to_fix 2.12, claude C7, codex C7]
+
+`allowBackup=true`, destructive migrations enabled, unencrypted DB overload exists.
+
+**Status**: ❌ Open (overlaps with 0.8, 1.21, 1.22).
+
+---
+
+### 2.13 TOTP secret lifecycle during setup ❌
+[source: need_to_fix 2.13]
+
+`GET /2fa/setup` stores TOTP secret before user verifies setup. If user abandons, stale secret remains with `twoFactorEnabled=false`.
 
 **Files**: `TwoFactorAuthService.java:64-77`, `TwoFactorController.java:55-84`
 
-`GET /2fa/setup` immediately stores the newly generated TOTP secret before the user verifies setup. If the user abandons setup, a valid secret remains stored while `twoFactorEnabled=false`. This is not as severe as plaintext storage, but it complicates lifecycle and cleanup.
-
-**Fix**: Store pending setup secrets separately with short TTL, encrypted at rest. Promote the pending secret to active only after code verification. Clear stale pending secrets.
+**Status**: ❌ Open.
 
 ---
 
-### 2.14 Zero-knowledge architecture gap
+### 2.14 Zero-knowledge architecture gap ❌
+[source: need_to_fix 2.14]
 
-**Files**: `AuthService.java:86-122`, `AuthService.java:328-341`, `PasswordService.java:221-277`
+Server receives master password during registration/login and can derive/wrap vault-key material. Common but weaker than true zero-knowledge claims.
 
-The server receives the master password during registration/login and can generate, derive, wrap, and in fallback flows unwrap vault-key material. That is common for many apps but weaker than the project's zero-knowledge claims.
-
-**Fix**: Move vault-key generation and wrapping fully client-side. Keep server authentication separate from vault encryption, ideally using a hardened verifier flow or PAKE-style protocol. Never implement server-side fallback unwrap for vault keys in production.
-
----
-
-### 2.15 Audit log hardening
-
-**File**: `AuditLog.java`, `AuditService.java`
-
-Raw IP stored (GDPR concern). No integrity protection.
-
-**Fix**: Hash IPs with daily-rotating HMAC key. Append-only DB constraint (revoke UPDATE/DELETE on table from app role). Optionally chain entries with `prev_hash` for tamper-evidence. Define retention policy (90d security events, 30d benign).
+**Status**: ❌ Open.
 
 ---
 
-### 2.16 Legacy dead `vaultKeyIv` field on User entity
+### 2.15 Audit log hardening ❌
+[source: need_to_fix 2.15]
 
-**Files**: `User.java` — check for unused `vaultKeyIv` field
+Raw IP stored (GDPR concern). No integrity protection (append-only, hash chaining). Failed login log events have `userId = null` — users can't see account probing in in-app audit history ([claude M7, codex M7]).
 
-A `vaultKeyIv` column exists on the `users` table but is no longer used by the current DEK/wrapped-vault-key model. Dead fields add confusion, increase row size, and may cause silent data assumptions in future refactors.
+**Files**: `AuditLog.java`, `AuditService.java`, `AuditLogRepository.java`
 
-**Fix**: Remove the field from `User.java` entity and add a Flyway migration to drop the column.
-
-**Status**: ✅ Fixed — field removed from `User.java`, `V7__drop_vault_key_iv.sql` migration created.
-
----
-
-### 2.17 Swagger not explicitly locked down in `SecurityConfig`
-
-**Files**: `SecurityConfig.java`, `OpenApiConfig.java`
-
-Swagger endpoints (`/swagger-ui/**`, `/v3/api-docs/**`) are not explicitly restricted in the `SecurityFilterChain`. They inherit the default `permitAll` catch from `/api/v1/auth/**` or may be implicitly accessible. Production exposure leaks API schema.
-
-**Fix**: Add explicit `requestMatchers("/swagger-ui/**", "/v3/api-docs/**").denyAll()` or gate behind an admin role/profile.
-
-**Status**: ✅ Fixed — `SecurityConfig.java:34` now has `.requestMatchers("/swagger-ui/**", "/v3/api-docs/**").denyAll()` before `anyRequest().authenticated()`.
+**Status**: ❌ Open.
 
 ---
 
-### 2.18 `encryptionVersion` hardcoded to `2` in multiple places
+### 2.16 Legacy `vaultKeyIv` field removed ✅
+[source: need_to_fix 2.16]
 
-**Files**: `AuthService.java`, `RegisterRequest.java`, client registration code
+Dead `vaultKeyIv` column on `users` table from previous encryption model.
 
-`encryptionVersion` is set as a literal `2` in the register DTO default, the service layer, and the client. If the version ever needs to change (e.g., breaking algorithm upgrade), all hardcoded values must be found and updated individually — high risk of inconsistency.
-
-**Fix**: Define a single source of truth (e.g., `public static final int CURRENT_ENCRYPTION_VERSION = 2` in a constants class or `EncryptionConfig`). Reference it everywhere.
-
-**Status**: ✅ Fixed — `EncryptionConstants.java` created with `CURRENT_ENCRYPTION_VERSION = 2`. All 3 hardcoded references in `AuthService.java` now use the constant.
+**Status**: ✅ Fixed — field removed from `User.java`, `V7__drop_vault_key_iv.sql` migration.
 
 ---
 
-### 2.19 No account deletion endpoint (GDPR concern)
+### 2.17 Swagger not explicitly locked down in SecurityConfig ✅
+[source: need_to_fix 2.17]
 
-**Files**: All layers — controller, service, repository
+Swagger endpoints inherited default `permitAll` catch.
 
-Users cannot delete their account and associated data. GDPR Article 17 ("Right to erasure") requires that users be able to request deletion of their personal data. Without this endpoint, the application is not compliant for EU users.
+**Status**: ✅ Fixed — `.requestMatchers("/swagger-ui/**", "/v3/api-docs/**").denyAll()` in `SecurityConfig.java:34`.
 
-**Fix**:
-- Add `DELETE /api/v1/auth/account` endpoint
-- Cascade-delete vault entries, devices, refresh tokens, audit logs, password history
-- Require re-authentication (2FA step-up if enabled) before deletion
-- Return 204 No Content on success
-- Consider a soft-delete with a grace period (e.g., 30 days) before hard deletion
+---
 
-**Status**: ✅ Fixed — `DELETE /api/v1/auth/account` endpoint added to `AuthController`. Requires re-authentication (`currentAuthHash`). Cascades deletion via FK constraints + explicit audit log cleanup. Redis keys cleared. Returns 200 with success message.
+### 2.18 `encryptionVersion` hardcoded in multiple places ✅
+[source: need_to_fix 2.18]
+
+`encryptionVersion` set as literal `2` in DTO default, service layer, client. Inconsistent on upgrade.
+
+**Status**: ✅ Fixed — `EncryptionConstants.java` created, all 3 hardcoded references use `CURRENT_ENCRYPTION_VERSION`.
+
+---
+
+### 2.19 No account deletion endpoint (GDPR) ✅
+[source: need_to_fix 2.19]
+
+Users couldn't delete their account and associated data. GDPR Article 17 non-compliant.
+
+**Status**: ✅ Fixed — `DELETE /api/v1/auth/account` endpoint added. Cascading deletion + Redis cleanup. Reordered to audit-log before delete.
+
+---
+
+### 2.20 Sensitive PII logged broadly ❌
+[source: claude M2, codex M2]
+
+Emails, IPs, and user agents logged in auth flows and `RequestLoggingInterceptor`. Log file (`logs/securevault.log`, 10MB × 30 history) contains large amounts of personal data on disk.
+
+**Status**: ❌ Open.
+
+---
+
+### 2.21 CSP allows `'unsafe-inline'` styles ❌
+[source: claude M7, codex M5]
+
+Both backend and nginx include `style-src 'self' 'unsafe-inline'`. CSS injection vector for data exfiltration via background-image URLs. Google Fonts loaded from CDN but CSP only allows `font-src 'self'` — blocked anyway (`index.html:9`).
+
+**Files**: `SecurityHeadersFilter.java:24`, `nginx.conf:11`, `index.html:9`
+
+**Status**: ❌ Open.
+
+---
+
+### 2.22 `Permissions-Policy` missing modern directives ❌
+[source: claude M6]
+
+Blocks camera/mic/geo/payment but not `interest-cohort=()`, `browsing-topics=()`, `attribution-reporting=()`.
+
+**File**: `SecurityHeadersFilter.java:36`
+
+**Status**: ❌ Open.
+
+---
+
+### 2.23 Account lockout counter behavior is awkward ❌
+[source: claude M8, codex M14]
+
+`handleFailedLogin()` increments `failedLoginAttempts` even when already locked. After unlock, next failure starts adding to previous count → only one failed attempt before re-lock. Also, active access tokens still work after account lockout ([claude H11, codex H11]).
+
+**File**: `AuthService.java:311`
+
+**Status**: ❌ Open.
+
+---
+
+### 2.24 HSTS always configured (even in dev) ❌
+[source: claude M9, codex M15]
+
+HSTS with `maxAge=1y, includeSubDomains, preload` configured unconditionally in `SecurityConfig.java:37`. Dev deployment on localhost could pin browsers to HTTPS for a year.
+
+**Status**: ❌ Open.
+
+---
+
+### 2.25 Login rate limit doesn't count unknown-user failures ❌
+[source: claude C2, codex C2]
+
+`loginRateLimiter.recordFailure()` only called in password-mismatch branch. Unknown users never have failures recorded. Combined with email enumeration timing oracle, accounts can be enumerated at high throughput.
+
+**Status**: ❌ Open (overlaps 1.13).
+
+---
+
+### 2.26 Master password held in React/Compose state ❌
+[source: claude M11]
+
+`LoginPage.tsx:48` keeps `data.password` in React Hook Form state until form reset. React DevTools / heap dump exposes it. Same in extension popup (`script.ts:88`).
+
+**Status**: ❌ Open.
+
+---
+
+### 2.27 Mobile biometric unlock stores vault key ❌
+[source: claude M16, codex M13]
+
+Biometric unlock encrypts the raw vault key and stores it locally. No rate-limit on biometric failures. No wipe after repeated failures.
+
+**Files**: `BiometricStorage.kt`, `SettingsViewModel.kt`
+
+**Status**: ❌ Open.
+
+---
+
+### 2.28 Extension content script runs on all pages ❌
+[source: claude L6, codex H6]
+
+`manifest.json:26` injects content script on `http://*/*` and `https://*/*`. Combined with raw vault key bytes in storage, blast radius of compromised extension dependency is entire vault.
+
+**File**: `web/extension/manifest.json:26`
+
+**Status**: ❌ Open.
+
+---
+
+### 2.29 Ktor JSON parser is lenient ❌
+[source: claude M12, codex M10]
+
+`isLenient = true` in `SecureVaultApi.kt`. Accepts non-standard JSON, widens parser surface.
+
+**File**: `SecureVaultApi.create:374`
+
+**Status**: ❌ Open.
+
+---
+
+### 2.30 Mobile uses `!!` non-null assertions on server responses ❌
+[source: claude M13, codex M11]
+
+Many `authResponse.accessToken!!` — malformed server response causes instant NPE crash.
+
+**Files**: `AuthRepositoryImpl.kt:49-55,96-104,134-141`
+
+**Status**: ❌ Open.
+
+---
+
+### 2.31 `CachedVaultRepository.withDao` catches any exception and deletes local DB ❌
+[source: claude M18]
+
+On first exception, the local DB and passphrase are wiped, then operation retried. Transient I/O error → silent cache destruction and forced re-sync of plaintext entries.
+
+**File**: `CachedVaultRepository.kt:60-72`
+
+**Status**: ❌ Open.
+
+---
+
+### 2.32 `TwoFactorVerifyRequest.email` lacks `@Email` 💡NEW
+[source: discovered during fix session]
+
+Only `@NotBlank` — no email format validation. Non-email strings reach service layer.
+
+**File**: `TwoFactorVerifyRequest.java:8-9`
+
+**Status**: ❌ Open.
+
+---
+
+### 2.33 No device count limit per user 💡NEW
+[source: discovered during fix session]
+
+Unlimited device registrations, no `@Size` on `publicKey`. Database resource exhaustion.
+
+**File**: `DeviceService.java:63-89`
+
+**Status**: ❌ Open.
+
+---
+
+### 2.34 `RequestLoggingInterceptor` logs wrong IP behind proxy 💡NEW
+[source: discovered during fix session]
+
+Uses `request.getRemoteAddr()` instead of `ClientIpResolver`. All request logs show Docker network IP, not real client.
+
+**File**: `RequestLoggingInterceptor.java:29`
+
+**Status**: ❌ Open.
+
+---
+
+### 2.35 RateLimitingFilter counts OPTIONS requests 💡NEW
+[source: discovered during fix session]
+
+All requests including CORS preflight count against the 60 req/min per-IP limit. After ~60 OPTIONS, victim's real API calls blocked for remainder of minute.
+
+**File**: `RateLimitingFilter.java:36-59`
+
+**Status**: ❌ Open.
+
+---
+
+### 2.36 Refresh tokens lack `jti`, `email`, `pwdUpdatedAt` claims 💡NEW
+[source: discovered during fix session]
+
+`generateRefreshToken()` only sets `sub`, `iat`, `exp`. No `jti` for token-family tracking, no `email` or `pwdUpdatedAt` binding within the JWT itself. DB-level checks compensate but no second layer of defense.
+
+**File**: `JwtTokenProvider.java:67-77`
+
+**Status**: ❌ Open.
+
+---
+
+### 2.37 Web disable-2FA sends no TOTP code ❌
+[source: claude M8, codex M8]
+
+Backend requires a code to disable 2FA, but web client sends no body. Users may be unable to manage 2FA reliably.
+
+**Files**: `web/src/api/twofa.ts`, `web/src/pages/SettingsPage.tsx`, `TwoFactorController.java`
+
+**Status**: ❌ Open.
 
 ---
 
 ## Phase 3 — Defense in depth
 
-### 3.1 Argon2id parameter tuning
+### 3.1 Argon2id parameter tuning ❌
+[source: need_to_fix 3.1]
 
-Bump to 96MB memory (closer to 1Password's 100MB). Store params per-user for future upgrades. Background re-hash on next login when params change.
+Bump to 96MB memory, store params per-user, background re-hash on next login.
 
----
-
-### 3.2 Optional "secret key" (1Password-style)
-
-128-bit random value generated at signup, never sent to server. Combined with master password for KDF input. Defends against weak master passwords.
+**Status**: ❌ Open.
 
 ---
 
-### 3.3 Security headers + CSP
+### 3.2 Optional "secret key" (1Password-style) ❌
+[source: need_to_fix 3.2]
 
-**Files**: `SecurityHeadersFilter.java:21-37`, `web/nginx.conf:8-12`, `web/index.html:7-9`
+128-bit random value at signup, never sent to server. Combined with master password for KDF input.
 
-Backend and web nginx set CSP and security headers, but policies differ. Backend `script-src 'self'` may break WASM clients if serving the SPA through Spring, while nginx allows `wasm-unsafe-eval`. Web `index.html` loads Google Fonts, but nginx CSP only allows `font-src 'self'` and `style-src 'self' 'unsafe-inline'`, so production may block those external font requests.
-
-**Fix**: Define one production CSP for the actual deployment path. Remove external font dependencies or explicitly allow required origins. Prefer self-hosted fonts. Keep `frame-ancestors 'none'`, `base-uri 'self'`, `form-action 'self'`, and strict `connect-src`.
-
----
-
-### 3.4 Replay protection (sudo mode)
-
-For `/auth/change-password`, `/2fa/disable`, `/vault DELETE all`: require fresh authentication challenge. Issue 5-minute elevated token.
+**Status**: ❌ Open.
 
 ---
 
-### 3.5 Device binding & session management
+### 3.3 Security headers + CSP alignment ❌
+[source: need_to_fix 3.3, claude M7, codex M5]
 
-Wire up existing `Device` entity: register device fingerprint on login, list active sessions, allow revoke-per-device, email notification on new device.
+Backend and nginx CSP differ. Backend `script-src 'self'` may break WASM; nginx allows `wasm-unsafe-eval`. Google Fonts loaded but blocked by `font-src 'self'`.
 
----
-
-### 3.6 Encrypted database backups
-
-`pg_dump` → encrypt with KMS key → store in S3 with object lock. Restore drills quarterly.
+**Status**: ❌ Open.
 
 ---
 
-### 3.7 Dependency & supply chain
+### 3.4 Replay protection (sudo mode) ❌
+[source: need_to_fix 3.4]
 
-Dependabot/Renovate for automated updates. OWASP Dependency-Check in CI (fail on CVSS ≥ 7). Pin Maven Central checksums.
+For sensitive operations: require fresh authentication challenge. Issue 5-minute elevated token.
 
----
-
-### 3.8 Static analysis & secret scanning
-
-Semgrep/CodeQL in CI with security ruleset. Gitleaks as pre-commit hook + CI check.
-
-**Current trigger**: `docker-compose.yaml` already contains committed secrets. Add Gitleaks immediately and fail CI on secret findings.
+**Status**: ❌ Open.
 
 ---
 
-### 3.9 Dependency verification status
+### 3.5 Device binding & session management ❌
+[source: need_to_fix 3.5]
 
-**Current check**: `npm audit --audit-level=moderate` reported `0 vulnerabilities`.
+Wire up existing `Device` entity: register device fingerprint, list sessions, revoke per-device, email notification on new device.
 
-**Fix**: Keep Dependabot/Renovate enabled for npm, Maven, and Gradle. Add OWASP Dependency-Check or osv-scanner in CI. Run audits in CI on every PR.
+**Status**: ❌ Open.
 
 ---
 
-### 3.10 Mobile test/build health
+### 3.6 Encrypted database backups ❌
+[source: need_to_fix 3.6]
 
-**Current check**: `mobile ./gradlew test` fails before tests run because `mobile/app/src/androidUnitTest/kotlin/com/securevault/mobile/data/local/CryptoEngine.kt` has duplicate `getCachedVaultKey()` definitions and unresolved `Json`.
+`pg_dump` → encrypt with KMS key → store in S3 with object lock.
 
-**Fix**: Repair mobile unit-test compilation, then add tests for vault-key cache clearing, encrypted database initialization, cleartext-disabled release config, and Android backup/data extraction rules.
+**Status**: ❌ Open.
+
+---
+
+### 3.7 Dependency & supply chain ❌
+[source: need_to_fix 3.7, claude H13, codex H13]
+
+Spring Boot `3.2.0`, Ktor `2.3.7`, `androidx.security:security-crypto:1.1.0-alpha06`, older mobile deps. No Dependabot/Renovate, no OWASP Dependency-Check in CI.
+
+**Status**: ❌ Open.
+
+---
+
+### 3.8 Static analysis & secret scanning ❌
+[source: need_to_fix 3.8]
+
+No Semgrep/CodeQL security rules, no Gitleaks pre-commit hook.
+
+**Status**: ❌ Open.
+
+---
+
+### 3.9 Dependency verification status ❌
+[source: need_to_fix 3.9]
+
+No automated CI audit of npm, Maven, or Gradle dependencies for vulnerabilities.
+
+**Status**: ❌ Open.
+
+---
+
+### 3.10 Mobile test/build health ❌
+[source: need_to_fix 3.10]
+
+Mobile unit tests fail to compile — duplicate `getCachedVaultKey()` definitions and unresolved `Json` import.
+
+**Status**: ❌ Open.
+
+---
+
+### 3.11 No Play Integrity / App Attest / root detection ❌
+[source: claude L19]
+
+For an Android password manager, app + device integrity attestation is table stakes. Currently nothing.
+
+**Status**: ❌ Open.
+
+---
+
+### 3.12 `server.error.*` not fully locked down ❌
+[source: claude L4, codex L4]
+
+`server.error.include-exception=false`, `server.error.include-stacktrace=never`, `server.error.whitelabel.enabled=false` not set.
+
+**Status**: ❌ Open.
+
+---
+
+### 3.13 Health endpoint reveals DB status ❌
+[source: claude L5, codex L5]
+
+`/api/v1/health` is `permitAll` and returns DB up/down + timestamp. 503 response on DB failure fingerprints outages.
+
+**File**: `HealthController.java`
+
+**Status**: ❌ Open.
+
+---
+
+### 3.14 `InputSanitizer` is unused ❌
+[source: claude L8, codex L7]
+
+Defined but never imported. Dead code creating false confidence.
+
+**File**: `InputSanitizer.java`
+
+**Status**: ❌ Open.
+
+---
+
+### 3.15 `Logout` accepts refresh tokens without auth ❌
+[source: claude L9, codex L8]
+
+Anyone with a stolen refresh token can spam logout to invalidate the victim's session (targeted session DoS).
+
+**File**: `AuthController.logout()`
+
+**Status**: ❌ Open.
+
+---
+
+### 3.16 `AuditLogRepository` exposes global query ❌
+[source: claude L10, codex L9]
+
+`findAllByOrderByCreatedAtDesc(Pageable)` returns all audit logs across all users. Currently unused but footgun for future admin endpoints.
+
+**File**: `AuditLogRepository.java:18`
+
+**Status**: ❌ Open.
+
+---
+
+### 3.17 Refresh rotation not atomic ❌
+[source: claude L11, codex L10]
+
+Old token deleted before new one saved. DB blip in between silently logs user out.
+
+**File**: `AuthService.refreshToken()`
+
+**Status**: ❌ Open.
+
+---
+
+### 3.18 Cookie SameSite set via raw attribute ❌
+[source: claude L14, codex L11]
+
+`Cookie.setAttribute("SameSite", "Strict")` instead of `ResponseCookie.from(...).sameSite("Strict")`. Works on modern Spring Boot but fragile.
+
+**File**: `AuthController.java:182`
+
+**Status**: ❌ Open.
+
+---
+
+### 3.19 iOS not implemented ❌
+[source: claude L16, codex L12]
+
+`IosEntryEncryptor.kt` and `CryptoEngine.ios.kt` throw `NotImplementedError` on every method.
+
+**Status**: ❌ Open.
+
+---
+
+### 3.20 Android release minification disabled ❌
+[source: codex L13]
+
+`isMinifyEnabled = false` for release. Easier reverse engineering/tampering.
+
+**Files**: `mobile/app/build.gradle.kts`
+
+**Status**: ❌ Open.
+
+---
+
+### 3.21 `local.properties` tracked in git ❌
+[source: codex L14]
+
+Contains local path/user info. Should be removed from git and added to `.gitignore`.
+
+**Status**: ❌ Open.
+
+---
+
+### 3.22 Postman collection stale/misleading ❌
+[source: codex L15]
+
+Uses plaintext `password` fields that no longer match auth-hash flow.
+
+**File**: `SecureVault.postman_collection.json`
+
+**Status**: ❌ Open.
+
+---
+
+### 3.23 Password generator has tiny modulo bias ❌
+[source: claude L3, codex L3]
+
+`Math.floor(crypto.getRandomValues(...)[0] / (0xffffffff + 1) * charset.length)` is biased when charset size doesn't divide 2^32.
+
+**File**: `web/src/crypto/generator.ts:17`
+
+**Status**: ❌ Open.
+
+---
+
+### 3.24 `Cache-Control: no-store` on all backend responses ❌
+[source: claude M3]
+
+Set in `SecurityHeadersFilter.java:39`. Verified no proxy chain override needed.
+
+**Status**: ❌ Verify in production.
+
+---
+
+### 3.25 `VaultCache.getLastSyncTime()` hangs forever ❌
+[source: claude M17]
+
+`data.collect { ... }` inside `suspend fun` is unbounded. Returns only when flow completes — which it never does.
+
+**Status**: ❌ Open.
+
+---
+
+### 3.26 `VaultEntryDao.searchEntries` uses leading `%` ❌
+[source: claude L20]
+
+Leading `%` prevents index use. Performance footgun on large vaults.
+
+**File**: `VaultEntryDao`
+
+**Status**: ❌ Open.
+
+---
+
+### 3.27 Flyway `baseline-on-migrate=true` ❌
+[source: claude L2, codex L2]
+
+Operational risk: partially initialized databases may silently skip migrations.
+
+**Status**: ❌ Open.
+
+---
+
+### 3.28 Verbose backend error surfacing ❌
+[source: claude L17]
+
+Many `Result.Error(it.message ...)` paths surface backend error messages in mobile UI.
+
+**Status**: ❌ Open.
+
+---
+
+### 3.29 Ktor JSON pretty-print enabled ❌
+[source: claude L18]
+
+`Json { prettyPrint = true }` sends pretty-printed JSON on every request. Tiny bytes wasted.
+
+**File**: `SecureVaultApi.create:373`
+
+**Status**: ❌ Open.
 
 ---
 
 ## Phase 4 — Operational maturity (ongoing)
 
-| Item | Why |
-|------|-----|
-| Third-party penetration test | Independent verification before GA |
-| Bug bounty program (HackerOne) | Continuous external scrutiny |
-| SOC 2 Type II roadmap | Required by enterprise customers |
-| Incident response runbook | Pre-defined steps for token leak, DB compromise |
-| Security training for contributors | Most vulns come from well-meaning code |
-| Threat model in repo | Forces explicit reasoning about new features |
-| Quarterly key-rotation drills | Verify rotation works before you need it |
-| Monitoring & alerting | Failed logins, lockouts, 429s, JWT failures |
-| Signed mobile releases | Prevents APK swap attacks |
-| Reproducible mobile builds | Users verify binary matches source |
-| Secret rotation after leaks | Rotate DB/Redis/JWT secrets immediately after any repo exposure |
-| Release security checklist | Verify TLS, mobile cleartext disabled, backup disabled, Swagger disabled |
+| Item | Why | Status |
+|------|-----|--------|
+| Third-party penetration test | Independent verification before GA | ❌ |
+| Bug bounty program (HackerOne) | Continuous external scrutiny | ❌ |
+| SOC 2 Type II roadmap | Required by enterprise customers | ❌ |
+| Incident response runbook | Pre-defined steps for token leak, DB compromise | ❌ |
+| Security training for contributors | Most vulns come from well-meaning code | ❌ |
+| Threat model in repo | Forces explicit reasoning about new features | ❌ |
+| Quarterly key-rotation drills | Verify rotation works before you need it | ❌ |
+| Monitoring & alerting | Failed logins, lockouts, 429s, JWT failures | ❌ |
+| Signed mobile releases | Prevents APK swap attacks | ❌ |
+| Reproducible mobile builds | Users verify binary matches source | ❌ |
+| Secret rotation after leaks | Rotate DB/Redis/JWT secrets after any repo exposure | ❌ |
+| Release security checklist | Verify TLS, mobile cleartext disabled, backup disabled, Swagger disabled | ❌ |
+
+---
+
+## Already fixed ✅
+
+| ID | Finding | Fix |
+|----|---------|-----|
+| 0.1 | DEK/wrapped vault key model | Password change no longer destroys existing vault entries |
+| 1.1 | Refresh token hashing | SHA-256 hash stored in DB instead of raw JWT |
+| 1.2 | Password reuse prevention | Salt-aware password history comparison |
+| 1.4 | Failed logins not audit-logged | `logFailedLogin()` now called from `AuthService.login()` catch path |
+| 1.5/2.19/M6 | Vault audit IP/UA + account deletion | All vault endpoints pass real IP/UA via `ClientIpResolver`; `DELETE /api/v1/auth/account` added |
+| 1.6 | JWT secret fallback | Removed from property files; startup validation enforces ≥ 32 chars |
+| 1.7 | Breach-corpus validation | Was added, then removed — HIBP is inappropriate server-side for zero-knowledge model; breach check is client-side only |
+| 1.12 | `token.getBytes()` charset | Explicit `StandardCharsets.UTF_8` in `hashToken()` |
+| 2.2 | `.env` not in `.gitignore` | Added to `.gitignore` |
+| 2.5/2.17 | Swagger exposure | Endpoints locked down with `.denyAll()` in `SecurityConfig`; `SWAGGER_ENABLED` default toggled |
+| 2.16 | Legacy `vaultKeyIv` field | Removed from `User.java` + `V7__drop_vault_key_iv.sql` migration |
+| 2.18 | `encryptionVersion` centralized | `EncryptionConstants.java` — single source of truth |
+| C4 | Thread.sleep DoS in 2FA enable | Removed `Thread.sleep(30000)` from `TwoFactorAuthService.enable2FA()` |
+| H2 | 2FA per-challenge brute force | Added per-challenge attempt limit (5 atomic HINCRBY) in `PendingLoginChallengeStore`; TOTP action rate limit on enable/disable (5 per 5min) |
+| H3 | IP spoofing | `ClientIpResolver` with `app.proxy.trusted` toggle; replaced all 3 inline X-Forwarded-For parsing sites |
+| L1 | Static 2FA PBKDF2 salt | `TwoFactorSecretConverter` now decodes `ENCRYPTION_KEY` directly as AES key (base64, 32 bytes) |
+
+**Additional fixes (not in original findings docs):**
+- PBKDF2 server-side hash salt → per-user random 32-byte salt + `SERVER_HASH_SECRET` pepper
+- `LoginRateLimiter` (ConcurrentHashMap → Redis, 5min TTL)
+- `RateLimitingFilter` (ConcurrentHashMap + ScheduledExecutorService → Redis, 60s TTL)
+- `PendingLoginChallengeStore` + `TwoFactorAuthService.pendingSetups` → Redis Hash (removed `ScheduledExecutorService` cleanup schedulers)
+- `VaultService` entry count limit (10,000 max per user)
+- `AuthController` IP resolution via `ClientIpResolver`
+- Refresh token rate limit (per-user, 5 per 60s)
+- Deleted user token denylist in Redis (1hr TTL, checked in `JwtAuthenticationFilter` before DB lookup)
+- Audit event reorder for `deleteAccount` (log before delete to preserve `ON DELETE SET NULL`)
+- `BreachCheckService.java` + `CommonPasswords.java` + test removed (dead server-side HIBP code)
+- `getAllEntries` audit log now includes IP and UA
+- Redundant `createdAt` TTL check removed from `PendingLoginChallengeStore.validateChallenge()` (race condition)
+- Fixed race condition in 2FA per-challenge attempt limit (non-atomic GET-then-INCR → atomic HINCRBY + return-value check)
 
 ---
 
 ## Summary
 
-| Phase | Total items | ✅ Fixed | ❌ Remaining |
-|-------|-------------|----------|--------------|
-| Phase 0 — Stop the bleeding | 5 | 1 | 4 |
-| Phase 1 — Critical hardening | 12 | 5 | 7 |
-| Phase 2 — Important hardening | 19 | 4 | 15 |
-| Phase 3 — Defense in depth | 10 | 0 | 10 |
+| Category | Total | ✅ Fixed | ❌ Remaining |
+|----------|-------|----------|--------------|
+| Phase 0 — Stop the bleeding | 9 | 0 | 9 |
+| Phase 1 — Critical hardening | 25 | 10 | 15 |
+| Phase 2 — Important hardening | 37 | 5 | 32 |
+| Phase 3 — Defense in depth | 29 | 0 | 29 |
 | Phase 4 — Operational maturity | 12 | 0 | 12 |
-| **Total** | **58** | **10** | **48** |
+| **Total** | **112** | **15** | **97** |
 
-### Already fixed ✅
-- 0.1 DEK/wrapped vault key model
-- 1.1 Refresh token hashing (SHA-256)
-- 1.2 Password reuse prevention (salt-aware comparison)
-- 1.6 JWT secret fallback removed (startup validation enforces ≥ 32 chars)
-- 1.7 Breach-corpus validation (HIBP k-anonymity + offline common-passwords set)
-- 1.12 `token.getBytes()` charset fix (explicit UTF-8)
-- 2.16 Legacy `vaultKeyIv` field removed (User entity + V7 migration)
-- 2.17 Swagger locked down in SecurityConfig (denyAll)
-- 2.18 `encryptionVersion` centralized in `EncryptionConstants`
-- 2.19 Account deletion endpoint added (`DELETE /api/v1/auth/account`)
+### Verification
+- Backend `mvn -q test`: passed (6/6)
+- Web `npm audit --audit-level=moderate`: 0 vulnerabilities
+- Mobile `./gradlew test`: failed — unit-test compile errors (`getCachedVaultKey()` conflict, unresolved `Json`)
 
-### Latest review verification
-- Backend `mvn -q test`: passed.
-- Web `npm audit --audit-level=moderate`: 0 vulnerabilities.
-- Mobile `./gradlew test`: failed due unit-test compile errors in `CryptoEngine.kt` (`getCachedVaultKey()` conflict, unresolved `Json`).
+### Source cross-reference legend
+- `need_to_fix 0.1` = original `need_to_fix.md` item
+- `claude C1` = `claude_findings.md` Critical item #1
+- `codex H2` = `codex_findings.md` High item #2
+- `💡NEW` = discovered during fix session, not in any original findings document

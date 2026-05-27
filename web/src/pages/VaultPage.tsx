@@ -28,17 +28,25 @@ export function VaultPage() {
   }, [isUnlocked, loadEntries])
 
   const filtered = useMemo(() => {
-    if (!search) return entries
-    const q = search.toLowerCase()
-    return entries.filter((e) => {
-      const d = decrypted[e.id]
-      if (!d) return false
-      return (
-        d.name.toLowerCase().includes(q) ||
-        d.username.toLowerCase().includes(q) ||
-        d.url.toLowerCase().includes(q)
-      )
+    let result = [...entries]
+    if (search) {
+      const q = search.toLowerCase()
+      result = result.filter((e) => {
+        const d = decrypted[e.id]
+        if (!d) return false
+        return (
+          d.name.toLowerCase().includes(q) ||
+          d.username.toLowerCase().includes(q) ||
+          d.url.toLowerCase().includes(q)
+        )
+      })
+    }
+    result.sort((a, b) => {
+      const na = (decrypted[a.id]?.name || '').toLowerCase()
+      const nb = (decrypted[b.id]?.name || '').toLowerCase()
+      return na.localeCompare(nb)
     })
+    return result
   }, [entries, decrypted, search])
 
   if (!isUnlocked) {

@@ -48,10 +48,11 @@ public class AuthController {
             HttpServletRequest httpRequest,
             HttpServletResponse httpResponse) {
         log.info("Registering user: {}", request.getEmail());
-        AuthResponse response = authService.register(request);
-        setRefreshTokenCookie(httpRequest, httpResponse, response.getRefreshToken());
-        log.info("User registered successfully: {}", request.getEmail());
         String clientIp = clientIpResolver.getClientIp(httpRequest);
+        AuthResponse response = authService.register(request, clientIp);
+        setRefreshTokenCookie(httpRequest, httpResponse, response.getRefreshToken());
+        stripRefreshTokenForWeb(response, httpRequest);
+        log.info("User registered successfully: {}", request.getEmail());
         auditService.logAction(
                 UUID.fromString(response.getUserId()),
                 "REGISTER",
@@ -77,6 +78,7 @@ public class AuthController {
             return ResponseEntity.ok(ApiResponse.success("2FA verification required", response));
         }
         setRefreshTokenCookie(httpRequest, httpResponse, response.getRefreshToken());
+        stripRefreshTokenForWeb(response, httpRequest);
         log.info("User logged in successfully: {}", request.getEmail());
         auditService.logLogin(
                 UUID.fromString(response.getUserId()),
@@ -96,6 +98,7 @@ public class AuthController {
         String userAgent = httpRequest.getHeader("User-Agent");
         AuthResponse response = authService.verifyTwoFactorLogin(request.getEmail(), request.getChallengeId(), request.getCode(), clientIp, userAgent);
         setRefreshTokenCookie(httpRequest, httpResponse, response.getRefreshToken());
+        stripRefreshTokenForWeb(response, httpRequest);
         log.info("User logged in with 2FA: {}", request.getEmail());
         auditService.logLogin(
                 UUID.fromString(response.getUserId()),
@@ -124,6 +127,7 @@ public class AuthController {
         }
         AuthResponse response = authService.refreshToken(refreshToken);
         setRefreshTokenCookie(httpRequest, httpResponse, response.getRefreshToken());
+        stripRefreshTokenForWeb(response, httpRequest);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
@@ -157,20 +161,25 @@ public class AuthController {
             HttpServletRequest httpRequest,
             HttpServletResponse httpResponse) {
         UUID userId = UserUtils.getUserId(userDetails);
+        String clientIp = clientIpResolver.getClientIp(httpRequest);
+        String userAgent = httpRequest.getHeader("User-Agent");
         log.info("Password change request for user: {}", userId);
         ChangePasswordResponse response = authService.changePassword(
                 userId,
                 request.getCurrentAuthHash(),
                 request.getNewAuthHash(),
                 request.getWrappedVaultKey(),
-                request.getNewEncryptionSalt()
+                request.getNewEncryptionSalt(),
+                clientIp,
+                userAgent
         );
         setRefreshTokenCookie(httpRequest, httpResponse, response.getRefreshToken());
+        stripRefreshTokenForWeb(response, httpRequest);
         auditService.logAction(
                 userId,
                 "PASSWORD_CHANGE",
-                clientIpResolver.getClientIp(httpRequest),
-                httpRequest.getHeader("User-Agent"),
+                clientIp,
+                userAgent,
                 null
         );
         return ResponseEntity.ok(ApiResponse.success("Password changed successfully", response));
@@ -205,6 +214,21 @@ public class AuthController {
         cookie.setPath("/api/v1/auth");
         cookie.setMaxAge(0);
         response.addCookie(cookie);
+    }
+
+    private boolean isMobileClient(HttpServletRequest request) {
+        String ua = request.getHeader("User-Agent");
+        return ua == null || !ua.contains("Mozilla");
+    }
+
+    private void stripRefreshTokenForWeb(Object response, HttpServletRequest request) {
+        if (!isMobileClient(request) && response instanceof AuthResponse) {
+            ((AuthResponse) response).setRefreshToken(null);
+        } else if (!isMobileClient(request) && response instanceof TwoFactorLoginResponse) {
+            ((TwoFactorLoginResponse) response).setRefreshToken(null);
+        } else if (!isMobileClient(request) && response instanceof ChangePasswordResponse) {
+            ((ChangePasswordResponse) response).setRefreshToken(null);
+        }
     }
 
     private String extractRefreshToken(HttpServletRequest request) {
