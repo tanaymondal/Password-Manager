@@ -26,6 +26,7 @@ import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.PBEKeySpec;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.security.spec.KeySpec;
 import java.time.LocalDateTime;
 import java.util.Base64;
@@ -73,9 +74,10 @@ public class AuthService {
         }
 
         User user = new User();
+        String userSalt = generateSalt();
         user.setEmail(request.getEmail().toLowerCase().trim());
-        user.setPasswordHash(serverSideHash(request.getAuthHash()));
-        user.setPasswordSalt(request.getEmail().toLowerCase().trim());
+        user.setPasswordHash(serverSideHash(request.getAuthHash(), userSalt));
+        user.setPasswordSalt(userSalt);
         user.setEncryptionSalt(request.getEncryptionSalt());
         user.setWrappedVaultKey(request.getWrappedVaultKey());
         user.setEncryptionVersion(request.getEncryptionVersion());
@@ -111,7 +113,7 @@ public class AuthService {
             throw new BadCredentialsException("Account is temporarily locked. Please try again later.");
         }
 
-        if (!passwordService.constantTimeEquals(serverSideHash(request.getAuthHash()), user.getPasswordHash())) {
+        if (!passwordService.constantTimeEquals(serverSideHash(request.getAuthHash(), user.getPasswordSalt()), user.getPasswordHash())) {
             loginRateLimiter.recordFailure(clientIp);
             loginRateLimiter.recordFailure(email);
             handleFailedLogin(user, clientIp, userAgent);
@@ -245,15 +247,16 @@ public class AuthService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
 
-        if (!passwordService.constantTimeEquals(serverSideHash(currentAuthHash), user.getPasswordHash())) {
+        if (!passwordService.constantTimeEquals(serverSideHash(currentAuthHash, user.getPasswordSalt()), user.getPasswordHash())) {
             throw new BadCredentialsException("Current auth hash is incorrect");
         }
 
-        String newServerHash = serverSideHash(newAuthHash);
+        String newSalt = generateSalt();
+        String newServerHash = serverSideHash(newAuthHash, newSalt);
 
-        checkPasswordHistory(user, newServerHash);
+        checkPasswordHistory(user, newAuthHash);
 
-        savePasswordHistory(user, user.getPasswordHash());
+        savePasswordHistory(user, user.getPasswordHash(), user.getPasswordSalt());
 
         int historyCount = passwordHistoryRepository.findByUserIdOrderByCreatedAtDesc(userId).size();
         if (historyCount > PASSWORD_HISTORY_LIMIT) {
@@ -264,6 +267,7 @@ public class AuthService {
         }
 
         user.setPasswordHash(newServerHash);
+        user.setPasswordSalt(newSalt);
         user.setEncryptionSalt(newEncryptionSalt);
         user.setWrappedVaultKey(newWrappedVaultKey);
         user.setEncryptionVersion(2);
@@ -279,26 +283,34 @@ public class AuthService {
         return generateChangePasswordResponse(user, null);
     }
 
-    private void checkPasswordHistory(User user, String newServerHash) {
+    private void checkPasswordHistory(User user, String newAuthHash) {
         List<PasswordHistory> history = passwordHistoryRepository.findByUserIdOrderByCreatedAtDesc(user.getId());
         for (PasswordHistory entry : history) {
-            if (passwordService.constantTimeEquals(newServerHash, entry.getPasswordHash())) {
+            String candidateHash = serverSideHash(newAuthHash, entry.getPasswordSalt());
+            if (passwordService.constantTimeEquals(candidateHash, entry.getPasswordHash())) {
                 throw new IllegalArgumentException("Password has been used recently. Please choose a different password.");
             }
         }
     }
 
-    private void savePasswordHistory(User user, String passwordHash) {
+    private void savePasswordHistory(User user, String passwordHash, String passwordSalt) {
         PasswordHistory history = new PasswordHistory();
         history.setUserId(user.getId());
         history.setPasswordHash(passwordHash);
-        history.setPasswordSalt(user.getPasswordSalt());
+        history.setPasswordSalt(passwordSalt);
         passwordHistoryRepository.save(history);
     }
 
-    private String serverSideHash(String clientAuthHash) {
+    private String generateSalt() {
+        byte[] salt = new byte[32];
+        new SecureRandom().nextBytes(salt);
+        return Base64.getEncoder().encodeToString(salt);
+    }
+
+    private String serverSideHash(String clientAuthHash, String userSalt) {
         try {
-            byte[] salt = serverHashSecret.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            String combinedSalt = serverHashSecret + ":" + userSalt;
+            byte[] salt = combinedSalt.getBytes(java.nio.charset.StandardCharsets.UTF_8);
             KeySpec spec = new PBEKeySpec(clientAuthHash.toCharArray(), salt, PBKDF2_ITERATIONS, 256);
             SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
             byte[] hash = factory.generateSecret(spec).getEncoded();
