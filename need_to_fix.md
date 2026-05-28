@@ -674,14 +674,21 @@ HSTS with `maxAge=1y, includeSubDomains, preload` configured unconditionally in 
 
 ---
 
-### 2.27 Mobile biometric unlock stores vault key ❌
+### 2.27 Mobile biometric unlock stores vault key ✅
 [source: claude M16, codex M13]
 
 Biometric unlock encrypts the raw vault key and stores it locally. No rate-limit on biometric failures. No wipe after repeated failures.
 
-**Files**: `BiometricStorage.kt`, `SettingsViewModel.kt`
+**Fix**:
+- `BiometricStorage.kt`: Added `MAX_BIOMETRIC_FAILURES = 5` counter. `recordFailure()` increments on each failed attempt. After 5 failures, `clear()` wipes the encrypted vault key + KeyStore key, forcing password re-entry. `resetFailureCount()` called on success. `onAuthenticationFailed()` and `onAuthenticationError()` (non-cancel) both call `recordFailure()`.
+- `BiometricStorage.kt:16-18`: Added `isLockedOut()` check.
+- `UnlockScreen.kt:48-50,160-195`: Auto biometric prompt and manual button both check `isLockedOut()`; shows a warning message when locked out.
 
-**Status**: ❌ Open.
+**Vault key storage itself** is already sound — encrypted with Android KeyStore key (`setUserAuthenticationRequired(true)`, `setInvalidatedByBiometricEnrollment(true)`). This is the standard approach used by Bitwarden et al.
+
+**Files**: `BiometricStorage.kt`, `UnlockScreen.kt`
+
+**Status**: ✅ Fixed.
 
 ---
 
@@ -1180,9 +1187,9 @@ Many `Result.Error(it.message ...)` paths surface backend error messages in mobi
 | Phase 0 — Stop the bleeding | 9 | 7 | 0 | 2 |
 | Phase 1 — Critical hardening | 25 | 12 | 1 | 12 |
 
-| Phase 2 — Important hardening | 37 | 19 | 1 | 17 |
+| Phase 2 — Important hardening | 37 | 20 | 1 | 16 |
 
-| **Total** | **112** | **38** | **2** | **72** |
+| **Total** | **112** | **39** | **2** | **71** |
 
 ### Verification
 - Backend `mvn -q test`: passed (6/6)

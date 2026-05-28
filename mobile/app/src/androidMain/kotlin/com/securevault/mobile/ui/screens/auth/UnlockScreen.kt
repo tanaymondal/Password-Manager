@@ -47,6 +47,7 @@ fun UnlockScreen(
             && SessionManager.getBiometricEnabled()
             && biometricStorage.hasEncryptedVaultKey()
             && biometricStorage.isAvailable()
+            && !biometricStorage.isLockedOut()
         ) {
             biometricTriggered = true
             val activity = context as? FragmentActivity ?: return@LaunchedEffect
@@ -159,29 +160,38 @@ fun UnlockScreen(
 
         if (biometricStorage.isAvailable() && biometricStorage.hasEncryptedVaultKey() && SessionManager.getBiometricEnabled()) {
             Spacer(modifier = Modifier.height(12.dp))
-            OutlinedButton(
-                onClick = {
-                    val activity = context as? FragmentActivity ?: return@OutlinedButton
-                    val cipher = biometricStorage.getDecryptionCipher()
-                    biometricStorage.showBiometricPrompt(
-                        activity = activity,
-                        title = "Unlock SecureVault",
-                        subtitle = "Authenticate to unlock your vault",
-                        cipher = cipher,
-                        onSuccess = { authenticatedCipher ->
-                            val vaultKey = biometricStorage.onDecryptComplete(authenticatedCipher)
-                            if (vaultKey != null) {
-                                viewModel.handleIntent(UnlockIntent.BiometricUnlockSuccess(vaultKey))
-                            }
-                        },
-                        onError = { }
-                    )
-                },
-                modifier = Modifier.fillMaxWidth().height(50.dp)
-            ) {
-                Icon(Icons.Default.Fingerprint, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Use Biometrics")
+            if (biometricStorage.isLockedOut()) {
+                Text(
+                    text = "Biometric unlock locked out after too many failures. Use your master password.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+            } else {
+                OutlinedButton(
+                    onClick = {
+                        val activity = context as? FragmentActivity ?: return@OutlinedButton
+                        val cipher = biometricStorage.getDecryptionCipher()
+                        biometricStorage.showBiometricPrompt(
+                            activity = activity,
+                            title = "Unlock SecureVault",
+                            subtitle = "Authenticate to unlock your vault",
+                            cipher = cipher,
+                            onSuccess = { authenticatedCipher ->
+                                val vaultKey = biometricStorage.onDecryptComplete(authenticatedCipher)
+                                if (vaultKey != null) {
+                                    viewModel.handleIntent(UnlockIntent.BiometricUnlockSuccess(vaultKey))
+                                }
+                            },
+                            onError = { }
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth().height(50.dp)
+                ) {
+                    Icon(Icons.Default.Fingerprint, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Use Biometrics")
+                }
             }
         }
 

@@ -20,6 +20,8 @@ class BiometricStorage(private val context: Context) {
         private const val PREFS_NAME = "secure_vault_biometric"
         private const val KEY_IV = "biometric_iv"
         private const val KEY_ENCRYPTED_DATA = "biometric_encrypted_vault_key"
+        private const val KEY_FAILURE_COUNT = "biometric_failure_count"
+        private const val MAX_BIOMETRIC_FAILURES = 5
     }
 
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -33,6 +35,22 @@ class BiometricStorage(private val context: Context) {
 
     fun hasEncryptedVaultKey(): Boolean {
         return prefs.contains(KEY_ENCRYPTED_DATA) && prefs.contains(KEY_IV)
+    }
+
+    fun isLockedOut(): Boolean {
+        return prefs.getInt(KEY_FAILURE_COUNT, 0) >= MAX_BIOMETRIC_FAILURES
+    }
+
+    fun recordFailure() {
+        val count = prefs.getInt(KEY_FAILURE_COUNT, 0) + 1
+        prefs.edit().putInt(KEY_FAILURE_COUNT, count).apply()
+        if (count >= MAX_BIOMETRIC_FAILURES) {
+            clear()
+        }
+    }
+
+    fun resetFailureCount() {
+        prefs.edit().remove(KEY_FAILURE_COUNT).apply()
     }
 
     fun getEncryptionCipher(): Cipher? {
@@ -78,6 +96,7 @@ class BiometricStorage(private val context: Context) {
             val encryptedData = prefs.getString(KEY_ENCRYPTED_DATA, null)
                 ?: return null
             val decrypted = cipher.doFinal(Base64.decode(encryptedData, Base64.NO_WRAP))
+            resetFailureCount()
             String(decrypted, Charsets.UTF_8)
         } catch (e: Exception) {
             null
@@ -96,6 +115,7 @@ class BiometricStorage(private val context: Context) {
         val executor = ContextCompat.getMainExecutor(context)
         val callback = object : BiometricPrompt.AuthenticationCallback() {
             override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                resetFailureCount()
                 val authenticatedCipher = result.cryptoObject?.cipher
                 if (authenticatedCipher != null) {
                     onSuccess(authenticatedCipher)
@@ -112,11 +132,13 @@ class BiometricStorage(private val context: Context) {
                 ) {
                     onCancel()
                 } else {
+                    recordFailure()
                     onError(errString.toString())
                 }
             }
 
             override fun onAuthenticationFailed() {
+                recordFailure()
                 onError("Biometric authentication failed. Try again.")
             }
         }
@@ -140,6 +162,7 @@ class BiometricStorage(private val context: Context) {
         prefs.edit()
             .remove(KEY_IV)
             .remove(KEY_ENCRYPTED_DATA)
+            .remove(KEY_FAILURE_COUNT)
             .apply()
         if (keyStore.containsAlias(KEY_ALIAS)) {
             keyStore.deleteEntry(KEY_ALIAS)
