@@ -462,14 +462,22 @@ Backend SSL disabled by default. `security.require-ssl` defaults to false. No st
 
 ---
 
-### 2.6 No size/format limits on vault entry payloads ❌
+### 2.6 No size/format limits on vault entry payloads ✅
 [source: need_to_fix 2.6, claude M4, codex M3]
 
 `VaultEntryRequest.encryptedData` and `iv` have `@NotBlank` but no `@Size`, Base64 validation, or IV length validation. Many other DTOs also lack `@Size` constraints.
 
 **Files**: `VaultEntryRequest.java`, `RegisterRequest.java`, `ChangePasswordRequest.java`, `DeviceRequest.java`, `RefreshTokenRequest.java`, `Enable2FARequest.java`
 
-**Status**: ❌ Open.
+**Changes**:
+- `VaultEntryRequest`: added `@Size(min=16, max=24)` and `@Pattern(Base64)` on `iv`; added `@Pattern(Base64)` on `encryptedData`
+- `RegisterRequest`: added `@Min`/`@Max` on KDF integer fields; added `@Size(max=255)` on `deviceId`
+- `ChangePasswordRequest`: already had `@Size` on all fields — no changes needed
+- `DeviceRequest`: added `@Size(max=100)` on `deviceName`, `@Size(max=255)` on `deviceId`
+- `RefreshTokenRequest`: added `@Size(max=2000)` on `refreshToken`
+- `Enable2FARequest`: added `@Size(min=6, max=6)` on `code` and `secondCode`
+
+**Status**: ✅ Fixed.
 
 ---
 
