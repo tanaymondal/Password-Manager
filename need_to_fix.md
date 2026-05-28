@@ -401,12 +401,14 @@ Authenticated user can register unlimited devices. PublicKey was removed — it 
 
 ## Phase 2 — Important hardening
 
-### 2.1 Hardcoded production secrets in docker-compose.yaml ❌
+### 2.1 Hardcoded production secrets in docker-compose.yaml ✅
 [source: need_to_fix 2.1]
 
 DB password, JWT secret, Redis password hardcoded in plaintext and committed.
 
-**Status**: ❌ Open.
+**Fix**: All secrets replaced with `${VAR}` environment variable references in `docker-compose.yaml`. Secrets loaded from `.env` (which is `.gitignore`'d, item 2.2).
+
+**Status**: ✅ Fixed.
 
 ---
 
@@ -1097,6 +1099,7 @@ Many `Result.Error(it.message ...)` paths surface backend error messages in mobi
 | 1.12 | `token.getBytes()` charset | Explicit `StandardCharsets.UTF_8` in `hashToken()` |
 | 1.13 | Email enumeration via timing | `serverSideHash()` always computed (dummy salt for unknown users); `recordFailure()` always called |
 | 1.23 | `TwoFactorVerifyRequest.email` lacks `@Email` | `@Email` annotation added |
+| 2.1 | Hardcoded production secrets in docker-compose.yaml | All secrets replaced with `${VAR}` env var references |
 | 2.2 | `.env` not in `.gitignore` | Added to `.gitignore` |
 | 2.5/2.17 | Swagger exposure | Endpoints locked down with `.denyAll()` in `SecurityConfig`; `SWAGGER_ENABLED` default toggled |
 | 2.16 | Legacy `vaultKeyIv` field | Removed from `User.java` + `V7__drop_vault_key_iv.sql` migration |
@@ -1139,10 +1142,10 @@ Many `Result.Error(it.message ...)` paths surface backend error messages in mobi
 |----------|-------|----------|-----------|--------------|
 | Phase 0 — Stop the bleeding | 9 | 7 | 0 | 2 |
 | Phase 1 — Critical hardening | 25 | 9 | 2 | 14 |
-| Phase 2 — Important hardening | 37 | 7 | 1 | 29 |
+| Phase 2 — Important hardening | 37 | 9 | 1 | 27 |
 | Phase 3 — Defense in depth | 29 | 0 | 0 | 29 |
 | Phase 4 — Operational maturity | 12 | 0 | 0 | 12 |
-| **Total** | **112** | **23** | **3** | **86** |
+| **Total** | **112** | **25** | **3** | **84** |
 
 ### Verification
 - Backend `mvn -q test`: passed (6/6)
