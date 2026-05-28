@@ -80,19 +80,8 @@ public class AuthController {
         String clientIp = clientIpResolver.getClientIp(httpRequest);
         String userAgent = httpRequest.getHeader("User-Agent");
         TwoFactorLoginResponse response = authService.login(request, clientIp, userAgent);
-        if (response.isTwoFactorRequired()) {
-            log.info("2FA required for user: {}", request.getEmail());
-            return ResponseEntity.ok(ApiResponse.success("2FA verification required", response));
-        }
-        setRefreshTokenCookie(httpRequest, httpResponse, response.getRefreshToken());
-        stripRefreshTokenForWeb(response, httpRequest);
-        log.info("User logged in successfully: {}", request.getEmail());
-        auditService.logLogin(
-                UUID.fromString(response.getUserId()),
-                clientIp,
-                userAgent
-        );
-        return ResponseEntity.ok(ApiResponse.success("Login successful", response));
+        log.info("Login challenge created for user: {}", request.getEmail());
+        return ResponseEntity.ok(ApiResponse.success("Login challenge created", response));
     }
 
     @PostMapping("/verify-2fa")
@@ -231,8 +220,6 @@ public class AuthController {
     private void stripRefreshTokenForWeb(Object response, HttpServletRequest request) {
         if (!isMobileClient(request) && response instanceof AuthResponse) {
             ((AuthResponse) response).setRefreshToken(null);
-        } else if (!isMobileClient(request) && response instanceof TwoFactorLoginResponse) {
-            ((TwoFactorLoginResponse) response).setRefreshToken(null);
         } else if (!isMobileClient(request) && response instanceof ChangePasswordResponse) {
             ((ChangePasswordResponse) response).setRefreshToken(null);
         }

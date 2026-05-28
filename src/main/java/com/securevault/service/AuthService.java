@@ -146,6 +146,8 @@ public class AuthService {
         java.util.Optional<User> userOpt = userRepository.findByEmail(email);
         User user = userOpt.orElse(null);
 
+        log.info("LOGIN_DEBUG: userExists={}, computing serverSideHash", user != null);
+
         if (user != null && user.isLocked()) {
             log.warn("Account locked for user: {}", user.getEmail());
             throw new BadCredentialsException("Account is temporarily locked. Please try again later.");
@@ -156,6 +158,7 @@ public class AuthService {
                 request.getAuthHash(),
                 user != null ? user.getPasswordSalt() : DUMMY_SALT
         );
+
         String storedHash = user != null ? user.getPasswordHash() : DUMMY_HASH;
 
         if (!passwordService.constantTimeEquals(computedHash, storedHash)) {
