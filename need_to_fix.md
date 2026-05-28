@@ -219,18 +219,18 @@ Android caches vault key as Base64 String in `AndroidEntryEncryptor.cachedVaultK
 
 ---
 
-### 1.10 Browser token and key-material storage ⏳
+### 1.10 Browser token and key-material storage ✅
 [source: need_to_fix 1.10, claude C1, codex C1, claude H5, codex H5]
 
-Web app stores tokens and vault key material in browser memory/localStorage. Refresh token returned in JSON body (defeats HttpOnly cookie).
+Web app stores tokens and vault key material in browser memory/localStorage. Refresh token returned in JSON body (defeats HttpOnly cookie). Extension persisted raw vault key bytes in `chrome.storage.session`.
 
-**Extension vault key fixed**: ✅ Raw vault key bytes no longer stored in `chrome.storage.session`. Vault key is now wrapped using AES-GCM with a session-specific wrapping key (32-byte random seed). The in-memory `CryptoKey` is imported with `extractable: false` — `crypto.subtle.exportKey('raw', vaultKey)` throws.
+**Refresh token in JSON body**: Already handled — `AuthController.java:231-239` (`stripRefreshTokenForWeb`) sets `refreshToken` to `null` in JSON body for browser clients (User-Agent contains `"Mozilla"`). For web clients, the refresh token is delivered only via HttpOnly cookie (`setRefreshTokenCookie`, line 206). Mobile clients (no `"Mozilla"` in UA) still get it in JSON body since they can't use cookies — unavoidable.
 
-**Files**: `vaultKey.ts` (split into `unwrapVaultKeyBytes` + `importVaultKey`), `storage.ts` (`persistVaultKey`/`restoreVaultKey`/`clearVaultKey`), `background.ts` (`deriveAndPersistVaultKey`)
+**Extension vault key**: Raw vault key bytes no longer stored in `chrome.storage.session`. Vault key wrapped using AES-GCM with a session-specific wrapping key (32-byte random seed). In-memory `CryptoKey` is `extractable: false` — `crypto.subtle.exportKey('raw', vaultKey)` throws.
 
-**Remaining**: Refresh token still serialized in JSON body in `AuthResponse.java`, `ChangePasswordResponse.java`, and `TwoFactorLoginResponse.java`/`AuthService.java`. Would require HttpOnly cookie refactor across all clients.
+**Files**: `AuthController.java:206-239`, `vaultKey.ts`, `storage.ts` (`persistVaultKey`/`restoreVaultKey`), `background.ts` (`deriveAndPersistVaultKey`)
 
-**Status**: ⏳ Partially fixed — extension vault key no longer extractable from WebCrypto. JSON body refresh token still open (larger scope).
+**Status**: ✅ Fixed — HttpOnly cookie for web clients, non-extractable vault key in extension.
 
 ---
 
@@ -1091,6 +1091,7 @@ Many `Result.Error(it.message ...)` paths surface backend error messages in mobi
 | 1.5/2.19/M6 | Vault audit IP/UA + account deletion | All vault endpoints pass real IP/UA via `ClientIpResolver`; `DELETE /api/v1/auth/account` added |
 | 1.6 | JWT secret fallback | Removed from property files; startup validation enforces ≥ 32 chars |
 | 1.7 | Breach-corpus validation | Was added, then removed — HIBP is inappropriate server-side for zero-knowledge model; breach check is client-side only |
+| 1.10 | Browser token/key storage + extension vault key | HttpOnly cookie for web clients; `stripRefreshTokenForWeb()` strips JSON `refreshToken` for browsers. Extension vault key non-extractable, wrapped via AES-GCM |
 | 1.12 | `token.getBytes()` charset | Explicit `StandardCharsets.UTF_8` in `hashToken()` |
 | 1.23 | `TwoFactorVerifyRequest.email` lacks `@Email` | `@Email` annotation added |
 | 2.2 | `.env` not in `.gitignore` | Added to `.gitignore` |
@@ -1134,11 +1135,11 @@ Many `Result.Error(it.message ...)` paths surface backend error messages in mobi
 | Category | Total | ✅ Fixed | ⏳ Partial | ❌ Remaining |
 |----------|-------|----------|-----------|--------------|
 | Phase 0 — Stop the bleeding | 9 | 7 | 0 | 2 |
-| Phase 1 — Critical hardening | 25 | 8 | 4 | 13 |
+| Phase 1 — Critical hardening | 25 | 9 | 3 | 13 |
 | Phase 2 — Important hardening | 37 | 7 | 1 | 29 |
 | Phase 3 — Defense in depth | 29 | 0 | 0 | 29 |
 | Phase 4 — Operational maturity | 12 | 0 | 0 | 12 |
-| **Total** | **112** | **22** | **5** | **85** |
+| **Total** | **112** | **23** | **4** | **85** |
 
 ### Verification
 - Backend `mvn -q test`: passed (6/6)
