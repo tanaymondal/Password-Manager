@@ -13,7 +13,7 @@ public class VaultEntryRequest {
 
     @NotBlank(message = "Encrypted data is required")
     @Size(max = 100000, message = "Encrypted data must not exceed 100KB")
-    @Pattern(regexp = "^[A-Za-z0-9+/]*={0,2}$", message = "Encrypted data must be valid Base64")
+    @Pattern(regexp = "^(v[0-9]+:)?[A-Za-z0-9+/]*={0,2}$", message = "Encrypted data must be valid Base64")
     private String encryptedData;
 
     @NotBlank(message = "IV is required")
