@@ -22,25 +22,25 @@ Single source of truth merging `need_to_fix.md`, `claude_findings.md`, `codex_fi
 
 ---
 
-### 0.2 Fix 2FA login challenge binding ❌
+### 0.2 Fix 2FA login challenge binding ✅
 [source: need_to_fix 0.2]
 
-`POST /api/v1/auth/verify-2fa` accepts only `{email, code}` and issues full tokens if TOTP is valid. Not bound to password-authenticated login attempt, challenge token, session nonce, device, IP, or expiration. Possession of a current TOTP code is enough to log in as any email with 2FA enabled.
+`POST /api/v1/auth/verify-2fa` now requires a `challengeId` from the password-authenticated login step. Each login creates a pending challenge in Redis (`PendingLoginChallengeStore`, 300s TTL) bound to the password-authenticated user. Without passing password-first login, attacker cannot obtain a valid challenge. Verify endpoint also conditionally checks TOTP — non-2FA users skip TOTP entirely to avoid unnecessary client round-trips. Login response shape is unified (same fields for all users), eliminating the structural oracle that leaked whether 2FA was enabled.
 
-**Files**: `AuthController.java:108-120`, `AuthService.java:193-210`, `TwoFactorVerifyRequest.java:7-12`, `TwoFactorLoginResponse.java:28-33`
+**Files**: `TwoFactorLoginResponse.java`, `TwoFactorVerifyRequest.java`, `AuthService.java:login/verifyTwoFactorLogin`, `PendingLoginChallengeStore.java`, `background.ts`, `LoginViewModel.kt`
 
-**Status**: ❌ Open.
+**Status**: ✅ Fixed — challenge binding, unified response shape, conditional TOTP check, all clients updated.
 
 ---
 
-### 0.3 Actually enforce 2FA at login ❌
+### 0.3 Actually enforce 2FA at login ✅
 [source: need_to_fix 0.3, claude H2/H3/H10, codex H2/H12]
 
-Password login no longer issues full JWT tokens when `twoFactorEnabled=true`, but still returns `encryptionSalt` and `wrappedVaultKey` before 2FA completes — exposing key-wrapping material to anyone with correct password but without second factor. Mobile 2FA flow also broken due to response contract mismatch (mobile parser expects `encryptionSalt` in first step but backend nulls it).
+Password login no longer issues any tokens or encryption material in the login response. Login always returns `{twoFactorRequired, userId, challengeId, authSalt, twoFactorMethods}` — no `encryptionSalt`, `wrappedVaultKey`, or `encryptionVersion`. These are only returned after `/verify-2fa` succeeds. Mobile flow fixed: `AuthRepositoryImpl.kt` no longer parses `encryptionSalt` from login response; `AuthResponse` model includes `twoFactorMethods` field; `LoginViewModel.kt` checks `twoFactorMethods.isNotEmpty()` for TOTP UI decision.
 
-**Files**: `AuthService.java:166-174`, `TwoFactorLoginResponse.java:28-33`, `SecureVaultApi.kt`, `AuthRepositoryImpl.kt`
+**Files**: `AuthService.java:login/verifyTwoFactorLogin`, `TwoFactorLoginResponse.java`, `SecureVaultApi.kt`, `AuthRepositoryImpl.kt`, `LoginViewModel.kt`
 
-**Status**: ❌ Open.
+**Status**: ✅ Fixed — no crypto material or tokens returned before 2FA, all clients updated.
 
 ---
 
@@ -359,25 +359,25 @@ On any schema upgrade, entire local cache wiped. A corrupt DB also silently dest
 
 ---
 
-### 1.23 `TwoFactorVerifyRequest.email` lacks `@Email` validation 💡NEW
+### 1.23 `TwoFactorVerifyRequest.email` lacks `@Email` validation ✅ 💡NEW
 [source: discovered during fix session]
 
-Has `@NotBlank` but no `@Email` annotation. Both `LoginRequest` and `RegisterRequest` have `@Email`. Non-email strings like `"<script>"` reach the service layer.
+Had `@NotBlank` but no `@Email` annotation.
 
 **File**: `TwoFactorVerifyRequest.java:8-9`
 
-**Status**: ❌ Open.
+**Status**: ✅ Fixed — `@Email` annotation added alongside existing `@NotBlank`.
 
 ---
 
 ### 1.24 No device registration rate limit or maximum count 💡NEW
 [source: discovered during fix session]
 
-Authenticated user can register unlimited devices. `DeviceRequest.publicKey` (TEXT column) has no size validation. A malicious user could fill the `devices` table with large blob data.
+Authenticated user can register unlimited devices. PublicKey was removed — it was dead code (unimplemented E2EE), so the blob-storage concern is moot. Device count limit per user still unaddressed.
 
 **File**: `DeviceService.java:63-89`
 
-**Status**: ❌ Open.
+**Status**: ⏳ Partially fixed — `publicKey` and `encryptedPrivateKey` removed from `Device.java`/`DeviceRequest.java`/DB (dead fields). Device count limit still open.
 
 ---
 
@@ -699,25 +699,25 @@ On first exception, the local DB and passphrase are wiped, then operation retrie
 
 ---
 
-### 2.32 `TwoFactorVerifyRequest.email` lacks `@Email` 💡NEW
+### 2.32 `TwoFactorVerifyRequest.email` lacks `@Email` ✅ 💡NEW
 [source: discovered during fix session]
 
-Only `@NotBlank` — no email format validation. Non-email strings reach service layer.
+Only `@NotBlank` — no email format validation.
 
 **File**: `TwoFactorVerifyRequest.java:8-9`
 
-**Status**: ❌ Open.
+**Status**: ✅ Fixed — duplicate of 1.23, `@Email` annotation added.
 
 ---
 
 ### 2.33 No device count limit per user 💡NEW
 [source: discovered during fix session]
 
-Unlimited device registrations, no `@Size` on `publicKey`. Database resource exhaustion.
+Unlimited device registrations. `publicKey` field removed (dead code for unimplemented E2EE), so the `@Size` concern is moot. Device count limit still unaddressed.
 
 **File**: `DeviceService.java:63-89`
 
-**Status**: ❌ Open.
+**Status**: ⏳ Partially fixed — `publicKey` column dropped. Device count limit still open (duplicate of 1.24).
 
 ---
 
@@ -1074,6 +1074,8 @@ Many `Result.Error(it.message ...)` paths surface backend error messages in mobi
 | ID | Finding | Fix |
 |----|---------|-----|
 | 0.1 | DEK/wrapped vault key model | Password change no longer destroys existing vault entries |
+| 0.2 | 2FA login challenge binding | Challenge created at login and validated at verify-2fa; unified response shape; conditional TOTP check |
+| 0.3 | Enforce 2FA at login | Login returns no tokens or crypto material before 2FA; all clients updated |
 | 1.1 | Refresh token hashing | SHA-256 hash stored in DB instead of raw JWT |
 | 1.2 | Password reuse prevention | Salt-aware password history comparison |
 | 1.4 | Failed logins not audit-logged | `logFailedLogin()` now called from `AuthService.login()` catch path |
@@ -1081,10 +1083,12 @@ Many `Result.Error(it.message ...)` paths surface backend error messages in mobi
 | 1.6 | JWT secret fallback | Removed from property files; startup validation enforces ≥ 32 chars |
 | 1.7 | Breach-corpus validation | Was added, then removed — HIBP is inappropriate server-side for zero-knowledge model; breach check is client-side only |
 | 1.12 | `token.getBytes()` charset | Explicit `StandardCharsets.UTF_8` in `hashToken()` |
+| 1.23 | `TwoFactorVerifyRequest.email` lacks `@Email` | `@Email` annotation added |
 | 2.2 | `.env` not in `.gitignore` | Added to `.gitignore` |
 | 2.5/2.17 | Swagger exposure | Endpoints locked down with `.denyAll()` in `SecurityConfig`; `SWAGGER_ENABLED` default toggled |
 | 2.16 | Legacy `vaultKeyIv` field | Removed from `User.java` + `V7__drop_vault_key_iv.sql` migration |
 | 2.18 | `encryptionVersion` centralized | `EncryptionConstants.java` — single source of truth |
+| 2.32 | `TwoFactorVerifyRequest.email` lacks `@Email` (dup) | Duplicate of 1.23, `@Email` annotation added |
 | C4 | Thread.sleep DoS in 2FA enable | Removed `Thread.sleep(30000)` from `TwoFactorAuthService.enable2FA()` |
 | H2 | 2FA per-challenge brute force | Added per-challenge attempt limit (5 atomic HINCRBY) in `PendingLoginChallengeStore`; TOTP action rate limit on enable/disable (5 per 5min) |
 | H3 | IP spoofing | `ClientIpResolver` with `app.proxy.trusted` toggle; replaced all 3 inline X-Forwarded-For parsing sites |
@@ -1104,19 +1108,23 @@ Many `Result.Error(it.message ...)` paths surface backend error messages in mobi
 - `getAllEntries` audit log now includes IP and UA
 - Redundant `createdAt` TTL check removed from `PendingLoginChallengeStore.validateChallenge()` (race condition)
 - Fixed race condition in 2FA per-challenge attempt limit (non-atomic GET-then-INCR → atomic HINCRBY + return-value check)
+- `@Email` annotation added to `TwoFactorVerifyRequest.email` to match `LoginRequest`/`RegisterRequest`
+- `DeviceRequest.publicKey` and `Device.encryptedPrivateKey` removed (dead fields for unimplemented E2EE); DB columns dropped via V9 migration
+- Login response unified: same shape for all users with `twoFactorMethods` field, no tokens/crypto material before 2FA
+- All clients (web extension, web app, mobile) updated for unified 2FA flow with `twoFactorMethods`-based TOTP UI decision
 
 ---
 
 ## Summary
 
-| Category | Total | ✅ Fixed | ❌ Remaining |
-|----------|-------|----------|--------------|
-| Phase 0 — Stop the bleeding | 9 | 0 | 9 |
-| Phase 1 — Critical hardening | 25 | 10 | 15 |
-| Phase 2 — Important hardening | 37 | 5 | 32 |
-| Phase 3 — Defense in depth | 29 | 0 | 29 |
-| Phase 4 — Operational maturity | 12 | 0 | 12 |
-| **Total** | **112** | **15** | **97** |
+| Category | Total | ✅ Fixed | ⏳ Partial | ❌ Remaining |
+|----------|-------|----------|-----------|--------------|
+| Phase 0 — Stop the bleeding | 9 | 3 | 0 | 6 |
+| Phase 1 — Critical hardening | 25 | 8 | 3 | 14 |
+| Phase 2 — Important hardening | 37 | 7 | 1 | 29 |
+| Phase 3 — Defense in depth | 29 | 0 | 0 | 29 |
+| Phase 4 — Operational maturity | 12 | 0 | 0 | 12 |
+| **Total** | **112** | **18** | **4** | **90** |
 
 ### Verification
 - Backend `mvn -q test`: passed (6/6)

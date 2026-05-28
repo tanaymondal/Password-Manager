@@ -16,19 +16,6 @@ class LoginUseCaseImpl(
         return when (val result = authRepository.login(email, password)) {
             is Result.Success -> {
                 when (val response = result.data) {
-                    is LoginResponse.Success -> {
-                        val authState = response.authState
-                        LoginResult.Success(
-                            tokens = AuthTokens(
-                                accessToken = authState.accessToken!!,
-                                refreshToken = authState.refreshToken!!,
-                                encryptionSalt = authState.encryptionSalt!!,
-                                userId = authState.user!!.id,
-                                email = authState.user.email
-                            ),
-                            user = User(authState.user.id, authState.user.email)
-                        )
-                    }
                     is LoginResponse.TwoFactorRequired -> {
                         LoginResult.TwoFactorRequired(response.info)
                     }

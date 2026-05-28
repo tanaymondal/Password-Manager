@@ -24,7 +24,6 @@ import java.util.stream.Collectors;
  *
  * DEVICE MANAGEMENT:
  * - Each device is identified by a unique device ID
- * - Devices can have a public key for end-to-end encryption scenarios
  * - Device names help users identify their registered devices
  * - Last accessed timestamp tracks recent device activity
  *
@@ -32,7 +31,6 @@ import java.util.stream.Collectors;
  * - Users can only manage their own devices
  * - Device registration requires valid authentication
  * - Device removal is immediate and permanent
- * - Public keys enable future end-to-end encryption features
  *
  * USE CASES:
  * - View all devices logged into the account
@@ -55,7 +53,7 @@ public class DeviceService {
      * If the device ID is new, it creates a new device registration.
      *
      * @param userId UUID of the user registering the device
-     * @param request Contains deviceId, deviceName, and optionally publicKey
+     * @param request Contains deviceId and deviceName
      * @return DeviceResponse with the registered device details
      * @throws IllegalArgumentException if device ID is already in use by another user
      */
@@ -70,7 +68,6 @@ public class DeviceService {
             }
 
             existingDevice.setDeviceName(request.getDeviceName());
-            existingDevice.setPublicKey(request.getPublicKey());
             existingDevice.updateLastAccessed();
             existingDevice = deviceRepository.save(existingDevice);
 
@@ -81,7 +78,6 @@ public class DeviceService {
         device.setUserId(userId);
         device.setDeviceName(request.getDeviceName());
         device.setDeviceId(request.getDeviceId());
-        device.setPublicKey(request.getPublicKey());
 
         device = deviceRepository.save(device);
 

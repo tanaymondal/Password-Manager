@@ -91,11 +91,7 @@ export async function apiLogin(data: {
     email: string
     challengeId?: string
     authSalt: string
-    encryptionSalt: string
-    wrappedVaultKey: string
-    encryptionVersion: number
-    accessToken: string | null
-    refreshToken: string | null
+    twoFactorMethods?: string[]
   }>('/auth/login', {
     method: 'POST',
     body: JSON.stringify(data),
@@ -106,7 +102,7 @@ export async function apiGetVaultEntries() {
   return apiClient<{ entries: { id: string; encryptedData: string; iv: string; version: number; createdAt: string; updatedAt: string }[]; count: number }>('/vault')
 }
 
-export async function verifyTwoFactor(email: string, challengeId: string, code: string) {
+export async function verifyTwoFactor(email: string, challengeId: string, code?: string) {
   return apiClient<{
     accessToken: string
     refreshToken: string

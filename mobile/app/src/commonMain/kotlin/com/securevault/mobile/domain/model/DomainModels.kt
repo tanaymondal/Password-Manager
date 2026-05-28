@@ -32,8 +32,7 @@ data class TwoFactorInfo(
     val userId: String,
     val email: String,
     val challengeId: String,
-    val encryptionSalt: String,
-    val wrappedVaultKey: String?
+    val twoFactorMethods: List<String> = emptyList()
 )
 
 @Serializable

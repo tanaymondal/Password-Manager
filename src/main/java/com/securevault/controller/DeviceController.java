@@ -45,7 +45,7 @@ public class DeviceController {
      * If the device ID is new, creates a new device registration.
      *
      * @param userDetails Injected from JWT authentication
-     * @param request Contains deviceId, deviceName, and optionally publicKey
+     * @param request Contains deviceId and deviceName
      * @return DeviceResponse with registered device details
      */
     @PostMapping

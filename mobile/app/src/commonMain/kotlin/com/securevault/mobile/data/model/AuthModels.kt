@@ -32,7 +32,8 @@ data class AuthResponse(
     val challengeId: String? = null,
     @SerialName("wrappedVaultKey") val wrappedVaultKey: String? = null,
     @SerialName("encryptionVersion") val encryptionVersion: Int = 2,
-    @SerialName("twoFactorRequired") val twoFactorRequired: Boolean = false
+    @SerialName("twoFactorRequired") val twoFactorRequired: Boolean = false,
+    @SerialName("twoFactorMethods") val twoFactorMethods: List<String> = emptyList()
 )
 
 @Serializable
@@ -60,7 +61,7 @@ data class RefreshTokenRequest(
 data class TwoFactorVerifyRequest(
     val email: String,
     val challengeId: String,
-    val code: String
+    val code: String = ""
 )
 
 @Serializable

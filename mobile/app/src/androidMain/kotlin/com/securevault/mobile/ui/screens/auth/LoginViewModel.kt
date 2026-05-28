@@ -76,8 +76,22 @@ class LoginViewModel(
             onResult = { result ->
                 setState { copy(isLoading = false) }
                 when (val r = result.getOrNull()) {
-                    is LoginResult.Success -> setEffect(LoginEffect.NavigateToVault)
-                    is LoginResult.TwoFactorRequired -> setState { copy(twoFactorInfo = r.info) }
+                    is LoginResult.TwoFactorRequired -> {
+                        if (r.info.twoFactorMethods.isNotEmpty()) {
+                            setState { copy(twoFactorInfo = r.info) }
+                        } else {
+                            runInBackground(
+                                block = { verifyTwoFactorUseCase(r.info.email, r.info.challengeId, "", password) },
+                                onResult = { verifyResult ->
+                                    when (val vr = verifyResult.getOrNull()) {
+                                        is VerifyTwoFactorResult.Success -> setEffect(LoginEffect.NavigateToVault)
+                                        is VerifyTwoFactorResult.Error -> setState { copy(error = vr.message) }
+                                        null -> setState { copy(error = verifyResult.exceptionOrNull()?.message ?: "Verification failed") }
+                                    }
+                                }
+                            )
+                        }
+                    }
                     is LoginResult.Error -> setState { copy(error = r.message) }
                     null -> setState { copy(error = result.exceptionOrNull()?.message ?: "Unknown error") }
                 }

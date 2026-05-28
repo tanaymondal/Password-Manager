@@ -79,35 +79,13 @@ class AuthRepositoryImpl(
 
             response.fold(
                 onSuccess = { authResponse ->
-                    if (authResponse.twoFactorRequired) {
-                        val info = TwoFactorInfo(
-                            userId = authResponse.userId!!,
-                            email = authResponse.email!!,
-                            challengeId = authResponse.challengeId!!,
-                            encryptionSalt = authResponse.encryptionSalt!!,
-                            wrappedVaultKey = authResponse.wrappedVaultKey
-                        )
-                        Result.Success(LoginResponse.TwoFactorRequired(info))
-                    } else {
-                        val vaultKey = deriveVaultKey(
-                            password,
-                            authResponse.encryptionSalt!!,
-                            authResponse.wrappedVaultKey
-                        )
-                        if (vaultKey != null) {
-                            vaultKeyManager.setCachedVaultKey(vaultKey)
-                        }
-                        saveSession(
-                            authResponse.accessToken!!,
-                            authResponse.refreshToken!!,
-                            authResponse.encryptionSalt!!,
-                            authResponse.userId!!,
-                            email,
-                            authResponse.encryptionVersion,
-                            authResponse.wrappedVaultKey
-                        )
-                        Result.Success(LoginResponse.Success(getCurrentAuthState()))
-                    }
+                    val info = TwoFactorInfo(
+                        userId = authResponse.userId!!,
+                        email = email,
+                        challengeId = authResponse.challengeId!!,
+                        twoFactorMethods = authResponse.twoFactorMethods
+                    )
+                    Result.Success(LoginResponse.TwoFactorRequired(info))
                 },
                 onFailure = { Result.Error(it.message ?: "Login failed", it) }
             )

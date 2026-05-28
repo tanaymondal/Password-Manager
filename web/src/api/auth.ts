@@ -16,10 +16,7 @@ export interface TwoFactorLoginResponse {
   email: string
   challengeId: string
   authSalt: string
-  encryptionSalt: string | null
-  wrappedVaultKey: string | null
-  encryptionVersion: number | null
-  accessToken: string | null
+  twoFactorMethods?: string[]
 }
 
 export interface LoginRequest {
@@ -60,7 +57,7 @@ export function prelogin(email: string) {
 export interface TwoFactorVerifyRequest {
   email: string
   challengeId: string
-  code: string
+  code?: string
 }
 
 export function verifyTwoFactor(data: TwoFactorVerifyRequest) {

@@ -58,6 +58,37 @@ chrome.runtime.onMessage.addListener((message: any, sender: chrome.runtime.Messa
   return true
 })
 
+async function handleVerifySuccess(res: {
+  authSalt: string
+  encryptionSalt: string
+  wrappedVaultKey: string
+  encryptionVersion: number
+  accessToken: string
+  refreshToken: string
+}, password: string, email: string): Promise<{ success: true }> {
+  const cm: CryptoMaterial = {
+    authSalt: res.authSalt,
+    encryptionSalt: res.encryptionSalt,
+    wrappedVaultKey: res.wrappedVaultKey,
+    encryptionVersion: res.encryptionVersion,
+    email,
+  }
+
+  await setCryptoMaterial(cm)
+  await setTokens({ accessToken: res.accessToken, refreshToken: res.refreshToken })
+
+  const kek = await deriveKek(password, cm.encryptionSalt)
+  vaultKey = await unwrapVaultKey(kek, cm.wrappedVaultKey)
+
+  const rawKey = await crypto.subtle.exportKey('raw', vaultKey)
+  await setVaultKeyBytes(new Uint8Array(rawKey))
+
+  currentEmail = email
+  await fetchAndCacheEntries()
+
+  return { success: true }
+}
+
 async function handleMessage(message: any, sender: chrome.runtime.MessageSender): Promise<any> {
   switch (message.type) {
     case 'login': {
@@ -65,40 +96,19 @@ async function handleMessage(message: any, sender: chrome.runtime.MessageSender)
         const { email, password } = message
         const pre = await apiPrelogin(email)
         const authHash = await derivePasswordHash(password, pre.authSalt)
-        const res = await apiLogin({
+        const loginRes = await apiLogin({
           email,
           authHash,
           deviceName: 'Browser Extension',
           deviceId: crypto.randomUUID(),
         })
 
-        if (res.twoFactorRequired) {
-          return { success: false, error: '2fa_required', challengeId: res.challengeId, email }
+        if (loginRes.twoFactorMethods?.length) {
+          return { success: false, error: '2fa_required', challengeId: loginRes.challengeId, email }
         }
 
-        const cm: CryptoMaterial = {
-          authSalt: pre.authSalt,
-          encryptionSalt: res.encryptionSalt,
-          wrappedVaultKey: res.wrappedVaultKey,
-          encryptionVersion: res.encryptionVersion,
-          email,
-        }
-
-        await setCryptoMaterial(cm)
-        if (res.accessToken && res.refreshToken) {
-          await setTokens({ accessToken: res.accessToken, refreshToken: res.refreshToken })
-        }
-
-        const kek = await deriveKek(password, cm.encryptionSalt)
-        vaultKey = await unwrapVaultKey(kek, cm.wrappedVaultKey)
-
-        const rawKey = await crypto.subtle.exportKey('raw', vaultKey)
-        await setVaultKeyBytes(new Uint8Array(rawKey))
-
-        currentEmail = email
-        await fetchAndCacheEntries()
-
-        return { success: true }
+        const verifyRes = await verifyTwoFactor(email, loginRes.challengeId)
+        return await handleVerifySuccess(verifyRes, password, email)
       } catch (error: any) {
         return { success: false, error: error.message || 'Login failed' }
       }
@@ -108,28 +118,7 @@ async function handleMessage(message: any, sender: chrome.runtime.MessageSender)
       try {
         const { email, password, challengeId, code } = message
         const res = await verifyTwoFactor(email, challengeId, code)
-
-        const cm: CryptoMaterial = {
-          authSalt: res.authSalt,
-          encryptionSalt: res.encryptionSalt,
-          wrappedVaultKey: res.wrappedVaultKey,
-          encryptionVersion: res.encryptionVersion,
-          email,
-        }
-
-        await setCryptoMaterial(cm)
-        await setTokens({ accessToken: res.accessToken, refreshToken: res.refreshToken })
-
-        const kek = await deriveKek(password, cm.encryptionSalt)
-        vaultKey = await unwrapVaultKey(kek, cm.wrappedVaultKey)
-
-        const rawKey = await crypto.subtle.exportKey('raw', vaultKey)
-        await setVaultKeyBytes(new Uint8Array(rawKey))
-
-        currentEmail = email
-        await fetchAndCacheEntries()
-
-        return { success: true }
+        return await handleVerifySuccess(res, password, email)
       } catch (error: any) {
         return { success: false, error: error.message || '2FA verification failed' }
       }

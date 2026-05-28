@@ -17,7 +17,6 @@ import java.util.UUID;
  *
  * SECURITY:
  * - Device ID is unique system-wide (prevents ID collision attacks)
- * - Public key enables future end-to-end encryption features
  *
  * @see com.securevault.service.DeviceService for business logic
  */
@@ -50,19 +49,6 @@ public class Device {
      */
     @Column(name = "device_id", nullable = false, unique = true)
     private String deviceId;
-
-    /**
-     * Public key for asymmetric encryption scenarios.
-     * Enables future end-to-end encryption features.
-     */
-    @Column(name = "public_key")
-    private String publicKey;
-
-    /**
-     * Encrypted private key (for future asymmetric encryption support).
-     */
-    @Column(name = "encrypted_private_key")
-    private String encryptedPrivateKey;
 
     /**
      * Last time this device was used to access the vault.

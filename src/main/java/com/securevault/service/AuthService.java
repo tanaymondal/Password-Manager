@@ -156,37 +156,15 @@ public class AuthService {
 
         String deviceId = request.getDeviceId();
 
-        if (user.getTwoFactorEnabled()) {
-            log.info("2FA required for user: {}", user.getEmail());
-            String challengeId = pendingLoginChallengeStore.createChallenge(user.getId(), user.getEmail(), deviceId);
-            return TwoFactorLoginResponse.requireTwoFactor(
-                    user.getId().toString(),
-                    user.getEmail(),
-                    challengeId,
-                    user.getAuthSalt(),
-                    null,
-                    null,
-                    null
-            );
-        }
-
-        loginRateLimiter.recordSuccess(clientIp);
-        loginRateLimiter.recordSuccess(email);
-        user.resetFailedAttempts();
-        userRepository.save(user);
-
-        log.info("User logged in successfully: {}", user.getEmail());
-        AuthResponse authResponse = generateAuthResponse(user, deviceId);
-        auditService.logLogin(user.getId(), clientIp, userAgent);
-        return TwoFactorLoginResponse.loginSuccess(
-                authResponse.getAccessToken(),
-                authResponse.getRefreshToken(),
-                authResponse.getUserId(),
-                authResponse.getEmail(),
+        log.info("Login challenge created for user: {}", user.getEmail());
+        String challengeId = pendingLoginChallengeStore.createChallenge(user.getId(), user.getEmail(), deviceId);
+        List<String> twoFactorMethods = user.getTwoFactorEnabled() ? List.of("totp") : List.of();
+        return TwoFactorLoginResponse.requireTwoFactor(
+                user.getId().toString(),
+                null,
+                challengeId,
                 user.getAuthSalt(),
-                authResponse.getEncryptionSalt(),
-                authResponse.getWrappedVaultKey(),
-                authResponse.getEncryptionVersion()
+                twoFactorMethods
         );
     }
 
@@ -199,15 +177,17 @@ public class AuthService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BadCredentialsException("Invalid email or password"));
 
-        if (!user.getTwoFactorEnabled()) {
-            throw new BadCredentialsException("2FA is not enabled for this account");
-        }
-
-        if (!twoFactorAuthService.verifyCode(user.getId(), code)) {
-            loginRateLimiter.recordFailure(clientIp);
-            loginRateLimiter.recordFailure(email);
-            handleFailedLogin(user, clientIp, userAgent);
-            throw new BadCredentialsException("Invalid 2FA code");
+        if (user.getTwoFactorEnabled()) {
+            if (code == null || code.isBlank()) {
+                log.warn("TOTP code required but not provided for user: {}", user.getEmail());
+                throw new BadCredentialsException("TOTP code is required");
+            }
+            if (!twoFactorAuthService.verifyCode(user.getId(), code)) {
+                loginRateLimiter.recordFailure(clientIp);
+                loginRateLimiter.recordFailure(email);
+                handleFailedLogin(user, clientIp, userAgent);
+                throw new BadCredentialsException("Invalid 2FA code");
+            }
         }
 
         pendingLoginChallengeStore.consumeChallenge(challengeId);
@@ -216,7 +196,7 @@ public class AuthService {
         user.resetFailedAttempts();
         userRepository.save(user);
 
-        log.info("User logged in with 2FA: {}", user.getEmail());
+        log.info("User logged in: {}", user.getEmail());
         auditService.logLogin(user.getId(), clientIp, userAgent);
         return generateAuthResponse(user, deviceId);
     }
