@@ -696,14 +696,16 @@ Biometric unlock encrypts the raw vault key and stores it locally. No rate-limit
 
 ---
 
-### 2.29 Ktor JSON parser is lenient ❌
+### 2.29 Ktor JSON parser is lenient ✅
 [source: claude M12, codex M10]
 
-`isLenient = true` in `SecureVaultApi.kt`. Accepts non-standard JSON, widens parser surface.
+`isLenient = true` in `SecureVaultApi.kt`. Accepted non-standard JSON, widened parser surface.
 
-**File**: `SecureVaultApi.create:374`
+**Fix**: Removed `isLenient = true`. Parser now enforces standard JSON. Kept `ignoreUnknownKeys = true` for forward compatibility with API additions.
 
-**Status**: ❌ Open.
+**File**: `SecureVaultApi.kt:394`
+
+**Status**: ✅ Fixed.
 
 ---
 
@@ -1178,9 +1180,9 @@ Many `Result.Error(it.message ...)` paths surface backend error messages in mobi
 | Phase 0 — Stop the bleeding | 9 | 7 | 0 | 2 |
 | Phase 1 — Critical hardening | 25 | 12 | 1 | 12 |
 
-| Phase 2 — Important hardening | 37 | 18 | 1 | 18 |
+| Phase 2 — Important hardening | 37 | 19 | 1 | 17 |
 
-| **Total** | **112** | **37** | **2** | **73** |
+| **Total** | **112** | **38** | **2** | **72** |
 
 ### Verification
 - Backend `mvn -q test`: passed (6/6)
