@@ -760,14 +760,14 @@ Uses `request.getRemoteAddr()` instead of `ClientIpResolver`. All request logs s
 
 ---
 
-### 2.35 RateLimitingFilter counts OPTIONS requests 💡NEW
+### 2.35 RateLimitingFilter counts OPTIONS requests ✅
 [source: discovered during fix session]
 
-All requests including CORS preflight count against the 60 req/min per-IP limit. After ~60 OPTIONS, victim's real API calls blocked for remainder of minute.
+All requests including CORS preflight counted against the 60 req/min per-IP limit. After ~60 OPTIONS, victim's real API calls blocked for remainder of minute.
 
-**File**: `RateLimitingFilter.java:36-59`
+**Fix**: Already fixed in item 1.3 — `RateLimitingFilter.java:42-45` skips `OPTIONS` requests before counting.
 
-**Status**: ❌ Open.
+**Status**: ✅ Fixed (duplicate of 1.3).
 
 ---
 
