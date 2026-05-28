@@ -5,6 +5,8 @@ export interface EncryptedPayload {
   iv: string
 }
 
+const ENTRY_VERSION_PREFIX = 'v1:'
+
 export async function encryptEntry(
   vaultKey: CryptoKey,
   plaintext: string,
@@ -19,7 +21,7 @@ export async function encryptEntry(
   )
 
   return {
-    encryptedData: bytesToBase64(new Uint8Array(ciphertext)),
+    encryptedData: ENTRY_VERSION_PREFIX + bytesToBase64(new Uint8Array(ciphertext)),
     iv: bytesToBase64(iv),
   }
 }
@@ -29,7 +31,10 @@ export async function decryptEntry(
   encryptedData: string,
   ivBase64: string,
 ): Promise<string> {
-  const ciphertext = base64ToBytes(encryptedData) as Uint8Array<ArrayBuffer>
+  const data = encryptedData.startsWith(ENTRY_VERSION_PREFIX)
+    ? encryptedData.slice(ENTRY_VERSION_PREFIX.length)
+    : encryptedData
+  const ciphertext = base64ToBytes(data) as Uint8Array<ArrayBuffer>
   const iv = base64ToBytes(ivBase64) as Uint8Array<ArrayBuffer>
 
   const plaintext = await crypto.subtle.decrypt(

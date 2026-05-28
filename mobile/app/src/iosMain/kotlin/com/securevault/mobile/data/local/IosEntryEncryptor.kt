@@ -13,6 +13,7 @@ import platform.Security.SecRandomCopyBytes
 class IosEntryEncryptor : EntryEncryptor, VaultKeyManager {
     private val keyLength = 32uL
     private val gcmIvLength = 12
+    private val entryVersionPrefix = "v1:"
     private var cachedVaultKey: ByteArray? = null
 
     @OptIn(ExperimentalForeignApi::class)
@@ -89,8 +90,9 @@ class IosEntryEncryptor : EntryEncryptor, VaultKeyManager {
         iv.copyInto(combined)
         ciphertext.copyInto(combined, destinationOffset = gcmIvLength)
 
-        val encryptedData = combined.toNSData().base64EncodedStringWithOptions(0u)
-        val ivString = iv.toNSData().base64EncodedStringWithOptions(0u)
+        val b64 = combined.toNSData().base64EncodedStringWithOptions(0u) ?: ""
+        val encryptedData = entryVersionPrefix + b64
+        val ivString = iv.toNSData().base64EncodedStringWithOptions(0u) ?: ""
 
         return VaultEntryRequest(id = null, encryptedData = encryptedData, iv = ivString)
     }
@@ -98,7 +100,9 @@ class IosEntryEncryptor : EntryEncryptor, VaultKeyManager {
     @OptIn(ExperimentalForeignApi::class)
     override fun decrypt(response: VaultEntryResponse): VaultEntry {
         val vaultKey = cachedVaultKey ?: throw IllegalStateException("Vault key not available")
-        val combined = NSData.create(base64EncodedString = response.encryptedData, options = 0u) ?: NSData()
+        val rawData = if (response.encryptedData.startsWith(entryVersionPrefix))
+            response.encryptedData.substring(entryVersionPrefix.length) else response.encryptedData
+        val combined = NSData.create(base64EncodedString = rawData, options = 0u) ?: NSData()
 
         val iv = ByteArray(gcmIvLength)
         combined.bytes!!.reinterpret<ByteVar>().let { ptr ->
@@ -156,13 +160,15 @@ class IosEntryEncryptor : EntryEncryptor, VaultKeyManager {
         val combined = ByteArray(gcmIvLength + ciphertext.size)
         iv.copyInto(combined)
         ciphertext.copyInto(combined, destinationOffset = gcmIvLength)
-        return combined.toNSData().base64EncodedStringWithOptions(0u)
+        val b64 = combined.toNSData().base64EncodedStringWithOptions(0u) ?: ""
+        return entryVersionPrefix + b64
     }
 
     override fun decryptField(ciphertext: String): String {
         if (ciphertext.isEmpty()) return ""
         val vaultKey = cachedVaultKey ?: throw IllegalStateException("Vault key not available")
-        val combined = NSData.create(base64EncodedString = ciphertext, options = 0u) ?: NSData()
+        val raw = if (ciphertext.startsWith(entryVersionPrefix)) ciphertext.substring(entryVersionPrefix.length) else ciphertext
+        val combined = NSData.create(base64EncodedString = raw, options = 0u) ?: NSData()
         val iv = ByteArray(gcmIvLength)
         combined.bytes!!.reinterpret<ByteVar>().let { ptr ->
             for (i in 0..11) iv[i] = ptr[i]

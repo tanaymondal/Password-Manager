@@ -22,6 +22,7 @@ class AndroidEntryEncryptor : EntryEncryptor, VaultKeyManager {
     private val gcmIvLength = 12
     private val gcmTagLength = 128
     private val keyLength = 32
+    private val entryVersionPrefix = "v1:"
 
     private var cachedVaultKey: ByteArray? = null
     private val autoLockHandler = Handler(Looper.getMainLooper())
@@ -174,7 +175,7 @@ class AndroidEntryEncryptor : EntryEncryptor, VaultKeyManager {
         val encryptedBytes = cipher.doFinal(plaintextBytes)
         plaintextBytes.fill(0)
 
-        val encryptedData = Base64.encodeToString(encryptedBytes, Base64.NO_WRAP)
+        val encryptedData = entryVersionPrefix + Base64.encodeToString(encryptedBytes, Base64.NO_WRAP)
         val ivString = Base64.encodeToString(iv, Base64.NO_WRAP)
 
         return VaultEntryRequest(
@@ -187,7 +188,9 @@ class AndroidEntryEncryptor : EntryEncryptor, VaultKeyManager {
     override fun decrypt(response: VaultEntryResponse): VaultEntry {
         val key = getEncryptionKey()
         val iv = Base64.decode(response.iv, Base64.NO_WRAP)
-        val encryptedBytes = Base64.decode(response.encryptedData, Base64.NO_WRAP)
+        val encryptedRaw = if (response.encryptedData.startsWith(entryVersionPrefix))
+            response.encryptedData.substring(entryVersionPrefix.length) else response.encryptedData
+        val encryptedBytes = Base64.decode(encryptedRaw, Base64.NO_WRAP)
 
         val cipher = Cipher.getInstance(algorithm)
         val spec = GCMParameterSpec(gcmTagLength, iv)
@@ -212,13 +215,14 @@ class AndroidEntryEncryptor : EntryEncryptor, VaultKeyManager {
         val combined = ByteArray(iv.size + ciphertext.size)
         System.arraycopy(iv, 0, combined, 0, iv.size)
         System.arraycopy(ciphertext, 0, combined, iv.size, ciphertext.size)
-        return Base64.encodeToString(combined, Base64.NO_WRAP)
+        return entryVersionPrefix + Base64.encodeToString(combined, Base64.NO_WRAP)
     }
 
     override fun decryptField(ciphertext: String): String {
         if (ciphertext.isEmpty()) return ""
         val key = getEncryptionKey()
-        val combined = Base64.decode(ciphertext, Base64.NO_WRAP)
+        val raw = if (ciphertext.startsWith(entryVersionPrefix)) ciphertext.substring(entryVersionPrefix.length) else ciphertext
+        val combined = Base64.decode(raw, Base64.NO_WRAP)
         val iv = combined.copyOfRange(0, gcmIvLength)
         val encrypted = combined.copyOfRange(gcmIvLength, combined.size)
         val cipher = Cipher.getInstance(algorithm)
