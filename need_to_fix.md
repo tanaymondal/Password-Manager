@@ -13,7 +13,7 @@ Single source of truth merging `need_to_fix.md`, `claude_findings.md`, `codex_fi
 
 ### Phase 1 — Critical hardening
 
-### 1.3 Per-endpoint distributed rate limiting + trusted proxy ⏳
+### 1.3 Per-endpoint distributed rate limiting + trusted proxy ✅
 [source: need_to_fix 1.3, claude H3, codex H3]
 
 RateLimitingFilter and LoginRateLimiter migrated to Redis, ClientIpResolver created, and:
@@ -22,7 +22,7 @@ RateLimitingFilter and LoginRateLimiter migrated to Redis, ClientIpResolver crea
 
 **Remaining**: No per-endpoint granular limits (single 60/min default).
 
-**Status**: ⏳ Partially fixed — Redis migration, ClientIpResolver, IP logging fix, and OPTIONS exclusion done. Per-endpoint granularity remains.
+**Status**: ✅ Fixed — Redis migration, ClientIpResolver, OPTIONS exclusion, per-endpoint granular limits (10/min for register/change-password/upgrade-kdf, 20/min for login/prelogin/2fa/refresh, 60/min default for all others).
 
 ---
 ### 1.11 CAPTCHA + email verification on registration and login ❌

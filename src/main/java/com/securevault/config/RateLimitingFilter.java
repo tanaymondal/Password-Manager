@@ -11,6 +11,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
@@ -19,6 +20,19 @@ import java.util.concurrent.TimeUnit;
 public class RateLimitingFilter implements Filter {
 
     private static final String KEY_PREFIX = "ratelimit:";
+    private static final int DEFAULT_LIMIT = 60;
+    private static final int AUTH_LIMIT = 20;
+    private static final int STRICT_LIMIT = 10;
+
+    private static final Map<String, Integer> ENDPOINT_LIMITS = Map.of(
+        "/api/v1/auth/login", AUTH_LIMIT,
+        "/api/v1/auth/register", STRICT_LIMIT,
+        "/api/v1/auth/prelogin", AUTH_LIMIT,
+        "/api/v1/auth/verify-2fa", AUTH_LIMIT,
+        "/api/v1/auth/refresh", AUTH_LIMIT,
+        "/api/v1/auth/change-password", STRICT_LIMIT,
+        "/api/v1/auth/upgrade-kdf", STRICT_LIMIT
+    );
 
     private final StringRedisTemplate redisTemplate;
     private final ClientIpResolver clientIpResolver;
@@ -45,18 +59,22 @@ public class RateLimitingFilter implements Filter {
         }
 
         String clientId = clientIpResolver.getClientIp(httpRequest);
-        String key = KEY_PREFIX + clientId;
+        String path = httpRequest.getRequestURI();
+        int limit = ENDPOINT_LIMITS.getOrDefault(path, maxRequestsPerMinute);
+        if (limit < 1) limit = 1;
+
+        String key = KEY_PREFIX + path.replace('/', '_') + ":" + clientId;
 
         Long count = redisTemplate.opsForValue().increment(key);
         if (count != null && count == 1) {
             redisTemplate.expire(key, 60, TimeUnit.SECONDS);
         }
 
-        if (count != null && count <= maxRequestsPerMinute) {
-            httpResponse.setHeader("X-RateLimit-Remaining", String.valueOf(maxRequestsPerMinute - count));
+        if (count != null && count <= limit) {
+            httpResponse.setHeader("X-RateLimit-Remaining", String.valueOf(limit - count));
             chain.doFilter(request, response);
         } else {
-            log.warn("Rate limit exceeded for client: {}", clientId);
+            log.warn("Rate limit exceeded for {} from {}", path, clientId);
             httpResponse.setStatus(429);
             httpResponse.setContentType("application/json");
             httpResponse.getWriter().write("{\"success\":false,\"message\":\"Rate limit exceeded. Please try again later.\"}");
