@@ -81,6 +81,13 @@ export async function apiClient<T>(
     headers['Authorization'] = `Bearer ${store.accessToken}`
   }
 
+  if (options.headers) {
+    const customHeaders = options.headers as Record<string, string>
+    for (const key of Object.keys(customHeaders)) {
+      headers[key] = customHeaders[key]
+    }
+  }
+
   let res = await fetch(`${API_BASE}${path}`, { ...options, headers, credentials: 'include' })
 
   const isPublicEndpoint = ['/auth/login', '/auth/register', '/auth/auth-salt'].some(p =>
