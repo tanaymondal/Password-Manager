@@ -933,7 +933,7 @@ Old token deleted before new one saved. DB blip in between silently logs user ou
 
 **File**: `AuthService.refreshToken()`
 
-**Status**: ❌ Open.
+**Status**: ✅ Fixed — new token saved before old deleted, within `@Transactional`.
 
 ---
 ### 3.18 Cookie SameSite set via raw attribute ✅
@@ -979,7 +979,7 @@ Uses plaintext `password` fields that no longer match auth-hash flow.
 
 **File**: `SecureVault.postman_collection.json`
 
-**Status**: ❌ Open.
+**Status**: ✅ Fixed — all request bodies updated to `authHash` pattern, stale `publicKey` removed from device registration.
 
 ---
 ### 3.23 Password generator has tiny modulo bias ✅
@@ -1007,7 +1007,7 @@ Leading `%` prevents index use. Performance footgun on large vaults.
 
 **File**: `VaultEntryDao`
 
-**Status**: ❌ Open.
+**Status**: ✅ Fixed — `searchEntriesPrefix` added for indexed prefix search; original `searchEntries` retained with leading `%`.
 
 ---
 ### 3.27 Flyway `baseline-on-migrate=true` ✅
