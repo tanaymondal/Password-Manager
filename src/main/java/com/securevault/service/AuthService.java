@@ -150,7 +150,8 @@ public class AuthService {
         log.info("LOGIN_DEBUG: userExists={}, computing serverSideHash", user != null);
 
         if (user != null && user.isLocked()) {
-            log.warn("Account locked for user: {}", user.getEmail());
+            refreshTokenRepository.deleteByUserId(user.getId());
+            log.warn("Account locked for user: {} — refresh tokens revoked", user.getEmail());
             throw new BadCredentialsException("Account is temporarily locked. Please try again later.");
         }
 
@@ -250,6 +251,12 @@ public class AuthService {
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("Invalid refresh token"));
+
+        if (user.isLocked()) {
+            refreshTokenRepository.delete(storedToken);
+            log.warn("Refresh token rejected for locked user: {}", userId);
+            throw new IllegalArgumentException("Account is temporarily locked");
+        }
 
         String tokenEmail = jwtTokenProvider.getEmailFromRefreshToken(refreshToken);
         long tokenPwdUpdatedAt = jwtTokenProvider.getPasswordUpdatedAtFromRefreshToken(refreshToken);
@@ -411,6 +418,9 @@ public class AuthService {
     }
 
     private void handleFailedLogin(User user, String clientIp, String userAgent) {
+        if (user.getLockedUntil() != null && !user.isLocked()) {
+            user.resetFailedAttempts();
+        }
         user.incrementFailedAttempts();
         log.warn("Failed login attempt {} for user: {}", user.getFailedLoginAttempts(), user.getEmail());
 
@@ -418,7 +428,8 @@ public class AuthService {
 
         if (user.getFailedLoginAttempts() >= MAX_FAILED_ATTEMPTS) {
             user.lockAccount(LOCKOUT_MINUTES);
-            log.warn("Account locked for user: {} due to {} failed attempts", user.getEmail(), MAX_FAILED_ATTEMPTS);
+            refreshTokenRepository.deleteByUserId(user.getId());
+            log.warn("Account locked for user: {} due to {} failed attempts. Refresh tokens revoked.", user.getEmail(), MAX_FAILED_ATTEMPTS);
         }
 
         userRepository.save(user);

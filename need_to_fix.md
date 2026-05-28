@@ -636,14 +636,19 @@ Blocks camera/mic/geo/payment but not `interest-cohort=()`, `browsing-topics=()`
 
 ---
 
-### 2.23 Account lockout counter behavior is awkward ❌
+### 2.23 Account lockout counter behavior is awkward ✅
 [source: claude M8, codex M14]
 
-`handleFailedLogin()` increments `failedLoginAttempts` even when already locked. After unlock, next failure starts adding to previous count → only one failed attempt before re-lock. Also, active access tokens still work after account lockout ([claude H11, codex H11]).
+`handleFailedLogin()` incremented `failedLoginAttempts` even when already locked. After unlock, next failure started adding to previous count → only one failed attempt before re-lock. Active access tokens still worked after account lockout ([claude H11, codex H11]).
 
-**File**: `AuthService.java:311`
+**Fix**:
+- **Counter reset after lockout**: `AuthService.java:413-415` — `handleFailedLogin()` resets `failedLoginAttempts` via `resetFailedAttempts()` if `lockedUntil` is non-null and the lock has expired (prevents overflow re-lock with one failure).
+- **Token revocation on lock**: `AuthService.java:420` — when account locks, `refreshTokenRepository.deleteByUserId()` revokes all refresh tokens. `AuthService.java:152-156` — when login rejects a locked account, refresh tokens are also revoked.
+- **Access token rejection during lock**: `JwtAuthenticationFilter.java:87-96` — every authenticated request checks `user.isLocked()` and rejects the token with 401 if locked. `AuthService.java:253-258` — refresh token endpoint also rejects locked accounts.
 
-**Status**: ❌ Open.
+**Files**: `AuthService.java:413-425,152-156,253-258`, `JwtAuthenticationFilter.java:87-96`
+
+**Status**: ✅ Fixed.
 
 ---
 
@@ -1195,9 +1200,9 @@ Many `Result.Error(it.message ...)` paths surface backend error messages in mobi
 | Phase 0 — Stop the bleeding | 9 | 7 | 0 | 2 |
 | Phase 1 — Critical hardening | 25 | 12 | 1 | 12 |
 
-| Phase 2 — Important hardening | 37 | 22 | 1 | 14 |
+| Phase 2 — Important hardening | 37 | 23 | 1 | 13 |
 
-| **Total** | **112** | **41** | **2** | **69** |
+| **Total** | **112** | **42** | **2** | **68** |
 
 ### Verification
 - Backend `mvn -q test`: passed (6/6)

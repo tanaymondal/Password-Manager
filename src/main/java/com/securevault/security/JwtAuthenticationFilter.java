@@ -84,6 +84,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             User user = userRepository.findById(userId).orElse(null);
             if (user != null) {
+                if (user.isLocked()) {
+                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                    response.setContentType("application/json");
+                    response.getWriter().write(
+                        "{\"success\":false,\"message\":\"Account is temporarily locked. Please try again later.\"}"
+                    );
+                    return;
+                }
+
                 Object tokenPwdClaim = jwtTokenProvider.getClaim(token, "pwdUpdatedAt", Object.class);
                 LocalDateTime dbPwdUpdatedAt = user.getPasswordUpdatedAt();
 
