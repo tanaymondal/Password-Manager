@@ -85,7 +85,9 @@ async function loadEntries(query: string) {
 
 $('login-btn').addEventListener('click', async () => {
   const email = ($('login-email') as HTMLInputElement).value.trim()
-  const password = ($('login-password') as HTMLInputElement).value
+  const passwordInput = $('login-password') as HTMLInputElement
+  const password = passwordInput.value
+  passwordInput.value = ''
   setError('login-error', '')
 
   if (!email || !password) {
@@ -146,6 +148,7 @@ $('2fa-btn').addEventListener('click', async () => {
       showView('vault')
       loadEntries('')
     } else {
+      pending2FA = null
       setError('2fa-error', res.error || 'Verification failed')
     }
   } catch (err: any) {
@@ -157,7 +160,9 @@ $('2fa-btn').addEventListener('click', async () => {
 })
 
 $('unlock-btn').addEventListener('click', async () => {
-  const password = ($('unlock-password') as HTMLInputElement).value
+  const unlockInput = $('unlock-password') as HTMLInputElement
+  const password = unlockInput.value
+  unlockInput.value = ''
   setError('unlock-error', '')
 
   if (!password) {

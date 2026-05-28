@@ -665,12 +665,16 @@ HSTS with `maxAge=1y, includeSubDomains, preload` configured unconditionally in 
 
 ---
 
-### 2.26 Master password held in React/Compose state ❌
+### 2.26 Master password held in React/Compose state ✅
 [source: claude M11]
 
-`LoginPage.tsx:48` keeps `data.password` in React Hook Form state until form reset. React DevTools / heap dump exposes it. Same in extension popup (`script.ts:88`).
+`LoginPage.tsx:48` kept `data.password` in React Hook Form state until form reset. React DevTools / heap dump exposes it. Same in extension popup (`script.ts:88`).
 
-**Status**: ❌ Open.
+**Fix**:
+- `LoginPage.tsx`: Added `resetLogin` to form. Both on 2FA success and on error, the password field is cleared via `resetLogin({ email, password: '' })` while preserving the email.
+- `extension/popup/script.ts`: `login-password` and `unlock-password` input values are cleared immediately after reading (`passwordInput.value = ''`). `pending2FA` is cleared on both success and failure paths so the password doesn't linger in heap.
+
+**Status**: ✅ Fixed.
 
 ---
 
@@ -1187,9 +1191,9 @@ Many `Result.Error(it.message ...)` paths surface backend error messages in mobi
 | Phase 0 — Stop the bleeding | 9 | 7 | 0 | 2 |
 | Phase 1 — Critical hardening | 25 | 12 | 1 | 12 |
 
-| Phase 2 — Important hardening | 37 | 20 | 1 | 16 |
+| Phase 2 — Important hardening | 37 | 21 | 1 | 15 |
 
-| **Total** | **112** | **39** | **2** | **71** |
+| **Total** | **112** | **40** | **2** | **70** |
 
 ### Verification
 - Backend `mvn -q test`: passed (6/6)

@@ -28,6 +28,7 @@ export function LoginPage() {
   const {
     register: registerLogin,
     handleSubmit: handleLoginSubmit,
+    reset: resetLogin,
     formState: { errors: loginErrors },
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
@@ -50,6 +51,7 @@ export function LoginPage() {
     setSubmitting(true)
     try {
       const res = await login(data.email, data.password)
+      resetLogin({ email: data.email, password: '' })
       const methods = res.twoFactorMethods ?? []
       if (methods.includes('totp')) {
         setTwoFactorRequired(true)
@@ -58,6 +60,7 @@ export function LoginPage() {
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Login failed')
+      resetLogin({ email: data.email, password: '' })
     } finally {
       setSubmitting(false)
     }
