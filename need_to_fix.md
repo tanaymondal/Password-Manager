@@ -344,25 +344,29 @@ Device ID generation uses `kotlin.random.Random` instead of `SecureRandom`. Pred
 
 ---
 
-### 1.21 Unencrypted Room DB overload exists ❌
+### 1.21 Unencrypted Room DB overload exists ✅
 [source: claude H12]
 
-`SecureVaultDatabase.kt` ships `getInstance(context)` overload that builds Room WITHOUT SQLCipher. Currently unreferenced but one typo away from writing plaintext (C5) to unencrypted SQLite.
+`SecureVaultDatabase.kt` shipped `getInstance(context)` overload that built Room WITHOUT SQLCipher. Unreferenced but one typo away from writing plaintext to unencrypted SQLite.
 
-**File**: `SecureVaultDatabase.kt:40`
+**Fix**: Removed the unencrypted `getInstance(context: Context)` overload. The only remaining `getInstance` requires a `passphrase: ByteArray` and creates SQLCipher-backed database.
 
-**Status**: ❌ Open.
+**File**: `SecureVaultDatabase.kt:24`
+
+**Status**: ✅ Fixed.
 
 ---
 
-### 1.22 `fallbackToDestructiveMigration()` on cache DB ❌
+### 1.22 `fallbackToDestructiveMigration()` on cache DB ✅
 [source: claude H13]
 
 On any schema upgrade, entire local cache wiped. A corrupt DB also silently destroys data — offline user with stale state could lose unsynced changes.
 
-**File**: `SecureVaultDatabase.kt:33,47`
+**Fix**: Removed `.fallbackToDestructiveMigration()`. Room will now throw on schema mismatch instead of silently destroying data, forcing developers to provide proper migrations.
 
-**Status**: ❌ Open.
+**File**: `SecureVaultDatabase.kt:24-37`
+
+**Status**: ✅ Fixed.
 
 ---
 
@@ -516,12 +520,12 @@ No pinning on Android or iOS. Rogue/user-installed CA can MITM.
 
 ---
 
-### 2.12 Android backup and local database hardening ❌
+### 2.12 Android backup and local database hardening ✅
 [source: need_to_fix 2.12, claude C7, codex C7]
 
 `allowBackup=true`, destructive migrations enabled, unencrypted DB overload exists.
 
-**Status**: ❌ Open (overlaps with 0.8, 1.21, 1.22).
+**Status**: ✅ Fixed (was overlapping with 0.8, 1.21, 1.22). See individual items for details.
 
 ---
 
@@ -1151,11 +1155,11 @@ Many `Result.Error(it.message ...)` paths surface backend error messages in mobi
 | Category | Total | ✅ Fixed | ⏳ Partial | ❌ Remaining |
 |----------|-------|----------|-----------|--------------|
 | Phase 0 — Stop the bleeding | 9 | 7 | 0 | 2 |
-| Phase 1 — Critical hardening | 25 | 9 | 2 | 14 |
-| Phase 2 — Important hardening | 37 | 11 | 1 | 25 |
-| Phase 3 — Defense in depth | 29 | 0 | 0 | 29 |
-| Phase 4 — Operational maturity | 12 | 0 | 0 | 12 |
-| **Total** | **112** | **27** | **3** | **82** |
+| Phase 1 — Critical hardening | 25 | 11 | 2 | 12 |
+
+| Phase 2 — Important hardening | 37 | 12 | 1 | 24 |
+
+| **Total** | **112** | **30** | **3** | **79** |
 
 ### Verification
 - Backend `mvn -q test`: passed (6/6)
