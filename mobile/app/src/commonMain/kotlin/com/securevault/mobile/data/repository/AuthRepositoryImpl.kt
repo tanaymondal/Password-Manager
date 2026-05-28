@@ -68,9 +68,9 @@ class AuthRepositoryImpl(
                         email = userEmail ?: email,
                         encryptionVersion = authResponse.encryptionVersion,
                         wrappedVaultKey = authResponse.wrappedVaultKey,
-                        kdfIterations = 4,
-                        kdfMemory = 65536,
-                        kdfParallelism = 4
+                        kdfIterations = authResponse.kdfIterations ?: 4,
+                        kdfMemory = authResponse.kdfMemory ?: 65536,
+                        kdfParallelism = authResponse.kdfParallelism ?: 4
                     )
                     Result.Success(getCurrentAuthState())
                 },
@@ -155,9 +155,9 @@ class AuthRepositoryImpl(
                         email = email,
                         encryptionVersion = authResponse.encryptionVersion,
                         wrappedVaultKey = authResponse.wrappedVaultKey,
-                        kdfIterations = 4,
-                        kdfMemory = 65536,
-                        kdfParallelism = 4
+                        kdfIterations = authResponse.kdfIterations ?: 4,
+                        kdfMemory = authResponse.kdfMemory ?: 65536,
+                        kdfParallelism = authResponse.kdfParallelism ?: 4
                     )
                     Result.Success(getCurrentAuthState())
                 },
