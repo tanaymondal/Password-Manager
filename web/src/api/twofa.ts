@@ -24,9 +24,12 @@ export function enable2FA(code: string) {
   })
 }
 
-export function disable2FA(code: string) {
+export function disable2FA(code: string, sudoToken?: string) {
+  const headers: Record<string, string> = {}
+  if (sudoToken) headers['X-Sudo-Token'] = sudoToken
   return apiClient<void>('/2fa/disable', {
     method: 'POST',
     body: JSON.stringify({ code }),
+    headers,
   })
 }

@@ -3,6 +3,7 @@ package com.securevault.controller;
 import com.securevault.dto.ApiResponse;
 import com.securevault.dto.Enable2FARequest;
 import com.securevault.dto.TwoFactorSetupResponse;
+import com.securevault.security.RequireSudo;
 import com.securevault.service.AuditService;
 import com.securevault.service.TwoFactorAuthService;
 import com.securevault.util.ClientIpResolver;
@@ -102,6 +103,7 @@ public class TwoFactorController {
      * @param httpRequest HTTP request for audit logging
      * @return Success response
      */
+    @RequireSudo
     @PostMapping("/disable")
     public ResponseEntity<ApiResponse<String>> disable2FA(
             @AuthenticationPrincipal UserDetails userDetails,

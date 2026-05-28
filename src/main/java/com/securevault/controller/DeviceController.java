@@ -4,6 +4,7 @@ import com.securevault.dto.ApiResponse;
 import com.securevault.dto.DeviceRequest;
 import com.securevault.dto.DeviceResponse;
 import com.securevault.dto.DevicesResponse;
+import com.securevault.security.RequireSudo;
 import com.securevault.service.DeviceService;
 import com.securevault.util.UserUtils;
 import jakarta.validation.Valid;
@@ -85,6 +86,7 @@ public class DeviceController {
      * @param deviceId String ID of the device to remove
      * @return Success response
      */
+    @RequireSudo
     @DeleteMapping("/{deviceId}")
     public ResponseEntity<ApiResponse<String>> deleteDevice(
             @AuthenticationPrincipal UserDetails userDetails,

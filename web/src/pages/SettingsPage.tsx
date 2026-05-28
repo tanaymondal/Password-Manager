@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useVault } from '../context/VaultContext'
 import { get2FAStatus, setup2FA, enable2FA, disable2FA } from '../api/twofa'
+import { requestSudo } from '../api/auth'
 import { getDevices, deleteDevice, type DeviceResponse } from '../api/devices'
 import { getAuditLogs, type AuditLogEntry } from '../api/audit'
 import { generatePassword } from '../crypto/generator'
@@ -320,7 +321,8 @@ function TwoFactorSection() {
     setError('')
     setBusy(true)
     try {
-      await disable2FA(code)
+      const sudo = await requestSudo()
+      await disable2FA(code, sudo.sudoToken)
       setEnabled(false)
       setDisabling(false)
       setCode('')
@@ -485,7 +487,8 @@ function DevicesSection() {
   const handleDelete = async (id: string) => {
     if (!window.confirm('Remove this device?')) return
     try {
-      await deleteDevice(id)
+      const sudo = await requestSudo()
+      await deleteDevice(id, sudo.sudoToken)
       setDevices((prev) => prev.filter((d) => d.id !== id))
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to remove device')
