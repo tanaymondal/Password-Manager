@@ -92,6 +92,9 @@ class AuthRepositoryImpl(
             val kdfIter = pre?.kdfIterations ?: 4
             val kdfMem = pre?.kdfMemory ?: 65536
             val kdfPar = pre?.kdfParallelism ?: 4
+            SessionManager.setKdfIterations(kdfIter)
+            SessionManager.setKdfMemory(kdfMem)
+            SessionManager.setKdfParallelism(kdfPar)
             val authHash = cryptoEngine.generateAuthHash(password, authSalt, kdfIter, kdfMem, kdfPar)
             val deviceId = getOrCreateDeviceId()
             val response = api.login(LoginRequest(email, authHash, deviceName = "Mobile App", deviceId = deviceId))
@@ -309,15 +312,9 @@ class AuthRepositoryImpl(
         if (wrappedVaultKey != null) {
             SessionManager.setWrappedVaultKey(wrappedVaultKey)
         }
-        if (kdfIterations != null) {
-            SessionManager.setKdfIterations(kdfIterations)
-        }
-        if (kdfMemory != null) {
-            SessionManager.setKdfMemory(kdfMemory)
-        }
-        if (kdfParallelism != null) {
-            SessionManager.setKdfParallelism(kdfParallelism)
-        }
+        SessionManager.setKdfIterations(kdfIterations ?: 4)
+        SessionManager.setKdfMemory(kdfMemory ?: 65536)
+        SessionManager.setKdfParallelism(kdfParallelism ?: 4)
         _authState.value = AuthState(
             user = User(userId.hashCode().toLong(), email),
             accessToken = accessToken,
