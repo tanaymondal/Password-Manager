@@ -140,19 +140,16 @@ History check re-hashed with freshly generated salt, making comparison always fa
 
 ---
 
-### 1.3 Per-endpoint distributed rate limiting + trusted proxy ❌
+### 1.3 Per-endpoint distributed rate limiting + trusted proxy ⏳
 [source: need_to_fix 1.3, claude H3, codex H3]
 
-RateLimitingFilter and LoginRateLimiter migrated to Redis, and ClientIpResolver created. But remaining gaps:
-- No per-endpoint granular limits (single 60/min default)
-- `RequestLoggingInterceptor` still uses `request.getRemoteAddr()` instead of `ClientIpResolver` → logs show proxy IP behind nginx
-- `RateLimitingFilter` counts CORS preflight (OPTIONS) requests — attacker exhausts limit with OPTIONS alone
+RateLimitingFilter and LoginRateLimiter migrated to Redis, ClientIpResolver created, and:
+- `RequestLoggingInterceptor` now uses `clientIpResolver.getClientIp()` instead of `request.getRemoteAddr()` ✅
+- `RateLimitingFilter` skips OPTIONS requests (CORS preflight no longer consumes rate limit) ✅
 
-**New issues found**:
-- `RequestLoggingInterceptor.java:29`: not using `ClientIpResolver`
-- `RateLimitingFilter.java:36-59`: OPTIONS counted against rate limit
+**Remaining**: No per-endpoint granular limits (single 60/min default).
 
-**Status**: ⏳ Partially fixed — Redis migration and ClientIpResolver done. Remaining: per-endpoint granularity, Interceptor IP fix, OPTIONS exclusion.
+**Status**: ⏳ Partially fixed — Redis migration, ClientIpResolver, IP logging fix, and OPTIONS exclusion done. Per-endpoint granularity remains.
 
 ---
 
@@ -1122,6 +1119,8 @@ Many `Result.Error(it.message ...)` paths surface backend error messages in mobi
 - All clients (web extension, web app, mobile) updated for unified 2FA flow with `twoFactorMethods`-based TOTP UI decision
 - `VaultEntryEntity` password/notes columns encrypted at entity level with vault key (AES-256-GCM); `e1:` prefix for legacy migration
 - `VaultCache.kt` removed — dead plaintext DataStore cache (zero references)
+- `RequestLoggingInterceptor` — uses `ClientIpResolver.getClientIp()` instead of `request.getRemoteAddr()`
+- `RateLimitingFilter` — skips OPTIONS requests (CORS preflight no longer counts against rate limit)
 
 ---
 
