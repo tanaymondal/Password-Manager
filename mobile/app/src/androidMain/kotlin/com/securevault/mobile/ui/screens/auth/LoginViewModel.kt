@@ -92,6 +92,7 @@ class LoginViewModel(
                             )
                         }
                     }
+                    is LoginResult.Success -> setEffect(LoginEffect.NavigateToVault)
                     is LoginResult.Error -> setState { copy(error = r.message) }
                     null -> setState { copy(error = result.exceptionOrNull()?.message ?: "Unknown error") }
                 }

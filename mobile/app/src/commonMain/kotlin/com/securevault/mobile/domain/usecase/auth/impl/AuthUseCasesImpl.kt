@@ -19,6 +19,18 @@ class LoginUseCaseImpl(
                     is LoginResponse.TwoFactorRequired -> {
                         LoginResult.TwoFactorRequired(response.info)
                     }
+                    is LoginResponse.Success -> {
+                        LoginResult.Success(
+                            tokens = AuthTokens(
+                                accessToken = response.authState.accessToken!!,
+                                refreshToken = response.authState.refreshToken!!,
+                                encryptionSalt = response.authState.encryptionSalt!!,
+                                userId = response.authState.user!!.id,
+                                email = response.authState.user.email
+                            ),
+                            user = User(response.authState.user.id, response.authState.user.email)
+                        )
+                    }
                 }
             }
             is Result.Error -> LoginResult.Error(result.message)
