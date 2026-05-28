@@ -2,7 +2,7 @@ import { argon2id } from 'hash-wasm'
 import { base64ToBytes, bytesToBase64, generateRandomBytes } from './util'
 
 export const DEFAULT_KDF_ITERATIONS = 4
-export const DEFAULT_KDF_MEMORY = 98304 // 96MB in KiB
+export const DEFAULT_KDF_MEMORY = 65536 // 64MB in KiB
 export const DEFAULT_KDF_PARALLELISM = 4
 
 export async function derivePasswordHash(

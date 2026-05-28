@@ -93,10 +93,9 @@ class AuthRepositoryImpl(
             val kdfIter = pre?.kdfIterations ?: 4
             val kdfMem = pre?.kdfMemory ?: 65536
             val kdfPar = pre?.kdfParallelism ?: 4
-            val mobileMem = 65536
-            SessionManager.setKdfIterations(4)
-            SessionManager.setKdfMemory(mobileMem)
-            SessionManager.setKdfParallelism(4)
+            SessionManager.setKdfIterations(kdfIter)
+            SessionManager.setKdfMemory(kdfMem)
+            SessionManager.setKdfParallelism(kdfPar)
             val authHash = cryptoEngine.generateAuthHash(password, authSalt, kdfIter, kdfMem, kdfPar)
             val deviceId = getOrCreateDeviceId()
             val response = api.login(LoginRequest(email, authHash, deviceName = "Mobile App", deviceId = deviceId))
@@ -140,10 +139,10 @@ class AuthRepositoryImpl(
                     if (encSalt == null || accessToken == null || refreshToken == null || userId == null) {
                         return@fold Result.Error("Incomplete 2FA verification response from server")
                     }
-                    val mobileMem = 65536
+                    val kdfMem = authResponse.kdfMemory ?: 65536
                     val vaultKey = deriveVaultKey(
                         password, encSalt, authResponse.wrappedVaultKey,
-                        4, mobileMem, 4
+                        4, kdfMem, 4
                     )
                     if (vaultKey != null) {
                         vaultKeyManager.setCachedVaultKey(vaultKey)
@@ -236,7 +235,7 @@ class AuthRepositoryImpl(
                 return Result.Error("Vault key material not available. Please login again.")
             }
 
-            val vaultKey = deriveVaultKey(password, encryptionSalt, wrappedVaultKey, 4, 65536, 4)
+            val vaultKey = deriveVaultKey(password, encryptionSalt, wrappedVaultKey, 4, SessionManager.getKdfMemory(), 4)
             if (vaultKey != null) {
                 vaultKeyManager.setCachedVaultKey(vaultKey)
             }
