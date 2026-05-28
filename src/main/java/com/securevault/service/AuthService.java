@@ -414,6 +414,16 @@ public class AuthService {
 
     @Transactional
     public void upgradeKdf(UUID userId, com.securevault.dto.UpgradeKdfRequest request) {
+        String rateLimitKey = "upgrade-kdf:user:" + userId;
+        Long count = redisTemplate.opsForValue().increment(rateLimitKey);
+        if (count != null && count == 1) {
+            redisTemplate.expire(rateLimitKey, 300, java.util.concurrent.TimeUnit.SECONDS);
+        }
+        if (count != null && count > 1) {
+            log.warn("KDF upgrade rate limit exceeded for user: {}", userId);
+            throw new RateLimitExceededException("KDF upgrade can only be performed once every 5 minutes.");
+        }
+
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
 
