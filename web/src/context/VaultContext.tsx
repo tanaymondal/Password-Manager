@@ -24,7 +24,7 @@ import {
   deleteVaultEntry,
   type VaultEntryResponse,
 } from '../api/vault'
-import { changePassword, checkBreach, upgradeKdf } from '../api/auth'
+import { changePassword, checkBreach, upgradeKdf, requestSudo } from '../api/auth'
 import { setTokens } from '../api/client'
 import { getCryptoMaterial, setCryptoMaterial } from '../store/cryptoMaterial'
 
@@ -325,13 +325,17 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       )
       const newAuthHash = await derivePasswordHash(newPassword, authSalt) // uses recommended defaults automatically
 
+      onProgress?.(0.7)
+      const sudo = await requestSudo()
+      const sudoToken = sudo.sudoToken
+
       onProgress?.(0.8)
       const res = await changePassword({
         current_auth_hash: currentAuthHash,
         new_auth_hash: newAuthHash,
         wrapped_vault_key: newWrapped,
         new_encryption_salt: newSalt,
-      })
+      }, sudoToken)
 
       setCryptoMaterial({
         authSalt: res.authSalt,

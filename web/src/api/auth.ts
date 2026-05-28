@@ -144,9 +144,20 @@ export interface ChangePasswordResponse {
   kdfParallelism?: number
 }
 
-export function changePassword(data: ChangePasswordRequest) {
+export function requestSudo() {
+  return apiClient<{ sudoToken: string }>('/auth/sudo', {
+    method: 'POST',
+  })
+}
+
+export function changePassword(data: ChangePasswordRequest, sudoToken?: string) {
+  const headers: Record<string, string> = {}
+  if (sudoToken) {
+    headers['X-Sudo-Token'] = sudoToken
+  }
   return apiClient<ChangePasswordResponse>('/auth/change-password', {
     method: 'POST',
     body: JSON.stringify(data),
+    headers,
   })
 }
