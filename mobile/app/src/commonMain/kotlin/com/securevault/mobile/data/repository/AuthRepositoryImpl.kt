@@ -1,5 +1,6 @@
 package com.securevault.mobile.data.repository
 
+import com.securevault.mobile.data.repository.ErrorMapper
 import com.securevault.mobile.data.api.SecureVaultApi
 import com.securevault.mobile.data.breach.BreachChecker
 import com.securevault.mobile.data.model.LoginRequest
@@ -68,11 +69,11 @@ class AuthRepositoryImpl(
                 onFailure = {
                     SessionManager.clearSession()
                     _authState.value = AuthState.unauthenticated()
-                    Result.Error(it.message ?: "Token refresh failed")
+                    Result.Error(ErrorMapper.map(it.message, "Token refresh failed"))
                 }
             )
         } catch (e: Exception) {
-            Result.Error(e.message ?: "Token refresh failed", e)
+            Result.Error(ErrorMapper.map(e.message, "Token refresh failed"), e)
         }
     }
 
@@ -99,10 +100,10 @@ class AuthRepositoryImpl(
                     )
                     Result.Success(LoginResponse.TwoFactorRequired(info))
                 },
-                onFailure = { Result.Error(it.message ?: "Login failed", it) }
+                onFailure = { Result.Error(ErrorMapper.map(it.message, "Login failed"), it) }
             )
         } catch (e: Exception) {
-            Result.Error(e.message ?: "Login failed", e)
+            Result.Error(ErrorMapper.map(e.message, "Login failed"), e)
         }
     }
 
@@ -142,10 +143,10 @@ class AuthRepositoryImpl(
                     )
                     Result.Success(getCurrentAuthState())
                 },
-                onFailure = { Result.Error(it.message ?: "2FA verification failed", it) }
+                onFailure = { Result.Error(ErrorMapper.map(it.message, "2FA verification failed"), it) }
             )
         } catch (e: Exception) {
-            Result.Error(e.message ?: "2FA verification failed", e)
+            Result.Error(ErrorMapper.map(e.message, "2FA verification failed"), e)
         }
     }
 
@@ -196,11 +197,11 @@ class AuthRepositoryImpl(
                 onFailure = {
                     SessionManager.clearSession()
                     _authState.value = AuthState.unauthenticated()
-                    Result.Error(it.message ?: "Token refresh failed")
+                    Result.Error(ErrorMapper.map(it.message, "Token refresh failed"))
                 }
             )
         } catch (e: Exception) {
-            Result.Error(e.message ?: "Token refresh failed", e)
+            Result.Error(ErrorMapper.map(e.message, "Token refresh failed"), e)
         }
     }
 
@@ -219,7 +220,7 @@ class AuthRepositoryImpl(
             }
             Result.Success(Unit)
         } catch (e: Exception) {
-            Result.Error("Failed to unlock vault: ${e.message}")
+            Result.Error(ErrorMapper.map(e.message, "Failed to unlock vault"))
         }
     }
 

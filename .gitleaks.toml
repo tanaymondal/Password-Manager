@@ -1,0 +1,13 @@
+# Gitleaks configuration for SecureVault Password Manager
+title = "SecureVault Gitleaks Config"
+
+[allowlist]
+  description = "Allowlisted files and paths"
+  paths = [
+    '''(?i)need_to_fix\.md''',
+    '''(?i)claude_findings\.md''',
+    '''(?i)codex_findings\.md''',
+    '''(?i)\.gitleaks\.toml''',
+    '''(?i)\.env\.example''',
+    '''(?i)SECURITY\.md''',
+  ]

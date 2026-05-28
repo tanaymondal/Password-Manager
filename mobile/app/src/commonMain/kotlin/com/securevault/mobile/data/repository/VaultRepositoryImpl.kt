@@ -1,5 +1,6 @@
 package com.securevault.mobile.data.repository
 
+import com.securevault.mobile.data.repository.ErrorMapper
 import com.securevault.mobile.data.api.SecureVaultApi
 import com.securevault.mobile.data.model.VaultEntryRequest
 import com.securevault.mobile.data.model.VaultEntryResponse
@@ -20,10 +21,10 @@ class VaultRepositoryImpl(
                     val decryptedEntries = entries.map { decryptEntry(it) }
                     Result.Success(decryptedEntries)
                 },
-                onFailure = { Result.Error(it.message ?: "Failed to fetch entries", it) }
+                onFailure = { Result.Error(ErrorMapper.map(it.message, "Failed to fetch entries"), it) }
             )
         } catch (e: Exception) {
-            Result.Error(e.message ?: "Failed to fetch entries", e)
+            Result.Error(ErrorMapper.map(e.message, "Failed to fetch entries"), e)
         }
     }
 
@@ -34,10 +35,10 @@ class VaultRepositoryImpl(
                 onSuccess = { entry ->
                     Result.Success(decryptEntry(entry))
                 },
-                onFailure = { Result.Error(it.message ?: "Failed to fetch entry", it) }
+                onFailure = { Result.Error(ErrorMapper.map(it.message, "Failed to fetch entry"), it) }
             )
         } catch (e: Exception) {
-            Result.Error(e.message ?: "Failed to fetch entry", e)
+            Result.Error(ErrorMapper.map(e.message, "Failed to fetch entry"), e)
         }
     }
 
@@ -49,10 +50,10 @@ class VaultRepositoryImpl(
                 onSuccess = { created ->
                     Result.Success(decryptEntry(created))
                 },
-                onFailure = { Result.Error(it.message ?: "Failed to create entry", it) }
+                onFailure = { Result.Error(ErrorMapper.map(it.message, "Failed to create entry"), it) }
             )
         } catch (e: Exception) {
-            Result.Error(e.message ?: "Failed to create entry", e)
+            Result.Error(ErrorMapper.map(e.message, "Failed to create entry"), e)
         }
     }
 
@@ -64,10 +65,10 @@ class VaultRepositoryImpl(
                 onSuccess = { updated ->
                     Result.Success(decryptEntry(updated))
                 },
-                onFailure = { Result.Error(it.message ?: "Failed to update entry", it) }
+                onFailure = { Result.Error(ErrorMapper.map(it.message, "Failed to update entry"), it) }
             )
         } catch (e: Exception) {
-            Result.Error(e.message ?: "Failed to update entry", e)
+            Result.Error(ErrorMapper.map(e.message, "Failed to update entry"), e)
         }
     }
 
@@ -76,10 +77,10 @@ class VaultRepositoryImpl(
             val response = api.deleteVaultEntry(id.toString())
             response.fold(
                 onSuccess = { Result.Success(Unit) },
-                onFailure = { Result.Error(it.message ?: "Failed to delete entry", it) }
+                onFailure = { Result.Error(ErrorMapper.map(it.message, "Failed to delete entry"), it) }
             )
         } catch (e: Exception) {
-            Result.Error(e.message ?: "Failed to delete entry", e)
+            Result.Error(ErrorMapper.map(e.message, "Failed to delete entry"), e)
         }
     }
 
@@ -88,10 +89,10 @@ class VaultRepositoryImpl(
             val response = api.deleteAllVaultEntries()
             response.fold(
                 onSuccess = { Result.Success(Unit) },
-                onFailure = { Result.Error(it.message ?: "Failed to delete entries", it) }
+                onFailure = { Result.Error(ErrorMapper.map(it.message, "Failed to delete entries"), it) }
             )
         } catch (e: Exception) {
-            Result.Error(e.message ?: "Failed to delete entries", e)
+            Result.Error(ErrorMapper.map(e.message, "Failed to delete entries"), e)
         }
     }
 

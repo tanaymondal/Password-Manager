@@ -1,5 +1,6 @@
 package com.securevault.mobile.data.repository
 
+import com.securevault.mobile.data.repository.ErrorMapper
 import com.securevault.mobile.data.api.SecureVaultApi
 import com.securevault.mobile.domain.model.Device
 import com.securevault.mobile.domain.model.Result
@@ -26,10 +27,10 @@ class DeviceRepositoryImpl(
                     }
                     Result.Success(result)
                 },
-                onFailure = { Result.Error(it.message ?: "Failed to fetch devices", it) }
+                onFailure = { Result.Error(ErrorMapper.map(it.message, "Failed to fetch devices"), it) }
             )
         } catch (e: Exception) {
-            Result.Error(e.message ?: "Failed to fetch devices", e)
+            Result.Error(ErrorMapper.map(e.message, "Failed to fetch devices"), e)
         }
     }
 
@@ -48,10 +49,10 @@ class DeviceRepositoryImpl(
                         )
                     )
                 },
-                onFailure = { Result.Error(it.message ?: "Failed to register device", it) }
+                onFailure = { Result.Error(ErrorMapper.map(it.message, "Failed to register device"), it) }
             )
         } catch (e: Exception) {
-            Result.Error(e.message ?: "Failed to register device", e)
+            Result.Error(ErrorMapper.map(e.message, "Failed to register device"), e)
         }
     }
 
@@ -60,10 +61,10 @@ class DeviceRepositoryImpl(
             val response = api.removeDevice(id)
             response.fold(
                 onSuccess = { Result.Success(Unit) },
-                onFailure = { Result.Error(it.message ?: "Failed to remove device", it) }
+                onFailure = { Result.Error(ErrorMapper.map(it.message, "Failed to remove device"), it) }
             )
         } catch (e: Exception) {
-            Result.Error(e.message ?: "Failed to remove device", e)
+            Result.Error(ErrorMapper.map(e.message, "Failed to remove device"), e)
         }
     }
 
@@ -80,10 +81,10 @@ class TwoFactorRepositoryImpl(
                 onSuccess = { setup ->
                     Result.Success(Pair(setup.secret, setup.qrCodeUrl))
                 },
-                onFailure = { Result.Error(it.message ?: "Failed to setup 2FA", it) }
+                onFailure = { Result.Error(ErrorMapper.map(it.message, "Failed to setup 2FA"), it) }
             )
         } catch (e: Exception) {
-            Result.Error(e.message ?: "Failed to setup 2FA", e)
+            Result.Error(ErrorMapper.map(e.message, "Failed to setup 2FA"), e)
         }
     }
 
@@ -92,10 +93,10 @@ class TwoFactorRepositoryImpl(
             val response = api.enableTwoFactor(com.securevault.mobile.data.model.EnableTwoFactorRequest(code))
             response.fold(
                 onSuccess = { Result.Success(Unit) },
-                onFailure = { Result.Error(it.message ?: "Failed to enable 2FA", it) }
+                onFailure = { Result.Error(ErrorMapper.map(it.message, "Failed to enable 2FA"), it) }
             )
         } catch (e: Exception) {
-            Result.Error(e.message ?: "Failed to enable 2FA", e)
+            Result.Error(ErrorMapper.map(e.message, "Failed to enable 2FA"), e)
         }
     }
 
@@ -104,10 +105,10 @@ class TwoFactorRepositoryImpl(
             val response = api.disableTwoFactor(code)
             response.fold(
                 onSuccess = { Result.Success(Unit) },
-                onFailure = { Result.Error(it.message ?: "Failed to disable 2FA", it) }
+                onFailure = { Result.Error(ErrorMapper.map(it.message, "Failed to disable 2FA"), it) }
             )
         } catch (e: Exception) {
-            Result.Error(e.message ?: "Failed to disable 2FA", e)
+            Result.Error(ErrorMapper.map(e.message, "Failed to disable 2FA"), e)
         }
     }
 
@@ -116,10 +117,10 @@ class TwoFactorRepositoryImpl(
             val response = api.getTwoFactorStatus()
             response.fold(
                 onSuccess = { Result.Success(it.enabled) },
-                onFailure = { Result.Error(it.message ?: "Failed to get 2FA status", it) }
+                onFailure = { Result.Error(ErrorMapper.map(it.message, "Failed to get 2FA status"), it) }
             )
         } catch (e: Exception) {
-            Result.Error(e.message ?: "Failed to get 2FA status", e)
+            Result.Error(ErrorMapper.map(e.message, "Failed to get 2FA status"), e)
         }
     }
 

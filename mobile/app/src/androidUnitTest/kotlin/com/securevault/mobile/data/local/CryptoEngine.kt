@@ -7,6 +7,7 @@ import java.util.Base64
 import javax.crypto.Cipher
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
+import kotlinx.serialization.json.Json
 import java.security.SecureRandom
 
 class CryptoEngine(
@@ -113,8 +114,6 @@ class CryptoEngine(
     fun clearCachedVaultKey() {
         cachedVaultKey = null
     }
-
-    fun getCachedVaultKey(): String? = cachedVaultKey
 
     private fun getVaultKeyForEncryption(): String {
         return cachedVaultKey

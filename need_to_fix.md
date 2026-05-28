@@ -855,21 +855,21 @@ Bump to 96MB memory, store params per-user, background re-hash on next login.
 
 ---
 
-### 3.3 Security headers + CSP alignment ❌
+### 3.3 Security headers + CSP alignment ✅
 [source: need_to_fix 3.3, claude M7, codex M5]
 
 Backend and nginx CSP differ. Backend `script-src 'self'` may break WASM; nginx allows `wasm-unsafe-eval`. Google Fonts loaded but blocked by `font-src 'self'`.
 
-**Status**: ❌ Open.
+**Status**: ✅ Fixed.
 
 ---
 
-### 3.4 Replay protection (sudo mode) ❌
+### 3.4 Replay protection (sudo mode) ✅
 [source: need_to_fix 3.4]
 
 For sensitive operations: require fresh authentication challenge. Issue 5-minute elevated token.
 
-**Status**: ❌ Open.
+**Status**: ✅ Fixed.
 
 ---
 
@@ -900,30 +900,30 @@ Spring Boot `3.2.0`, Ktor `2.3.7`, `androidx.security:security-crypto:1.1.0-alph
 
 ---
 
-### 3.8 Static analysis & secret scanning ❌
+### 3.8 Static analysis & secret scanning ✅
 [source: need_to_fix 3.8]
 
 No Semgrep/CodeQL security rules, no Gitleaks pre-commit hook.
 
-**Status**: ❌ Open.
+**Status**: ✅ Fixed.
 
 ---
 
-### 3.9 Dependency verification status ❌
+### 3.9 Dependency verification status ✅
 [source: need_to_fix 3.9]
 
 No automated CI audit of npm, Maven, or Gradle dependencies for vulnerabilities.
 
-**Status**: ❌ Open.
+**Status**: ✅ Fixed.
 
 ---
 
-### 3.10 Mobile test/build health ❌
+### 3.10 Mobile test/build health ✅
 [source: need_to_fix 3.10]
 
 Mobile unit tests fail to compile — duplicate `getCachedVaultKey()` definitions and unresolved `Json` import.
 
-**Status**: ❌ Open.
+**Status**: ✅ Fixed.
 
 ---
 
@@ -936,16 +936,16 @@ For an Android password manager, app + device integrity attestation is table sta
 
 ---
 
-### 3.12 `server.error.*` not fully locked down ❌
+### 3.12 `server.error.*` not fully locked down ✅
 [source: claude L4, codex L4]
 
 `server.error.include-exception=false`, `server.error.include-stacktrace=never`, `server.error.whitelabel.enabled=false` not set.
 
-**Status**: ❌ Open.
+**Status**: ✅ Fixed.
 
 ---
 
-### 3.13 Health endpoint reveals DB status ❌
+### 3.13 Health endpoint reveals DB status ✅
 [source: claude L5, codex L5]
 
 `/api/v1/health` is `permitAll` and returns DB up/down + timestamp. 503 response on DB failure fingerprints outages.
@@ -956,7 +956,7 @@ For an Android password manager, app + device integrity attestation is table sta
 
 ---
 
-### 3.14 `InputSanitizer` is unused ❌
+### 3.14 `InputSanitizer` is unused ✅
 [source: claude L8, codex L7]
 
 Defined but never imported. Dead code creating false confidence.
@@ -967,7 +967,7 @@ Defined but never imported. Dead code creating false confidence.
 
 ---
 
-### 3.15 `Logout` accepts refresh tokens without auth ❌
+### 3.15 `Logout` accepts refresh tokens without auth ✅
 [source: claude L9, codex L8]
 
 Anyone with a stolen refresh token can spam logout to invalidate the victim's session (targeted session DoS).
@@ -978,7 +978,7 @@ Anyone with a stolen refresh token can spam logout to invalidate the victim's se
 
 ---
 
-### 3.16 `AuditLogRepository` exposes global query ❌
+### 3.16 `AuditLogRepository` exposes global query ✅
 [source: claude L10, codex L9]
 
 `findAllByOrderByCreatedAtDesc(Pageable)` returns all audit logs across all users. Currently unused but footgun for future admin endpoints.
@@ -989,7 +989,7 @@ Anyone with a stolen refresh token can spam logout to invalidate the victim's se
 
 ---
 
-### 3.17 Refresh rotation not atomic ❌
+### 3.17 Refresh rotation not atomic ✅
 [source: claude L11, codex L10]
 
 Old token deleted before new one saved. DB blip in between silently logs user out.
@@ -1000,7 +1000,7 @@ Old token deleted before new one saved. DB blip in between silently logs user ou
 
 ---
 
-### 3.18 Cookie SameSite set via raw attribute ❌
+### 3.18 Cookie SameSite set via raw attribute ✅
 [source: claude L14, codex L11]
 
 `Cookie.setAttribute("SameSite", "Strict")` instead of `ResponseCookie.from(...).sameSite("Strict")`. Works on modern Spring Boot but fragile.
@@ -1020,7 +1020,7 @@ Old token deleted before new one saved. DB blip in between silently logs user ou
 
 ---
 
-### 3.20 Android release minification disabled ❌
+### 3.20 Android release minification disabled ✅
 [source: codex L13]
 
 `isMinifyEnabled = false` for release. Easier reverse engineering/tampering.
@@ -1031,16 +1031,16 @@ Old token deleted before new one saved. DB blip in between silently logs user ou
 
 ---
 
-### 3.21 `local.properties` tracked in git ❌
+### 3.21 `local.properties` tracked in git ✅
 [source: codex L14]
 
 Contains local path/user info. Should be removed from git and added to `.gitignore`.
 
-**Status**: ❌ Open.
+**Status**: ✅ Fixed.
 
 ---
 
-### 3.22 Postman collection stale/misleading ❌
+### 3.22 Postman collection stale/misleading ✅
 [source: codex L15]
 
 Uses plaintext `password` fields that no longer match auth-hash flow.
@@ -1051,7 +1051,7 @@ Uses plaintext `password` fields that no longer match auth-hash flow.
 
 ---
 
-### 3.23 Password generator has tiny modulo bias ❌
+### 3.23 Password generator has tiny modulo bias ✅
 [source: claude L3, codex L3]
 
 `Math.floor(crypto.getRandomValues(...)[0] / (0xffffffff + 1) * charset.length)` is biased when charset size doesn't divide 2^32.
@@ -1071,16 +1071,16 @@ Set in `SecurityHeadersFilter.java:39`. Verified no proxy chain override needed.
 
 ---
 
-### 3.25 `VaultCache.getLastSyncTime()` hangs forever ❌
+### 3.25 `VaultCache.getLastSyncTime()` hangs forever ✅
 [source: claude M17]
 
 `data.collect { ... }` inside `suspend fun` is unbounded. Returns only when flow completes — which it never does.
 
-**Status**: ❌ Open.
+**Status**: ✅ Fixed.
 
 ---
 
-### 3.26 `VaultEntryDao.searchEntries` uses leading `%` ❌
+### 3.26 `VaultEntryDao.searchEntries` uses leading `%` ✅
 [source: claude L20]
 
 Leading `%` prevents index use. Performance footgun on large vaults.
@@ -1091,25 +1091,25 @@ Leading `%` prevents index use. Performance footgun on large vaults.
 
 ---
 
-### 3.27 Flyway `baseline-on-migrate=true` ❌
+### 3.27 Flyway `baseline-on-migrate=true` ✅
 [source: claude L2, codex L2]
 
 Operational risk: partially initialized databases may silently skip migrations.
 
-**Status**: ❌ Open.
+**Status**: ✅ Fixed.
 
 ---
 
-### 3.28 Verbose backend error surfacing ❌
+### 3.28 Verbose backend error surfacing ✅
 [source: claude L17]
 
 Many `Result.Error(it.message ...)` paths surface backend error messages in mobile UI.
 
-**Status**: ❌ Open.
+**Status**: ✅ Fixed.
 
 ---
 
-### 3.29 Ktor JSON pretty-print enabled ❌
+### 3.29 Ktor JSON pretty-print enabled ✅
 [source: claude L18]
 
 `Json { prettyPrint = true }` sends pretty-printed JSON on every request. Tiny bytes wasted.

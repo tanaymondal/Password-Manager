@@ -61,7 +61,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"test@example.com\",\n  \"password\": \"Test1234!\",\n  \"deviceName\": \"My Device\",\n  \"deviceId\": \"device-001\"\n}"
+              "raw": "{\n  \"email\": \"test@example.com\",\n  \"deviceName\": \"My Device\",\n  \"deviceId\": \"device-001\",\n  \"authHash\": \"Test1234!\",\n  \"authSalt\": \"BASE64_AUTH_SALT\",\n  \"encryptionSalt\": \"BASE64_ENCRYPTION_SALT\",\n  \"wrappedVaultKey\": \"BASE64_WRAPPED_KEY\",\n  \"encryptionVersion\": 2,\n  \"kdfIterations\": 4,\n  \"kdfMemory\": 98304,\n  \"kdfParallelism\": 4\n}"
             }
           },
           "event": [
@@ -96,7 +96,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"test@example.com\",\n  \"password\": \"Test1234!\",\n  \"deviceName\": \"My Device\"\n}"
+              "raw": "{\n  \"email\": \"test@example.com\",\n  \"deviceName\": \"My Device\",\n  \"authHash\": \"Test1234!\"\n}"
             }
           },
           "event": [
@@ -181,7 +181,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"currentPassword\": \"Test1234!\",\n  \"newPassword\": \"NewTest1234!\"\n}"
+              "raw": "{\n  \"current_auth_hash\": \"Test1234!\",\n  \"new_auth_hash\": \"NewTest1234!\",\n  \"new_encryption_salt\": \"BASE64_NEW_ENCRYPTION_SALT\",\n  \"wrapped_vault_key\": \"BASE64_NEW_WRAPPED_KEY\"\n}"
             }
           }
         }
@@ -230,8 +230,15 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/api/v1/vault/{{entryId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "vault", "{{entryId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "vault",
+                "{{entryId}}"
+              ]
             },
             "header": [
               {
@@ -247,8 +254,15 @@
             "method": "PUT",
             "url": {
               "raw": "{{baseUrl}}/api/v1/vault/{{entryId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "vault", "{{entryId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "vault",
+                "{{entryId}}"
+              ]
             },
             "header": [
               {
@@ -272,8 +286,15 @@
             "method": "DELETE",
             "url": {
               "raw": "{{baseUrl}}/api/v1/vault/{{entryId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "vault", "{{entryId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "vault",
+                "{{entryId}}"
+              ]
             },
             "header": [
               {
@@ -331,7 +352,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"deviceName\": \"My New Device\",\n  \"deviceId\": \"device-002\",\n  \"publicKey\": \"BASE64_ENCODED_PUBLIC_KEY\"\n}"
+              "raw": "{\n  \"deviceName\": \"My New Device\",\n  \"deviceId\": \"device-002\"\n}"
             }
           }
         },
@@ -341,8 +362,15 @@
             "method": "DELETE",
             "url": {
               "raw": "{{baseUrl}}/api/v1/devices/{{deviceId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "devices", "{{deviceId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "devices",
+                "{{deviceId}}"
+              ]
             },
             "header": [
               {
@@ -428,8 +456,14 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/api/v1/audit?page=0&size=20",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "audit"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "audit"
+              ],
               "query": [
                 {
                   "key": "page",
