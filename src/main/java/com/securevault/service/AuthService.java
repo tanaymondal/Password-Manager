@@ -217,12 +217,28 @@ public class AuthService {
 
     @Transactional
     public AuthResponse verifyTwoFactorLogin(String email, String challengeId, String code, String clientIp, String userAgent) {
+        if (loginRateLimiter.isBlocked(clientIp)) {
+            log.warn("2FA verify blocked due to rate limit for IP: {}", clientIp);
+            throw new BadCredentialsException("Too many login attempts. Please try again later.");
+        }
+
+        if (loginRateLimiter.isBlocked(email)) {
+            log.warn("2FA verify blocked due to rate limit for email: {}", email);
+            throw new BadCredentialsException("Too many login attempts. Please try again later.");
+        }
+
         PendingLoginChallengeStore.ChallengeResult challengeResult = pendingLoginChallengeStore.validateChallenge(challengeId, email);
         UUID userId = challengeResult.userId();
         String deviceId = challengeResult.deviceId();
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BadCredentialsException("Invalid email or password"));
+
+        if (user.isLocked()) {
+            refreshTokenRepository.deleteByUserId(user.getId());
+            log.warn("Account locked for user: {} during 2FA verify", user.getEmail());
+            throw new BadCredentialsException("Account is temporarily locked. Please try again later.");
+        }
 
         if (user.getTwoFactorEnabled()) {
             if (code == null || code.isBlank()) {

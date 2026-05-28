@@ -394,14 +394,14 @@ Authenticated user could register unlimited devices. PublicKey removed — dead 
 
 ---
 
-### 1.25 `verifyTwoFactorLogin` does not check `isBlocked()` before challenge ❌
+### 1.25 `verifyTwoFactorLogin` does not check `isBlocked()` before challenge ✅
 [source: claude M10]
 
 `AuthService.verifyTwoFactorLogin()` skips the `isBlocked(clientIp)` / `isBlocked(email)` checks that `login()` performs. First ~5 attempts always go through regardless of IP being blocked.
 
 **File**: `AuthService.java:158`
 
-**Status**: ❌ Open.
+**Status**: ✅ Fixed.
 
 ---
 
