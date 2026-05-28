@@ -656,12 +656,14 @@ HSTS with `maxAge=1y, includeSubDomains, preload` configured unconditionally in 
 
 ---
 
-### 2.25 Login rate limit doesn't count unknown-user failures ❌
+### 2.25 Login rate limit doesn't count unknown-user failures ✅
 [source: claude C2, codex C2]
 
 `loginRateLimiter.recordFailure()` only called in password-mismatch branch. Unknown users never have failures recorded. Combined with email enumeration timing oracle, accounts can be enumerated at high throughput.
 
-**Status**: ❌ Open (overlaps 1.13).
+**Fix**: Already fixed in item 1.13 — `AuthService.java:166-167` calls `loginRateLimiter.recordFailure(clientIp)` and `recordFailure(email)` for all failures, including unknown users (dummy hash path).
+
+**Status**: ✅ Fixed (duplicate of 1.13).
 
 ---
 
