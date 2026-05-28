@@ -15,6 +15,9 @@ interface VaultEntryDao {
     @Query("SELECT * FROM vault_entries WHERE folder = :folder ORDER BY title ASC")
     fun getEntriesByFolder(folder: String): Flow<List<VaultEntryEntity>>
 
+    @Query("SELECT * FROM vault_entries WHERE title LIKE :query || '%' OR username LIKE :query || '%'")
+    fun searchEntriesPrefix(query: String): Flow<List<VaultEntryEntity>>
+
     @Query("SELECT * FROM vault_entries WHERE title LIKE '%' || :query || '%' OR username LIKE '%' || :query || '%'")
     fun searchEntries(query: String): Flow<List<VaultEntryEntity>>
 
