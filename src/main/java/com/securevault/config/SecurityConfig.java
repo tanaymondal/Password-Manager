@@ -51,7 +51,11 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> {
-                    auth.requestMatchers("/api/v1/auth/**").permitAll();
+                    auth.requestMatchers("/api/v1/auth/prelogin").permitAll();
+                    auth.requestMatchers("/api/v1/auth/register").permitAll();
+                    auth.requestMatchers("/api/v1/auth/login").permitAll();
+                    auth.requestMatchers("/api/v1/auth/verify-2fa").permitAll();
+                    auth.requestMatchers("/api/v1/auth/refresh").permitAll();
                     auth.requestMatchers("/api/v1/health").permitAll();
                     auth.requestMatchers("/swagger-ui/**", "/v3/api-docs/**").denyAll();
                     auth.anyRequest().authenticated();

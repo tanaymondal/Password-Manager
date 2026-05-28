@@ -267,36 +267,36 @@ No bot protection, no email ownership verification, no new-device confirmation. 
 
 ---
 
-### 1.14 `permitAll` for `/api/v1/auth/**` exposes change-password ❌
+### 1.14 `permitAll` for `/api/v1/auth/**` exposes change-password ✅
 [source: claude C3, codex C3]
 
 Spring Security grants `permitAll` to everything under `/api/v1/auth/**`, including `POST /api/v1/auth/change-password`. Only saved by NPE in null principal handling — one refactor away from auth bypass.
 
 **File**: `SecurityConfig.java:32`
 
-**Status**: ❌ Open — `auth.requestMatchers("/api/v1/auth/**").permitAll()` still in place.
+**Status**: ✅ Fixed — narrowed `permitAll` to only public endpoints (`/prelogin`, `/register`, `/login`, `/verify-2fa`, `/refresh`). Everything else under `/api/v1/auth/` requires authentication.
 
 ---
 
-### 1.15 No refresh token family / reuse detection ❌
+### 1.15 No refresh token family / reuse detection ✅
 [source: claude H4, codex H4]
 
 Token rotation provides no family binding. Reuse of old token throws generic failure but doesn't revoke the entire session family. Attacker who uses stolen token first rolls the session forward; victim silently loses access.
 
 **File**: `AuthService.java:189` (refresh token path)
 
-**Status**: ❌ Open — no `familyId` or `parentTokenId` on `RefreshToken` entity; reuse detection is hash-not-found only, no family revocation.
+**Status**: ✅ Fixed — when a reused refresh token is detected (valid JWT but hash not found in DB), all refresh tokens for that user are revoked, forcing full re-authentication for all sessions.
 
 ---
 
-### 1.16 Auth audit JSON built with manual escaping ❌
+### 1.16 Auth audit JSON built with manual escaping ✅
 [source: claude H6]
 
 `AuditService.logFailedLogin()` constructs `details` JSON by hand-escaping only `\, ", \n, \r, \t`. Does not escape other control chars (U+0000–U+001F). PostgreSQL JSONB rejects these → audit insert fails → attacker can suppress audit by supplying control chars in email field.
 
 **File**: `AuditService.java:106`
 
-**Status**: ❌ Open.
+**Status**: ✅ Fixed — replaced manual string escaping with Jackson `ObjectMapper.writeValueAsString()` which properly escapes all control characters per JSON spec.
 
 ---
 

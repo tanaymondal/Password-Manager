@@ -1,10 +1,13 @@
 package com.securevault.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.securevault.entity.AuditLog;
 import com.securevault.repository.AuditLogRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -38,6 +41,7 @@ import java.util.UUID;
 public class AuditService {
 
     private final AuditLogRepository auditLogRepository;
+    private final ObjectMapper objectMapper;
 
     /**
      * Logs a generic action event.
@@ -104,13 +108,12 @@ public class AuditService {
      * @param userAgent User-Agent from the client
      */
     public void logFailedLogin(String email, String ipAddress, String userAgent) {
-        String escapedEmail = email
-                .replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\n", "\\n")
-                .replace("\r", "\\r")
-                .replace("\t", "\\t");
-        logAction(null, "LOGIN_FAILED", ipAddress, userAgent, "{\"email\":\"" + escapedEmail + "\"}");
+        try {
+            String details = objectMapper.writeValueAsString(Map.of("email", email));
+            logAction(null, "LOGIN_FAILED", ipAddress, userAgent, details);
+        } catch (JsonProcessingException e) {
+            logAction(null, "LOGIN_FAILED", ipAddress, userAgent, "{\"error\":\"serialization_failed\"}");
+        }
     }
 
     /**

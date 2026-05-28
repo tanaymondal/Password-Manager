@@ -285,7 +285,8 @@ public class AuthService {
         String tokenHash = hashToken(refreshToken);
         RefreshToken storedToken = refreshTokenRepository.findByTokenHash(tokenHash)
                 .orElseThrow(() -> {
-                    log.warn("Refresh token reuse detected - hash not found in DB");
+                    log.warn("Refresh token reuse detected - revoking all tokens for user: {}", userId);
+                    refreshTokenRepository.deleteByUserId(userId);
                     return new IllegalArgumentException("Invalid refresh token");
                 });
 
