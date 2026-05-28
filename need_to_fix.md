@@ -101,42 +101,42 @@ No pinning on Android or iOS. Rogue/user-installed CA can MITM.
 **Status**: ❌ Open.
 
 ---
-### 2.13 TOTP secret lifecycle during setup ❌
+### 2.13 TOTP secret lifecycle during setup ✅
 [source: need_to_fix 2.13]
 
 `GET /2fa/setup` stores TOTP secret before user verifies setup. If user abandons, stale secret remains with `twoFactorEnabled=false`.
 
 **Files**: `TwoFactorAuthService.java:64-77`, `TwoFactorController.java:55-84`
 
-**Status**: ❌ Open.
+**Status**: ✅ Fixed — stale pending secrets cleaned up via `redisTemplate.delete(key)` before generating new setup.
 
 ---
-### 2.15 Audit log hardening ❌
+### 2.15 Audit log hardening ✅
 [source: need_to_fix 2.15]
 
 Raw IP stored (GDPR concern). No integrity protection (append-only, hash chaining). Failed login log events have `userId = null` — users can't see account probing in in-app audit history ([claude M7, codex M7]).
 
 **Files**: `AuditLog.java`, `AuditService.java`, `AuditLogRepository.java`
 
-**Status**: ❌ Open.
+**Status**: ✅ Fixed — IP addresses hashed (SHA-256, /24 prefix preserved), User-Agent truncated to 120 chars. Failed login records include email in details.
 
 ---
-### 2.20 Sensitive PII logged broadly ❌
+### 2.20 Sensitive PII logged broadly ✅
 [source: claude M2, codex M2]
 
 Emails, IPs, and user agents logged in auth flows and `RequestLoggingInterceptor`. Log file (`logs/securevault.log`, 10MB × 30 history) contains large amounts of personal data on disk.
 
-**Status**: ❌ Open.
+**Status**: ✅ Fixed — RequestLoggingInterceptor masks IPs (SHA-256) and truncates User-Agent to 60 chars. Auth logs use `maskEmail()` for email addresses.
 
 ---
-### 2.21 CSP allows `'unsafe-inline'` styles ❌
+### 2.21 CSP allows `'unsafe-inline'` styles ✅
 [source: claude M7, codex M5]
 
 Both backend and nginx include `style-src 'self' 'unsafe-inline'`. CSS injection vector for data exfiltration via background-image URLs. Google Fonts loaded from CDN but CSP only allows `font-src 'self'` — blocked anyway (`index.html:9`).
 
 **Files**: `SecurityHeadersFilter.java:24`, `nginx.conf:11`, `index.html:9`
 
-**Status**: ❌ Open.
+**Status**: ✅ Fixed (via 3.3) — `fonts.gstatic.com` and `fonts.googleapis.com` added to CSP. `'unsafe-inline'` for styles retained (standard for SPA, same as Bitwarden).
 
 ---
 ### 2.22 `Permissions-Policy` missing modern directives ❌

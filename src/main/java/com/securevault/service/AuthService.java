@@ -166,7 +166,7 @@ public class AuthService {
         String email = request.getEmail().toLowerCase().trim();
 
         if (loginRateLimiter.isBlocked(email)) {
-            log.warn("Login blocked due to rate limit for email: {}", email);
+            log.warn("Login blocked due to rate limit for email: {}", maskEmail(email));
             throw new BadCredentialsException("Too many login attempts. Please try again later.");
         }
 
@@ -498,6 +498,13 @@ public class AuthService {
         byte[] salt = new byte[32];
         new SecureRandom().nextBytes(salt);
         return Base64.getEncoder().encodeToString(salt);
+    }
+
+    private String maskEmail(String email) {
+        if (email == null || email.length() < 3) return "***";
+        int at = email.indexOf('@');
+        if (at <= 1) return email.charAt(0) + "***";
+        return email.charAt(0) + "***" + email.substring(at);
     }
 
     @Transactional

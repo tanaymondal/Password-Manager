@@ -44,8 +44,10 @@ public class TwoFactorAuthService {
             throw new IllegalArgumentException("2FA is already enabled. Disable it first to generate a new setup.");
         }
 
-        String secret = secretGenerator.generate();
         String key = KEY_PREFIX + userId;
+        redisTemplate.delete(key);
+
+        String secret = secretGenerator.generate();
         redisTemplate.opsForHash().put(key, "secret", secret);
         redisTemplate.opsForHash().put(key, "createdAt", String.valueOf(Instant.now().toEpochMilli()));
         redisTemplate.expire(key, PENDING_SETUP_TTL_SECONDS, TimeUnit.SECONDS);

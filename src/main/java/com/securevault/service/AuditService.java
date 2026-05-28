@@ -7,6 +7,9 @@ import com.securevault.repository.AuditLogRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.HexFormat;
 import java.util.Map;
 import java.util.UUID;
 
@@ -56,11 +59,36 @@ public class AuditService {
         AuditLog auditLog = new AuditLog();
         auditLog.setUserId(userId);
         auditLog.setAction(action);
-        auditLog.setIpAddress(ipAddress);
-        auditLog.setUserAgent(userAgent);
+        auditLog.setIpAddress(hashIp(ipAddress));
+        auditLog.setUserAgent(truncateUserAgent(userAgent));
         auditLog.setDetails(details);
 
         auditLogRepository.save(auditLog);
+    }
+
+    private String hashIp(String ip) {
+        if (ip == null || ip.isBlank()) return null;
+        try {
+            String prefix;
+            if (ip.contains(".")) {
+                prefix = ip.substring(0, ip.lastIndexOf('.'));
+            } else if (ip.contains(":")) {
+                prefix = ip.contains("%") ? ip.substring(0, ip.indexOf('%')) : ip;
+            } else {
+                prefix = ip;
+            }
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] hash = md.digest(ip.getBytes(StandardCharsets.UTF_8));
+            String suffix = HexFormat.of().formatHex(hash).substring(0, 8);
+            return prefix + ".h:" + suffix;
+        } catch (Exception e) {
+            return "unknown";
+        }
+    }
+
+    private String truncateUserAgent(String ua) {
+        if (ua == null || ua.length() <= 120) return ua;
+        return ua.substring(0, 120);
     }
 
     /**
