@@ -16,7 +16,6 @@ import com.securevault.mobile.domain.repository.LoginResponse
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlin.random.Random
 
 class AuthRepositoryImpl(
     private val api: SecureVaultApi,
@@ -254,10 +253,7 @@ class AuthRepositoryImpl(
     private fun getOrCreateDeviceId(): String {
         val existing = SessionManager.getDeviceId()
         if (existing.isNotEmpty()) return existing
-        val newId = buildString {
-            val hex = "0123456789abcdef"
-            repeat(32) { append(hex[Random.nextInt(hex.length)]) }
-        }
+        val newId = cryptoEngine.generateSecureDeviceId()
         SessionManager.setDeviceId(newId)
         return newId
     }

@@ -8,4 +8,5 @@ expect class CryptoEngine {
     fun wrapVaultKey(vaultKey: String, kek: ByteArray): String
     fun unwrapVaultKey(wrappedVaultKey: String, kek: ByteArray): String
     fun sha1Hex(data: String): String
+    fun generateSecureDeviceId(): String
 }

@@ -93,4 +93,10 @@ actual class CryptoEngine {
         val hash = digest.digest(data.toByteArray(Charsets.UTF_8))
         return hash.joinToString("") { "%02x".format(it) }.uppercase()
     }
+
+    actual fun generateSecureDeviceId(): String {
+        val bytes = ByteArray(16)
+        secureRandom.nextBytes(bytes)
+        return bytes.joinToString("") { "%02x".format(it) }
+    }
 }

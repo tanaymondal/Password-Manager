@@ -311,25 +311,25 @@ Ktor's default `HttpClient` has no SSL pinning. User-installed or compromised pu
 
 ---
 
-### 1.18 Android `FLAG_SECURE` not set ❌
+### 1.18 Android `FLAG_SECURE` not set ✅
 [source: claude H9, codex H8]
 
 MainActivity does not set `FLAG_SECURE`. Vault content visible in task-switcher preview, screenshots, screen recording, screen casting.
 
 **File**: `MainActivity.kt`
 
-**Status**: ❌ Open.
+**Status**: ✅ Fixed.
 
 ---
 
-### 1.19 Mobile device IDs use non-cryptographic random ❌
+### 1.19 Mobile device IDs use non-cryptographic random ✅
 [source: claude H11, codex H9]
 
 Device ID generation uses `kotlin.random.Random` instead of `SecureRandom`. Predictable/correlatable device identifiers.
 
 **File**: `AuthRepositoryImpl.getOrCreateDeviceId:248`
 
-**Status**: ❌ Open.
+**Status**: ✅ Fixed.
 
 ---
 
