@@ -254,14 +254,16 @@ No bot protection, no email ownership verification, no new-device confirmation. 
 
 ---
 
-### 1.13 Email enumeration via timing ❌
+### 1.13 Email enumeration via timing ✅
 [source: claude C2, codex C2]
 
-`AuthService.login()` throws `BadCredentialsException` immediately on `findByEmail().orElseThrow()`. Existing-user requests run PBKDF2 + Argon2id; non-existing users skip all crypto. Timing delta (ms vs sub-ms) is trivially measurable. Additionally, `loginRateLimiter.recordFailure()` only called inside password-mismatch branch — attempts against non-existent emails don't increment failure counter.
+`AuthService.login()` threw `BadCredentialsException` immediately on `findByEmail().orElseThrow()`. Existing-user requests ran PBKDF2 + Argon2id; non-existing users skipped all crypto. Timing delta (ms vs sub-ms) trivially measurable. Additionally, `loginRateLimiter.recordFailure()` only called inside password-mismatch branch — attempts against non-existent emails didn't increment failure counter.
 
-**File**: `AuthService.java:112-113`
+**Fix**: Always compute `serverSideHash()` with a dummy salt for non-existing users (`DUMMY_SALT`/`DUMMY_HASH` constants) for timing-constant execution. `loginRateLimiter.recordFailure()` now called regardless of user existence.
 
-**Status**: ❌ Open.
+**File**: `AuthService.java`
+
+**Status**: ✅ Fixed.
 
 ---
 
@@ -1093,6 +1095,7 @@ Many `Result.Error(it.message ...)` paths surface backend error messages in mobi
 | 1.7 | Breach-corpus validation | Was added, then removed — HIBP is inappropriate server-side for zero-knowledge model; breach check is client-side only |
 | 1.10 | Browser token/key storage + extension vault key | HttpOnly cookie for web clients; `stripRefreshTokenForWeb()` strips JSON `refreshToken` for browsers. Extension vault key non-extractable, wrapped via AES-GCM |
 | 1.12 | `token.getBytes()` charset | Explicit `StandardCharsets.UTF_8` in `hashToken()` |
+| 1.13 | Email enumeration via timing | `serverSideHash()` always computed (dummy salt for unknown users); `recordFailure()` always called |
 | 1.23 | `TwoFactorVerifyRequest.email` lacks `@Email` | `@Email` annotation added |
 | 2.2 | `.env` not in `.gitignore` | Added to `.gitignore` |
 | 2.5/2.17 | Swagger exposure | Endpoints locked down with `.denyAll()` in `SecurityConfig`; `SWAGGER_ENABLED` default toggled |
@@ -1135,11 +1138,11 @@ Many `Result.Error(it.message ...)` paths surface backend error messages in mobi
 | Category | Total | ✅ Fixed | ⏳ Partial | ❌ Remaining |
 |----------|-------|----------|-----------|--------------|
 | Phase 0 — Stop the bleeding | 9 | 7 | 0 | 2 |
-| Phase 1 — Critical hardening | 25 | 9 | 3 | 13 |
+| Phase 1 — Critical hardening | 25 | 10 | 3 | 12 |
 | Phase 2 — Important hardening | 37 | 7 | 1 | 29 |
 | Phase 3 — Defense in depth | 29 | 0 | 0 | 29 |
 | Phase 4 — Operational maturity | 12 | 0 | 0 | 12 |
-| **Total** | **112** | **23** | **4** | **85** |
+| **Total** | **112** | **24** | **4** | **84** |
 
 ### Verification
 - Backend `mvn -q test`: passed (6/6)

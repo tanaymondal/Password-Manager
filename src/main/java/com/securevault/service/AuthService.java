@@ -47,6 +47,10 @@ public class AuthService {
     private static final int LOCKOUT_MINUTES = 15;
     private static final int PASSWORD_HISTORY_LIMIT = 10;
 
+    // Dummy salt/hash for timing-constant login — same length as real base64(32 bytes)
+    private static final String DUMMY_SALT = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+    private static final String DUMMY_HASH = "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=";
+
     @Value("${app.pbkdf2.iterations}")
     private int pbkdf2Iterations;
 
@@ -139,18 +143,27 @@ public class AuthService {
             throw new BadCredentialsException("Too many login attempts. Please try again later.");
         }
 
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new BadCredentialsException("Invalid email or password"));
+        java.util.Optional<User> userOpt = userRepository.findByEmail(email);
+        User user = userOpt.orElse(null);
 
-        if (user.isLocked()) {
+        if (user != null && user.isLocked()) {
             log.warn("Account locked for user: {}", user.getEmail());
             throw new BadCredentialsException("Account is temporarily locked. Please try again later.");
         }
 
-        if (!passwordService.constantTimeEquals(serverSideHash(request.getAuthHash(), user.getPasswordSalt()), user.getPasswordHash())) {
+        // Always compute PBKDF2 — timing-constant regardless of user existence
+        String computedHash = serverSideHash(
+                request.getAuthHash(),
+                user != null ? user.getPasswordSalt() : DUMMY_SALT
+        );
+        String storedHash = user != null ? user.getPasswordHash() : DUMMY_HASH;
+
+        if (!passwordService.constantTimeEquals(computedHash, storedHash)) {
             loginRateLimiter.recordFailure(clientIp);
             loginRateLimiter.recordFailure(email);
-            self.recordFailedChangePasswordAttempt(user.getId(), clientIp, userAgent);
+            if (user != null) {
+                self.recordFailedChangePasswordAttempt(user.getId(), clientIp, userAgent);
+            }
             throw new BadCredentialsException("Invalid email or password");
         }
 
