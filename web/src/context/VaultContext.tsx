@@ -326,7 +326,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       const newAuthHash = await derivePasswordHash(newPassword, authSalt) // uses recommended defaults automatically
 
       onProgress?.(0.7)
-      const sudo = await requestSudo()
+      const sudo = await requestSudo(currentAuthHash)
       const sudoToken = sudo.sudoToken
 
       onProgress?.(0.8)

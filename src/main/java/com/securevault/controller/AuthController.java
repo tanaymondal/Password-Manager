@@ -167,8 +167,10 @@ public class AuthController {
 
     @PostMapping("/sudo")
     public ResponseEntity<ApiResponse<Map<String, String>>> requestSudo(
-            @AuthenticationPrincipal UserDetails userDetails) {
+            @AuthenticationPrincipal UserDetails userDetails,
+            @Valid @RequestBody com.securevault.dto.SudoRequest request) {
         UUID userId = UserUtils.getUserId(userDetails);
+        authService.verifyPassword(userId, request.getAuthHash());
         String token = sudoService.generateSudoToken(userId);
         return ResponseEntity.ok(ApiResponse.success(Map.of("sudoToken", token)));
     }

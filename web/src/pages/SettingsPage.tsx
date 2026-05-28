@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { useVault } from '../context/VaultContext'
 import { get2FAStatus, setup2FA, enable2FA, disable2FA } from '../api/twofa'
 import { requestSudo } from '../api/auth'
+import { derivePasswordHash } from '../crypto/argon2'
+import { getCryptoMaterial } from '../store/cryptoMaterial'
 import { getDevices, deleteDevice, type DeviceResponse } from '../api/devices'
 import { getAuditLogs, type AuditLogEntry } from '../api/audit'
 import { generatePassword } from '../crypto/generator'
@@ -264,6 +266,7 @@ function TwoFactorSection() {
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
   const [disabling, setDisabling] = useState(false)
+  const [sudoPassword, setSudoPassword] = useState('')
 
   const loadStatus = useCallback(async () => {
     setLoading(true)
@@ -318,10 +321,15 @@ function TwoFactorSection() {
 
   const handleDisable = async () => {
     if (!code || code.length !== 6) return
+    if (!sudoPassword) { setError('Master password is required to disable 2FA'); return }
     setError('')
     setBusy(true)
     try {
-      const sudo = await requestSudo()
+      const material = getCryptoMaterial()
+      if (!material) throw new Error('Crypto material not available')
+      const authHash = await derivePasswordHash(sudoPassword, material.authSalt)
+      setSudoPassword('')
+      const sudo = await requestSudo(authHash)
       await disable2FA(code, sudo.sudoToken)
       setEnabled(false)
       setDisabling(false)
@@ -373,7 +381,14 @@ function TwoFactorSection() {
               </button>
             ) : (
               <div className="space-y-4">
-                <p className="text-sm text-gray-400">Enter a verification code from your authenticator app to disable 2FA.</p>
+                <p className="text-sm text-gray-400">Enter your master password and a verification code from your authenticator app to disable 2FA.</p>
+                <input
+                  type="password"
+                  value={sudoPassword}
+                  onChange={(e) => setSudoPassword(e.target.value)}
+                  placeholder="Master password"
+                  className="block w-full max-w-[280px] rounded-xl border border-gray-700/50 bg-gray-950/50 px-3.5 py-2.5 text-sm text-gray-100 transition-all duration-200 focus:border-emerald-500/50 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                />
                 <input
                   type="text"
                   value={code}
@@ -467,6 +482,8 @@ function DevicesSection() {
   const [devices, setDevices] = useState<DeviceResponse[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [deletingDeviceId, setDeletingDeviceId] = useState<string | null>(null)
+  const [devicePassword, setDevicePassword] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -485,9 +502,14 @@ function DevicesSection() {
   }, [load])
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('Remove this device?')) return
+    if (!devicePassword) return
+    const material = getCryptoMaterial()
+    if (!material) { setError('Crypto material not available'); return }
     try {
-      const sudo = await requestSudo()
+      const authHash = await derivePasswordHash(devicePassword, material.authSalt)
+      setDevicePassword('')
+      setDeletingDeviceId(null)
+      const sudo = await requestSudo(authHash)
       await deleteDevice(id, sudo.sudoToken)
       setDevices((prev) => prev.filter((d) => d.id !== id))
     } catch (e) {
@@ -533,12 +555,38 @@ function DevicesSection() {
                   </p>
                 </div>
               </div>
-              <button
-                onClick={() => handleDelete(device.id)}
-                className="shrink-0 rounded-lg px-2 py-1 text-xs text-red-400 transition-colors hover:bg-red-950/30"
-              >
-                Remove
-              </button>
+              {deletingDeviceId === device.id ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="password"
+                    value={devicePassword}
+                    onChange={(e) => setDevicePassword(e.target.value)}
+                    placeholder="Master password"
+                    className="w-36 rounded-lg border border-gray-700/50 bg-gray-950/50 px-2.5 py-1 text-xs text-gray-100 transition-all focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/20"
+                    autoFocus
+                  />
+                  <button
+                    onClick={() => handleDelete(device.id)}
+                    disabled={!devicePassword}
+                    className="shrink-0 rounded-lg px-2 py-1 text-xs text-red-400 transition-colors hover:bg-red-950/30 disabled:opacity-50"
+                  >
+                    Confirm
+                  </button>
+                  <button
+                    onClick={() => { setDeletingDeviceId(null); setDevicePassword('') }}
+                    className="shrink-0 rounded-lg px-2 py-1 text-xs text-gray-400 transition-colors hover:bg-gray-800/30"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setDeletingDeviceId(device.id)}
+                  className="shrink-0 rounded-lg px-2 py-1 text-xs text-red-400 transition-colors hover:bg-red-950/30"
+                >
+                  Remove
+                </button>
+              )}
             </div>
           ))}
         </div>

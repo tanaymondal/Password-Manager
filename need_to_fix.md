@@ -40,9 +40,10 @@ Ktor's default `HttpClient` has no SSL pinning. User-installed or compromised pu
 
 **Files**: `SecureVaultApi.kt`, `network_security_config.xml`
 
-**Status**: ✅ Fixed — `@RequireSudo` on change-password, delete-account, disable-2FA, delete-device, delete-all-entries. All sensitive operations require step-up authentication.
+**Status**: ❌ Open.
 
 ---
+
 ### 1.20 Credentialed CORS uses origin patterns ❌
 [source: claude H7, codex H10]
 
@@ -63,7 +64,7 @@ Password changes, 2FA disable, device removal, and full vault deletion have no s
 
 **Files**: `TwoFactorController.java:97-105`, `VaultController.java:163-170`, `AuthController.java:183-205`, `DeviceController.java`
 
-**Status**: ❌ Open.
+**Status**: ✅ Fixed — `@RequireSudo` on change-password, delete-account, disable-2FA, delete-device, delete-all-entries.
 
 ---
 ### 2.8 JWT signing key rotation ❌

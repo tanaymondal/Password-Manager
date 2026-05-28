@@ -500,6 +500,22 @@ public class AuthService {
         return Base64.getEncoder().encodeToString(salt);
     }
 
+    @Transactional
+    public void verifyPassword(UUID userId, String authHash) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+
+        if (user.isLocked()) {
+            throw new BadCredentialsException("Account is temporarily locked. Please try again later.");
+        }
+
+        if (!passwordService.constantTimeEquals(
+                serverSideHash(authHash, user.getPasswordSalt()),
+                user.getPasswordHash())) {
+            throw new BadCredentialsException("Invalid password");
+        }
+    }
+
     private String serverSideHash(String clientAuthHash, String userSalt) {
         try {
             String combinedSalt = serverHashSecret + ":" + userSalt;

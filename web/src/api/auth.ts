@@ -144,9 +144,10 @@ export interface ChangePasswordResponse {
   kdfParallelism?: number
 }
 
-export function requestSudo() {
+export function requestSudo(authHash: string) {
   return apiClient<{ sudoToken: string }>('/auth/sudo', {
     method: 'POST',
+    body: JSON.stringify({ authHash }),
   })
 }
 
