@@ -64,12 +64,15 @@ public class JwtTokenProvider {
                 .compact();
     }
 
-    public String generateRefreshToken(UUID userId) {
+    public String generateRefreshToken(UUID userId, String email, LocalDateTime passwordUpdatedAt) {
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + refreshExpiration);
 
         return Jwts.builder()
+                .id(UUID.randomUUID().toString())
                 .subject(userId.toString())
+                .claim("email", email)
+                .claim("pwdUpdatedAt", passwordUpdatedAt.toEpochSecond(ZoneOffset.UTC))
                 .issuedAt(now)
                 .expiration(expiryDate)
                 .signWith(refreshKey)
@@ -101,6 +104,24 @@ public class JwtTokenProvider {
                 .parseSignedClaims(token)
                 .getPayload();
         return claims.get("email", String.class);
+    }
+
+    public String getEmailFromRefreshToken(String token) {
+        Claims claims = Jwts.parser()
+                .verifyWith(refreshKey)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
+        return claims.get("email", String.class);
+    }
+
+    public long getPasswordUpdatedAtFromRefreshToken(String token) {
+        Claims claims = Jwts.parser()
+                .verifyWith(refreshKey)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
+        return claims.get("pwdUpdatedAt", Long.class);
     }
 
     public <T> T getClaim(String token, String claimName, Class<T> type) {

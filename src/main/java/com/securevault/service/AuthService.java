@@ -33,6 +33,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.security.spec.KeySpec;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Base64;
 import java.util.HexFormat;
 import java.util.List;
@@ -250,6 +251,16 @@ public class AuthService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("Invalid refresh token"));
 
+        String tokenEmail = jwtTokenProvider.getEmailFromRefreshToken(refreshToken);
+        long tokenPwdUpdatedAt = jwtTokenProvider.getPasswordUpdatedAtFromRefreshToken(refreshToken);
+        long currentPwdUpdatedAt = user.getPasswordUpdatedAt().toEpochSecond(ZoneOffset.UTC);
+
+        if (!tokenEmail.equals(user.getEmail()) || tokenPwdUpdatedAt != currentPwdUpdatedAt) {
+            refreshTokenRepository.delete(storedToken);
+            log.warn("Refresh token claim mismatch for user: {} (email changed or password reset)", userId);
+            throw new IllegalArgumentException("Invalid refresh token");
+        }
+
         String deviceId = storedToken.getDeviceId();
         refreshTokenRepository.delete(storedToken);
 
@@ -423,7 +434,7 @@ public class AuthService {
 
     private AuthResponse generateAuthResponse(User user, String deviceId) {
         String accessToken = jwtTokenProvider.generateAccessToken(user.getId(), user.getEmail(), user.getPasswordUpdatedAt());
-        String refreshToken = jwtTokenProvider.generateRefreshToken(user.getId());
+        String refreshToken = jwtTokenProvider.generateRefreshToken(user.getId(), user.getEmail(), user.getPasswordUpdatedAt());
 
         RefreshToken token = new RefreshToken();
         token.setUserId(user.getId());
@@ -446,7 +457,7 @@ public class AuthService {
 
     private ChangePasswordResponse generateChangePasswordResponse(User user, String deviceId) {
         String accessToken = jwtTokenProvider.generateAccessToken(user.getId(), user.getEmail(), user.getPasswordUpdatedAt());
-        String refreshToken = jwtTokenProvider.generateRefreshToken(user.getId());
+        String refreshToken = jwtTokenProvider.generateRefreshToken(user.getId(), user.getEmail(), user.getPasswordUpdatedAt());
 
         RefreshToken token = new RefreshToken();
         token.setUserId(user.getId());

@@ -771,14 +771,17 @@ All requests including CORS preflight count against the 60 req/min per-IP limit.
 
 ---
 
-### 2.36 Refresh tokens lack `jti`, `email`, `pwdUpdatedAt` claims 💡NEW
+### 2.36 Refresh tokens lack `jti`, `email`, `pwdUpdatedAt` claims ✅
 [source: discovered during fix session]
 
-`generateRefreshToken()` only sets `sub`, `iat`, `exp`. No `jti` for token-family tracking, no `email` or `pwdUpdatedAt` binding within the JWT itself. DB-level checks compensate but no second layer of defense.
+`generateRefreshToken()` only set `sub`, `iat`, `exp`. No `jti` for token-family tracking, no `email` or `pwdUpdatedAt` binding within the JWT itself. DB-level checks compensated but no second layer of defense.
 
-**File**: `JwtTokenProvider.java:67-77`
+**Fix**:
+- `JwtTokenProvider.java:67`: `generateRefreshToken()` now accepts `email` and `passwordUpdatedAt`, sets `jti`, `email`, `pwdUpdatedAt` claims (matching the access token pattern)
+- `JwtTokenProvider.java:88-102`: Added `getEmailFromRefreshToken()` and `getPasswordUpdatedAtFromRefreshToken()` extraction methods
+- `AuthService.java:255-262`: `refreshToken()` validates email and `pwdUpdatedAt` claims against current user state — rejects if email changed or password was reset since token issuance
 
-**Status**: ❌ Open.
+**Status**: ✅ Fixed.
 
 ---
 
@@ -1169,9 +1172,9 @@ Many `Result.Error(it.message ...)` paths surface backend error messages in mobi
 | Phase 0 — Stop the bleeding | 9 | 7 | 0 | 2 |
 | Phase 1 — Critical hardening | 25 | 11 | 2 | 12 |
 
-| Phase 2 — Important hardening | 37 | 14 | 1 | 22 |
+| Phase 2 — Important hardening | 37 | 15 | 1 | 21 |
 
-| **Total** | **112** | **32** | **3** | **77** |
+| **Total** | **112** | **33** | **3** | **76** |
 
 ### Verification
 - Backend `mvn -q test`: passed (6/6)
