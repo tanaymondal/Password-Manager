@@ -35,7 +35,7 @@ commonMain.dependencies {
     implementation("io.ktor:ktor-client-core:2.3.7")
     implementation("io.ktor:ktor-client-content-negotiation:2.3.7")
     implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.7")
-    implementation("com.russhwolf:multiplatform-settings:1.1.0")
+    implementation("com.russhwolf:multiplatform-settings:1.3.0")
 }
 
 commonTest.dependencies {
