@@ -1,6 +1,7 @@
 package com.securevault.controller;
 
 import com.securevault.dto.*;
+import com.securevault.security.JwtAuthenticationFilter;
 import com.securevault.service.AuditService;
 import com.securevault.service.AuthService;
 import com.securevault.util.ClientIpResolver;
@@ -35,11 +36,15 @@ public class AuthController {
     @Value("${app.jwt.refresh-expiration}")
     private long refreshTokenExpirationMs;
 
+    private final JwtAuthenticationFilter jwtAuthenticationFilter;
+
     public AuthController(AuthService authService, AuditService auditService,
-                          ClientIpResolver clientIpResolver) {
+                          ClientIpResolver clientIpResolver,
+                          JwtAuthenticationFilter jwtAuthenticationFilter) {
         this.authService = authService;
         this.auditService = auditService;
         this.clientIpResolver = clientIpResolver;
+        this.jwtAuthenticationFilter = jwtAuthenticationFilter;
     }
 
     @PostMapping("/prelogin")
@@ -135,6 +140,10 @@ public class AuthController {
             HttpServletResponse httpResponse) {
         if (userDetails != null) {
             UUID userId = UserUtils.getUserId(userDetails);
+            String accessToken = extractAccessToken(httpRequest);
+            if (accessToken != null) {
+                jwtAuthenticationFilter.denylistToken(accessToken);
+            }
             log.info("User logged out: {}", userId);
             auditService.logLogout(userId, clientIpResolver.getClientIp(httpRequest), httpRequest.getHeader("User-Agent"));
             authService.logout(userId);
@@ -242,6 +251,19 @@ public class AuthController {
                 if ("refreshToken".equals(cookie.getName())) {
                     return cookie.getValue();
                 }
+            }
+        }
+        return null;
+    }
+
+    private String extractAccessToken(HttpServletRequest request) {
+        String bearer = request.getHeader("Authorization");
+        if (bearer != null && bearer.startsWith("Bearer ")) {
+            return bearer.substring(7);
+        }
+        return null;
+    }
+}
             }
         }
         return null;

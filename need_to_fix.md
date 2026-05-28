@@ -197,14 +197,12 @@ Default secret `SecureVaultSecretKeyForJWTTokenGeneration2024` not random. Falls
 
 ---
 
-### 1.8 Short access-token TTL + revocation list ❌
+### 1.8 Short access-token TTL + revocation list ✅
 [source: need_to_fix 1.8, claude M5, codex M4, claude H11, codex H11]
 
-Access tokens: current TTL 1 hour, `jti` exists but no denylist, logout doesn't revoke active tokens, locked user's tokens still work. Refresh tokens: lack `jti`, `email`, `pwdUpdatedAt` claims — missing `jti` prevents token-family tracking from JWT claims alone (though DB-level hash lookup compensates). JWT also lacks `iss`/`aud` validation.
+Access tokens: current TTL 1 hour, `jti` exists but no denylist, logout doesn't revoke active tokens, locked user's tokens still work. JWT also lacks `iss`/`aud` validation.
 
-**New issue found**: `JwtTokenProvider.java:67-77` — `generateRefreshToken()` only sets `sub`, `iat`, `exp`; no `jti`, `email`, or `pwdUpdatedAt` claims.
-
-**Status**: ❌ Open — `jti` added to access tokens, `pwdUpdatedAt` claim checked in filter, but no token denylist on logout/lockout, no refresh token `jti`, no iss/aud validation.
+**Status**: ✅ Fixed — Redis-based token denylist (`token_denylist:{jti}`) with per-token TTL; `denylistToken()` called on logout via JwtAuthenticationFilter; `iss`/`aud` claims added to both access and refresh tokens; `jti`, `email`, `pwdUpdatedAt` already present on all tokens (resolved previously).
 
 ---
 

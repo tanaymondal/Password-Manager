@@ -64,6 +64,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
      * @throws ServletException if filter processing fails
      * @throws IOException if I/O error occurs
      */
+    private static final String DENYLIST_PREFIX = "token_denylist:";
+
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
@@ -71,6 +73,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String token = getTokenFromRequest(request);
 
         if (StringUtils.hasText(token) && jwtTokenProvider.validateToken(token)) {
+            String jti = jwtTokenProvider.getTokenId(token);
+
+            if (Boolean.TRUE.equals(redisTemplate.hasKey(DENYLIST_PREFIX + jti))) {
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                response.setContentType("application/json");
+                response.getWriter().write(
+                    "{\"success\":false,\"message\":\"Token has been revoked. Please log in again.\"}"
+                );
+                return;
+            }
+
             UUID userId = jwtTokenProvider.getUserIdFromToken(token);
 
             if (Boolean.TRUE.equals(redisTemplate.hasKey("deleted_user:" + userId))) {
@@ -120,6 +133,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    public void denylistToken(String token) {
+        if (!StringUtils.hasText(token) || !jwtTokenProvider.validateToken(token)) return;
+        String jti = jwtTokenProvider.getTokenId(token);
+        long ttlSeconds = jwtTokenProvider.getExpiration(token) / 1000;
+        redisTemplate.opsForValue().set(DENYLIST_PREFIX + jti, "1", java.time.Duration.ofSeconds(ttlSeconds));
     }
 
     /**

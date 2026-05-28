@@ -49,12 +49,17 @@ public class JwtTokenProvider {
         }
     }
 
+    private static final String ISSUER = "securevault";
+    private static final String AUDIENCE = "securevault-api";
+
     public String generateAccessToken(UUID userId, String email, LocalDateTime passwordUpdatedAt) {
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + jwtExpiration);
 
         return Jwts.builder()
                 .id(UUID.randomUUID().toString())
+                .issuer(ISSUER)
+                .audience().add(AUDIENCE).and()
                 .subject(userId.toString())
                 .claim("email", email)
                 .claim("pwdUpdatedAt", passwordUpdatedAt.toEpochSecond(ZoneOffset.UTC))
@@ -70,6 +75,8 @@ public class JwtTokenProvider {
 
         return Jwts.builder()
                 .id(UUID.randomUUID().toString())
+                .issuer(ISSUER)
+                .audience().add(AUDIENCE).and()
                 .subject(userId.toString())
                 .claim("email", email)
                 .claim("pwdUpdatedAt", passwordUpdatedAt.toEpochSecond(ZoneOffset.UTC))
@@ -78,6 +85,35 @@ public class JwtTokenProvider {
                 .signWith(refreshKey)
                 .compact();
     }
+
+    public String getTokenId(String token) {
+        return Jwts.parser()
+                .verifyWith(accessKey)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload()
+                .getId();
+    }
+
+    public long getExpiration(String token) {
+        Date exp = Jwts.parser()
+                .verifyWith(accessKey)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload()
+                .getExpiration();
+        return exp.getTime() - System.currentTimeMillis();
+    }
+
+    public Date getExpirationDate(String token) {
+        return Jwts.parser()
+                .verifyWith(accessKey)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload()
+                .getExpiration();
+    }
+}
 
     public UUID getUserIdFromToken(String token) {
         Claims claims = Jwts.parser()
