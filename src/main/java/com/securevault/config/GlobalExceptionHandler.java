@@ -60,6 +60,17 @@ public class GlobalExceptionHandler {
                         .build());
     }
 
+    @ExceptionHandler(SecurityException.class)
+    public ResponseEntity<ApiResponse<String>> handleSecurity(SecurityException ex) {
+        log.warn("Security check failed: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiResponse.<String>builder()
+                        .success(false)
+                        .message(ex.getMessage())
+                        .timestamp(java.time.LocalDateTime.now())
+                        .build());
+    }
+
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiResponse<String>> handleIllegalArgument(IllegalArgumentException ex) {
         log.warn("Bad request: {}", ex.getMessage());

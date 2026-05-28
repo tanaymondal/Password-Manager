@@ -2,6 +2,8 @@ package com.securevault.controller;
 
 import com.securevault.dto.*;
 import com.securevault.security.JwtAuthenticationFilter;
+import com.securevault.security.RequireSudo;
+import com.securevault.security.SudoService;
 import com.securevault.service.AuditService;
 import com.securevault.service.AuthService;
 import com.securevault.util.ClientIpResolver;
@@ -38,14 +40,17 @@ public class AuthController {
     private long refreshTokenExpirationMs;
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final SudoService sudoService;
 
     public AuthController(AuthService authService, AuditService auditService,
                           ClientIpResolver clientIpResolver,
-                          JwtAuthenticationFilter jwtAuthenticationFilter) {
+                          JwtAuthenticationFilter jwtAuthenticationFilter,
+                          SudoService sudoService) {
         this.authService = authService;
         this.auditService = auditService;
         this.clientIpResolver = clientIpResolver;
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
+        this.sudoService = sudoService;
     }
 
     @PostMapping("/prelogin")
@@ -160,6 +165,15 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.success("Logged out successfully", ""));
     }
 
+    @PostMapping("/sudo")
+    public ResponseEntity<ApiResponse<Map<String, String>>> requestSudo(
+            @AuthenticationPrincipal UserDetails userDetails) {
+        UUID userId = UserUtils.getUserId(userDetails);
+        String token = sudoService.generateSudoToken(userId);
+        return ResponseEntity.ok(ApiResponse.success(Map.of("sudoToken", token)));
+    }
+
+    @RequireSudo
     @PostMapping("/change-password")
     public ResponseEntity<ApiResponse<ChangePasswordResponse>> changePassword(
             @AuthenticationPrincipal UserDetails userDetails,
@@ -191,6 +205,7 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.success("Password changed successfully", response));
     }
 
+    @RequireSudo
     @DeleteMapping("/account")
     public ResponseEntity<ApiResponse<String>> deleteAccount(
             @AuthenticationPrincipal UserDetails userDetails,
@@ -202,6 +217,7 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.success("Account deleted successfully", ""));
     }
 
+    @RequireSudo
     @PostMapping("/upgrade-kdf")
     public ResponseEntity<ApiResponse<String>> upgradeKdf(
             @AuthenticationPrincipal UserDetails userDetails,
