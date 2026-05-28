@@ -540,12 +540,19 @@ No pinning on Android or iOS. Rogue/user-installed CA can MITM.
 
 ---
 
-### 2.14 Zero-knowledge architecture gap ❌
+### 2.14 Zero-knowledge architecture gap ✅
 [source: need_to_fix 2.14]
 
-Server receives master password during registration/login and can derive/wrap vault-key material. Common but weaker than true zero-knowledge claims.
+Claimed "Server receives master password during registration/login and can derive/wrap vault-key material."
 
-**Status**: ❌ Open.
+**Verification**: Incorrect claim. Architecture was always zero-knowledge:
+- `RegisterRequest` receives `authHash` (client-side PBKDF2 of password), not the raw password — `AuthService.java:105`
+- `LoginRequest` receives `authHash` (client-side PBKDF2), not raw password — `LoginRequest.java:17`
+- Server stores `serverSideHash(authHash)` (double-hashed with `SERVER_HASH_SECRET`) — never sees plaintext
+- `wrappedVaultKey` is encrypted with client-derived KEK; server cannot decrypt it
+- `User.java:31-34` already documents the zero-knowledge architecture
+
+**Status**: ✅ Always was zero-knowledge — never an issue.
 
 ---
 
@@ -1157,9 +1164,9 @@ Many `Result.Error(it.message ...)` paths surface backend error messages in mobi
 | Phase 0 — Stop the bleeding | 9 | 7 | 0 | 2 |
 | Phase 1 — Critical hardening | 25 | 11 | 2 | 12 |
 
-| Phase 2 — Important hardening | 37 | 12 | 1 | 24 |
+| Phase 2 — Important hardening | 37 | 13 | 1 | 23 |
 
-| **Total** | **112** | **30** | **3** | **79** |
+| **Total** | **112** | **31** | **3** | **78** |
 
 ### Verification
 - Backend `mvn -q test`: passed (6/6)
