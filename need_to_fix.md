@@ -782,14 +782,19 @@ All requests including CORS preflight count against the 60 req/min per-IP limit.
 
 ---
 
-### 2.37 Web disable-2FA sends no TOTP code ❌
+### 2.37 Web disable-2FA sends no TOTP code ✅
 [source: claude M8, codex M8]
 
-Backend requires a code to disable 2FA, but web client sends no body. Users may be unable to manage 2FA reliably.
+Backend requires a code to disable 2FA, but web client sent no body. Users would be unable to manage 2FA reliably.
 
-**Files**: `web/src/api/twofa.ts`, `web/src/pages/SettingsPage.tsx`, `TwoFactorController.java`
+**Fix**:
+- `web/src/api/twofa.ts:27`: `disable2FA()` now accepts a `code: string` parameter and sends `{"code": code}` in the POST body
+- `web/src/pages/SettingsPage.tsx`: `handleDisable()` requires a 6-digit code before calling the API. Added `disabling` state — clicking "Disable 2FA" now shows a code input + "Confirm Disable" / "Cancel" buttons, matching the enable flow UX
+- Mobile client (`SecureVaultApi.kt:227-236`) already sent the code correctly — only web was broken
 
-**Status**: ❌ Open.
+**Files**: `web/src/api/twofa.ts:27`, `web/src/pages/SettingsPage.tsx:317-368`
+
+**Status**: ✅ Fixed.
 
 ---
 
@@ -1164,9 +1169,9 @@ Many `Result.Error(it.message ...)` paths surface backend error messages in mobi
 | Phase 0 — Stop the bleeding | 9 | 7 | 0 | 2 |
 | Phase 1 — Critical hardening | 25 | 11 | 2 | 12 |
 
-| Phase 2 — Important hardening | 37 | 13 | 1 | 23 |
+| Phase 2 — Important hardening | 37 | 14 | 1 | 22 |
 
-| **Total** | **112** | **31** | **3** | **78** |
+| **Total** | **112** | **32** | **3** | **77** |
 
 ### Verification
 - Backend `mvn -q test`: passed (6/6)

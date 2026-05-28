@@ -262,6 +262,7 @@ function TwoFactorSection() {
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
+  const [disabling, setDisabling] = useState(false)
 
   const loadStatus = useCallback(async () => {
     setLoading(true)
@@ -315,11 +316,14 @@ function TwoFactorSection() {
   }
 
   const handleDisable = async () => {
+    if (!code || code.length !== 6) return
     setError('')
     setBusy(true)
     try {
-      await disable2FA()
+      await disable2FA(code)
       setEnabled(false)
+      setDisabling(false)
+      setCode('')
       setMessage('Two-factor authentication disabled')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to disable 2FA')
@@ -357,13 +361,43 @@ function TwoFactorSection() {
               <div className="h-2 w-2 rounded-full bg-emerald-500 shadow-sm shadow-emerald-500/50" />
               <span className="text-sm text-emerald-400">Two-factor authentication is enabled</span>
             </div>
-            <button
-              onClick={handleDisable}
-              disabled={busy}
-              className="inline-flex items-center gap-2 rounded-xl bg-red-950/30 px-4 py-2.5 text-sm font-medium text-red-400 transition-all duration-200 hover:bg-red-950/50 disabled:opacity-50"
-            >
-              {busy ? 'Disabling...' : 'Disable 2FA'}
-            </button>
+            {!disabling ? (
+              <button
+                onClick={() => setDisabling(true)}
+                disabled={busy}
+                className="inline-flex items-center gap-2 rounded-xl bg-red-950/30 px-4 py-2.5 text-sm font-medium text-red-400 transition-all duration-200 hover:bg-red-950/50 disabled:opacity-50"
+              >
+                Disable 2FA
+              </button>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-sm text-gray-400">Enter a verification code from your authenticator app to disable 2FA.</p>
+                <input
+                  type="text"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="000000"
+                  maxLength={6}
+                  className="block w-full max-w-[160px] rounded-xl border border-gray-700/50 bg-gray-950/50 px-3.5 py-2.5 text-sm text-gray-100 font-mono tracking-widest text-center transition-all duration-200 focus:border-emerald-500/50 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                />
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleDisable}
+                    disabled={busy || code.length !== 6}
+                    className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg transition-all duration-200 hover:bg-red-500 disabled:opacity-50 disabled:shadow-none"
+                  >
+                    {busy ? 'Disabling...' : 'Confirm Disable'}
+                  </button>
+                  <button
+                    onClick={() => { setDisabling(false); setCode(''); setError('') }}
+                    disabled={busy}
+                    className="inline-flex items-center gap-2 rounded-xl bg-gray-800 px-4 py-2.5 text-sm font-medium text-gray-300 transition-all duration-200 hover:bg-gray-700 disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
