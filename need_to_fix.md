@@ -92,14 +92,16 @@ Room table had plaintext `title, username, password, url, notes` columns within 
 
 ---
 
-### 0.8 Android `allowBackup="true"` on a password manager ❌
+### 0.8 Android `allowBackup="true"` on a password manager ✅
 [source: claude C7, codex C7]
 
-Allows `adb backup` and Google Auto Backup to copy app data including plaintext caches, encrypted preferences, and database. Should be `android:allowBackup="false"` with strict extraction rules.
+Allowed `adb backup` and Google Auto Backup to copy app data including caches and database.
 
-**File**: `AndroidManifest.xml:9`
+**Fix**: Set `android:allowBackup="false"`, `android:fullBackupContent="false"`, and `android:dataExtractionRules="@xml/backup_rules"`. Created `backup_rules.xml` that excludes all domains from cloud backup and device transfer.
 
-**Status**: ❌ Open.
+**Files**: `AndroidManifest.xml:9`, `res/xml/backup_rules.xml`
+
+**Status**: ✅ Fixed — backup fully disabled on all API levels.
 
 ---
 
@@ -1081,6 +1083,7 @@ Many `Result.Error(it.message ...)` paths surface backend error messages in mobi
 | 0.4 | TOTP secret encrypted at rest | AES-256-GCM via `TwoFactorSecretConverter` (JPA `@Convert`), key from `ENCRYPTION_KEY` |
 | 0.6 | Local vault cache plaintext | Password/notes encrypted at entity level with vault key (AES-256-GCM); `e1:` prefix for migration |
 | 0.7 | Plaintext DataStore vault cache | `VaultCache.kt` deleted — dead code, zero references |
+| 0.8 | Android backup enabled | `allowBackup="false"`, `dataExtractionRules` excludes all domains |
 | 1.1 | Refresh token hashing | SHA-256 hash stored in DB instead of raw JWT |
 | 1.2 | Password reuse prevention | Salt-aware password history comparison |
 | 1.4 | Failed logins not audit-logged | `logFailedLogin()` now called from `AuthService.login()` catch path |
@@ -1126,12 +1129,12 @@ Many `Result.Error(it.message ...)` paths surface backend error messages in mobi
 
 | Category | Total | ✅ Fixed | ⏳ Partial | ❌ Remaining |
 |----------|-------|----------|-----------|--------------|
-| Phase 0 — Stop the bleeding | 9 | 6 | 0 | 3 |
+| Phase 0 — Stop the bleeding | 9 | 7 | 0 | 2 |
 | Phase 1 — Critical hardening | 25 | 8 | 3 | 14 |
 | Phase 2 — Important hardening | 37 | 7 | 1 | 29 |
 | Phase 3 — Defense in depth | 29 | 0 | 0 | 29 |
 | Phase 4 — Operational maturity | 12 | 0 | 0 | 12 |
-| **Total** | **112** | **21** | **4** | **87** |
+| **Total** | **112** | **22** | **4** | **86** |
 
 ### Verification
 - Backend `mvn -q test`: passed (6/6)
