@@ -118,7 +118,7 @@ object SessionManager {
         encryptedPrefs?.edit()?.putInt(KEY_KDF_ITERATIONS, value)?.apply()
     }
 
-    fun getKdfMemory(): Int = encryptedPrefs?.getInt(KEY_KDF_MEMORY, 98304) ?: 98304
+    fun getKdfMemory(): Int = encryptedPrefs?.getInt(KEY_KDF_MEMORY, 65536) ?: 65536
 
     fun setKdfMemory(value: Int) {
         encryptedPrefs?.edit()?.putInt(KEY_KDF_MEMORY, value)?.apply()
