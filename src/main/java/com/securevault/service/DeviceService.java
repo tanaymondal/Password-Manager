@@ -42,6 +42,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class DeviceService {
 
+    private static final int MAX_DEVICES_PER_USER = 10;
+
     private final DeviceRepository deviceRepository;
     private final RefreshTokenRepository refreshTokenRepository;
 
@@ -72,6 +74,11 @@ public class DeviceService {
             existingDevice = deviceRepository.save(existingDevice);
 
             return toResponse(existingDevice);
+        }
+
+        long currentCount = deviceRepository.countByUserId(userId);
+        if (currentCount >= MAX_DEVICES_PER_USER) {
+            throw new IllegalArgumentException("Maximum of " + MAX_DEVICES_PER_USER + " devices allowed. Remove an existing device first.");
         }
 
         Device device = new Device();

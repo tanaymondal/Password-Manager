@@ -381,14 +381,16 @@ Had `@NotBlank` but no `@Email` annotation.
 
 ---
 
-### 1.24 No device registration rate limit or maximum count 💡NEW
+### 1.24 No device registration rate limit or maximum count ✅
 [source: discovered during fix session]
 
-Authenticated user can register unlimited devices. PublicKey was removed — it was dead code (unimplemented E2EE), so the blob-storage concern is moot. Device count limit per user still unaddressed.
+Authenticated user could register unlimited devices. PublicKey removed — dead code (unimplemented E2EE).
 
-**File**: `DeviceService.java:63-89`
+**Fix**: `DeviceService.java:48+88-90` — `MAX_DEVICES_PER_USER = 10`. `registerDevice()` checks `deviceRepository.countByUserId()` before creating a new device. `DeviceRepository.java:18` — added `countByUserId(UUID)` derived query.
 
-**Status**: ⏳ Partially fixed — `publicKey` and `encryptedPrivateKey` removed from `Device.java`/`DeviceRequest.java`/DB (dead fields). Device count limit still open.
+**Files**: `DeviceService.java:48,87-89`, `DeviceRepository.java:18`
+
+**Status**: ✅ Fixed.
 
 ---
 
@@ -738,14 +740,12 @@ Only `@NotBlank` — no email format validation.
 
 ---
 
-### 2.33 No device count limit per user 💡NEW
+### 2.33 No device count limit per user ✅
 [source: discovered during fix session]
 
-Unlimited device registrations. `publicKey` field removed (dead code for unimplemented E2EE), so the `@Size` concern is moot. Device count limit still unaddressed.
+Unlimited device registrations. `publicKey` field removed (dead code for unimplemented E2EE), so the `@Size` concern is moot. Device count limit now addressed.
 
-**File**: `DeviceService.java:63-89`
-
-**Status**: ⏳ Partially fixed — `publicKey` column dropped. Device count limit still open (duplicate of 1.24).
+**Status**: ✅ Fixed (duplicate of 1.24).
 
 ---
 
@@ -1170,11 +1170,11 @@ Many `Result.Error(it.message ...)` paths surface backend error messages in mobi
 | Category | Total | ✅ Fixed | ⏳ Partial | ❌ Remaining |
 |----------|-------|----------|-----------|--------------|
 | Phase 0 — Stop the bleeding | 9 | 7 | 0 | 2 |
-| Phase 1 — Critical hardening | 25 | 11 | 2 | 12 |
+| Phase 1 — Critical hardening | 25 | 12 | 1 | 12 |
 
-| Phase 2 — Important hardening | 37 | 15 | 1 | 21 |
+| Phase 2 — Important hardening | 37 | 16 | 1 | 20 |
 
-| **Total** | **112** | **33** | **3** | **76** |
+| **Total** | **112** | **35** | **2** | **75** |
 
 ### Verification
 - Backend `mvn -q test`: passed (6/6)
