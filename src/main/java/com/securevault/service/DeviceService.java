@@ -42,7 +42,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class DeviceService {
 
-    private static final int MAX_DEVICES_PER_USER = 10;
+    private static final int MAX_DEVICES_PER_USER = 50;
 
     private final DeviceRepository deviceRepository;
     private final RefreshTokenRepository refreshTokenRepository;

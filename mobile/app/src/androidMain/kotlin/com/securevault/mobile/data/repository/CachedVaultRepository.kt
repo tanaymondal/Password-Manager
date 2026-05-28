@@ -1,6 +1,7 @@
 package com.securevault.mobile.data.repository
 
 import android.content.Context
+import android.util.Log
 import com.securevault.mobile.data.local.DatabaseKeyManager
 import com.securevault.mobile.data.local.SecureVaultDatabase
 import com.securevault.mobile.data.local.VaultEntryDao
@@ -42,6 +43,7 @@ class CachedVaultRepository(
             db.openHelper.writableDatabase
             db.vaultEntryDao()
         } catch (e: Exception) {
+            Log.w("CachedVaultRepo", "DB open failed, recreating: ${e.message}")
             SecureVaultDatabase.clearInstance()
             context.deleteDatabase(SecureVaultDatabase.DATABASE_NAME)
             keyManager.clearPassphrase()
@@ -60,18 +62,7 @@ class CachedVaultRepository(
     }
 
     private suspend fun <T> withDao(block: suspend (VaultEntryDao) -> T): T {
-        return try {
-            block(getOrCreateDao())
-        } catch (e: Exception) {
-            context.deleteDatabase(SecureVaultDatabase.DATABASE_NAME)
-            DatabaseKeyManager(context).clearPassphrase()
-            resetDao()
-            try {
-                block(getOrCreateDao())
-            } catch (retryException: Exception) {
-                throw retryException
-            }
-        }
+        return block(getOrCreateDao())
     }
 
     override suspend fun getEntries(): Result<List<VaultEntry>> {

@@ -718,14 +718,18 @@ Many `authResponse.accessToken!!` — malformed server response causes instant N
 
 ---
 
-### 2.31 `CachedVaultRepository.withDao` catches any exception and deletes local DB ❌
+### 2.31 `CachedVaultRepository.withDao` catches any exception and deletes local DB ✅
 [source: claude M18]
 
-On first exception, the local DB and passphrase are wiped, then operation retried. Transient I/O error → silent cache destruction and forced re-sync of plaintext entries.
+On first exception, the local DB and passphrase were wiped, then operation retried. Transient I/O error → silent cache destruction and forced re-sync of plaintext entries.
 
-**File**: `CachedVaultRepository.kt:60-72`
+**Fix**:
+- `CachedVaultRepository.kt:62-64`: `withDao()` no longer catches exceptions — transient errors propagate cleanly instead of silently destroying the cache
+- `createDao()` catch retained for DB initialization failures (corrupt file, wrong passphrase) with added `Log.w` for visibility
 
-**Status**: ❌ Open.
+**File**: `CachedVaultRepository.kt:62-64,47`
+
+**Status**: ✅ Fixed.
 
 ---
 
@@ -1172,9 +1176,9 @@ Many `Result.Error(it.message ...)` paths surface backend error messages in mobi
 | Phase 0 — Stop the bleeding | 9 | 7 | 0 | 2 |
 | Phase 1 — Critical hardening | 25 | 12 | 1 | 12 |
 
-| Phase 2 — Important hardening | 37 | 16 | 1 | 20 |
+| Phase 2 — Important hardening | 37 | 17 | 1 | 19 |
 
-| **Total** | **112** | **35** | **2** | **75** |
+| **Total** | **112** | **36** | **2** | **74** |
 
 ### Verification
 - Backend `mvn -q test`: passed (6/6)
