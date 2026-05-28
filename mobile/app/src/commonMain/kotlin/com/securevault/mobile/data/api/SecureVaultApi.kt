@@ -358,7 +358,7 @@ class SecureVaultApi(
         } ?: emptyList()
 
         if (twoFactorRequired) {
-            if (userId == null || email == null || encryptionSalt == null || challengeId == null) {
+            if (userId == null || email == null || challengeId == null) {
                 throw Exception("Missing required fields for 2FA verification")
             }
             AuthResponse(
