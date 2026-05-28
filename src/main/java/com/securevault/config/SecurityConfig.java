@@ -1,9 +1,13 @@
 package com.securevault.config;
 
 import com.securevault.security.JwtAuthenticationFilter;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -13,7 +17,9 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfigurationSource;
+import java.util.Arrays;
 
+@Slf4j
 @Configuration
 @EnableWebSecurity
 @RequiredArgsConstructor
@@ -21,6 +27,22 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final CorsConfigurationSource corsConfigurationSource;
+    private final Environment environment;
+
+    @Value("${security.require-ssl:false}")
+    private boolean requireSsl;
+
+    @Value("${server.ssl.enabled:false}")
+    private boolean sslEnabled;
+
+    @PostConstruct
+    public void validateTlsInProduction() {
+        boolean isProd = Arrays.asList(environment.getActiveProfiles()).contains("prod");
+        if (isProd && (!sslEnabled || !requireSsl)) {
+            log.warn("PRODUCTION WARNING: SSL is not enabled (ssl.enabled={}, require-ssl={}). "
+                    + "A TLS-terminating reverse proxy (nginx/Caddy) MUST be deployed in front of this application.", sslEnabled, requireSsl);
+        }
+    }
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {

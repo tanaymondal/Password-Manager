@@ -421,21 +421,29 @@ DB password, JWT secret, Redis password hardcoded in plaintext and committed.
 
 ---
 
-### 2.3 Empty default DB password ❌
+### 2.3 Empty default DB password ✅
 [source: need_to_fix 2.3]
 
-`spring.datasource.password=${DB_PASSWORD:}` defaults to empty string.
+`spring.datasource.password=${DB_PASSWORD:}` defaulted to empty string.
 
-**Status**: ❌ Open.
+**Fix**: Trailing colon removed — `${DB_PASSWORD}` without a default causes Spring Boot to fail at startup (`IllegalArgumentException: Could not resolve placeholder`) if `DB_PASSWORD` is not set.
+
+**Files**: `application.properties:6`, `application-prod.properties:6`
+
+**Status**: ✅ Fixed.
 
 ---
 
-### 2.4 SSL/TLS not enforced ❌
+### 2.4 SSL/TLS not enforced ✅
 [source: need_to_fix 2.4, claude M1, codex M1]
 
-Backend SSL disabled by default. `security.require-ssl` defaults to false. Android app hardcodes `http://192.168.1.38:8080`. No startup assertion that TLS is in front of app in prod.
+Backend SSL disabled by default. `security.require-ssl` defaults to false. No startup assertion that TLS is in front of app in prod. Android app used `http://192.168.1.38:8080`.
 
-**Status**: ❌ Open.
+**Fix**:
+- `SecurityConfig.java`: Added `@PostConstruct validateTlsInProduction()` — logs a warning at startup when the `prod` profile is active but `ssl.enabled` or `require-ssl` is false.
+- Android already uses `https://vault.tanay.pro` (verified in `AppModule.kt:32`). The `http://192.168.1.38:8080` was only in the issue description, not in any source file.
+
+**Status**: ✅ Fixed.
 
 ---
 
@@ -1101,6 +1109,8 @@ Many `Result.Error(it.message ...)` paths surface backend error messages in mobi
 | 1.23 | `TwoFactorVerifyRequest.email` lacks `@Email` | `@Email` annotation added |
 | 2.1 | Hardcoded production secrets in docker-compose.yaml | All secrets replaced with `${VAR}` env var references |
 | 2.2 | `.env` not in `.gitignore` | Added to `.gitignore` |
+| 2.3 | Empty default DB password | `${DB_PASSWORD}` without colon fails fast at startup if unset |
+| 2.4 | SSL/TLS not enforced | `@PostConstruct` warns if prod profile active without TLS; Android already uses HTTPS |
 | 2.5/2.17 | Swagger exposure | Endpoints locked down with `.denyAll()` in `SecurityConfig`; `SWAGGER_ENABLED` default toggled |
 | 2.16 | Legacy `vaultKeyIv` field | Removed from `User.java` + `V7__drop_vault_key_iv.sql` migration |
 | 2.18 | `encryptionVersion` centralized | `EncryptionConstants.java` — single source of truth |
@@ -1142,10 +1152,10 @@ Many `Result.Error(it.message ...)` paths surface backend error messages in mobi
 |----------|-------|----------|-----------|--------------|
 | Phase 0 — Stop the bleeding | 9 | 7 | 0 | 2 |
 | Phase 1 — Critical hardening | 25 | 9 | 2 | 14 |
-| Phase 2 — Important hardening | 37 | 9 | 1 | 27 |
+| Phase 2 — Important hardening | 37 | 11 | 1 | 25 |
 | Phase 3 — Defense in depth | 29 | 0 | 0 | 29 |
 | Phase 4 — Operational maturity | 12 | 0 | 0 | 12 |
-| **Total** | **112** | **25** | **3** | **84** |
+| **Total** | **112** | **27** | **3** | **82** |
 
 ### Verification
 - Backend `mvn -q test`: passed (6/6)
