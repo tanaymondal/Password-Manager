@@ -3,6 +3,9 @@ export interface CryptoMaterial {
   encryptionSalt: string
   wrappedVaultKey: string
   encryptionVersion: number
+  kdfIterations?: number
+  kdfMemory?: number
+  kdfParallelism?: number
 }
 
 let _cryptoMaterial: CryptoMaterial | null = null

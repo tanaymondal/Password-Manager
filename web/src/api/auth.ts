@@ -8,6 +8,9 @@ export interface AuthResponse {
   encryptionSalt: string
   wrappedVaultKey: string
   encryptionVersion: number
+  kdfIterations?: number
+  kdfMemory?: number
+  kdfParallelism?: number
 }
 
 export interface TwoFactorLoginResponse {
@@ -17,6 +20,9 @@ export interface TwoFactorLoginResponse {
   challengeId: string
   authSalt: string
   twoFactorMethods?: string[]
+  kdfIterations?: number
+  kdfMemory?: number
+  kdfParallelism?: number
 }
 
 export interface LoginRequest {
@@ -28,6 +34,9 @@ export interface LoginRequest {
 
 export interface PreLoginResponse {
   authSalt: string
+  kdfIterations?: number
+  kdfMemory?: number
+  kdfParallelism?: number
 }
 
 export interface RegisterRequest {
@@ -37,7 +46,25 @@ export interface RegisterRequest {
   encryptionSalt: string
   wrappedVaultKey: string
   encryptionVersion: number
+  kdfIterations?: number
+  kdfMemory?: number
+  kdfParallelism?: number
   deviceId?: string
+}
+
+export interface UpgradeKdfRequest {
+  authHash: string
+  wrappedVaultKey: string
+  kdfIterations: number
+  kdfMemory: number
+  kdfParallelism: number
+}
+
+export function upgradeKdf(data: UpgradeKdfRequest) {
+  return apiClient<void>('/auth/upgrade-kdf', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
 }
 
 export function login(data: LoginRequest) {
@@ -112,6 +139,9 @@ export interface ChangePasswordResponse {
   encryptionVersion: number
   userId: string
   email: string
+  kdfIterations?: number
+  kdfMemory?: number
+  kdfParallelism?: number
 }
 
 export function changePassword(data: ChangePasswordRequest) {

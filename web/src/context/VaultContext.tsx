@@ -7,7 +7,13 @@ import {
   useEffect,
   type ReactNode,
 } from 'react'
-import { deriveKek, derivePasswordHash } from '../crypto/argon2'
+import {
+  deriveKek,
+  derivePasswordHash,
+  DEFAULT_KDF_ITERATIONS,
+  DEFAULT_KDF_MEMORY,
+  DEFAULT_KDF_PARALLELISM,
+} from '../crypto/argon2'
 import { unwrapVaultKey, wrapVaultKey } from '../crypto/vaultKey'
 import { encryptEntry, decryptEntry } from '../crypto/entries'
 import { bytesToBase64, generateRandomBytes } from '../crypto/util'
@@ -18,7 +24,7 @@ import {
   deleteVaultEntry,
   type VaultEntryResponse,
 } from '../api/vault'
-import { changePassword, checkBreach } from '../api/auth'
+import { changePassword, checkBreach, upgradeKdf } from '../api/auth'
 import { setTokens } from '../api/client'
 import { getCryptoMaterial, setCryptoMaterial } from '../store/cryptoMaterial'
 
@@ -107,10 +113,60 @@ export function VaultProvider({ children }: { children: ReactNode }) {
     setIsLoading(true)
     setError(null)
     try {
-      const kek = await deriveKek(password, material.encryptionSalt)
+      const kek = await deriveKek(
+        password,
+        material.encryptionSalt,
+        material.kdfIterations,
+        material.kdfMemory,
+        material.kdfParallelism
+      )
       const vaultKeyDerived = await unwrapVaultKey(kek, material.wrappedVaultKey)
       vaultKeyRef.current = vaultKeyDerived
       setIsUnlocked(true)
+
+      // Background KDF parameter upgrade check
+      const currentMemory = material.kdfMemory || DEFAULT_KDF_MEMORY
+      if (currentMemory < DEFAULT_KDF_MEMORY) {
+        console.log('Background KDF parameter upgrade starting...')
+        ;(async () => {
+          try {
+            const newAuthHash = await derivePasswordHash(
+              password,
+              material.authSalt,
+              DEFAULT_KDF_ITERATIONS,
+              DEFAULT_KDF_MEMORY,
+              DEFAULT_KDF_PARALLELISM
+            )
+            const newKek = await deriveKek(
+              password,
+              material.encryptionSalt,
+              DEFAULT_KDF_ITERATIONS,
+              DEFAULT_KDF_MEMORY,
+              DEFAULT_KDF_PARALLELISM
+            )
+            const newWrapped = await wrapVaultKey(newKek, vaultKeyDerived)
+
+            await upgradeKdf({
+              authHash: newAuthHash,
+              wrappedVaultKey: newWrapped,
+              kdfIterations: DEFAULT_KDF_ITERATIONS,
+              kdfMemory: DEFAULT_KDF_MEMORY,
+              kdfParallelism: DEFAULT_KDF_PARALLELISM,
+            })
+
+            // Update local material in store
+            setCryptoMaterial({
+              ...material,
+              kdfIterations: DEFAULT_KDF_ITERATIONS,
+              kdfMemory: DEFAULT_KDF_MEMORY,
+              kdfParallelism: DEFAULT_KDF_PARALLELISM,
+            })
+            console.log('Background KDF parameter upgrade succeeded!')
+          } catch (err) {
+            console.error('Background KDF parameter upgrade failed:', err)
+          }
+        })()
+      }
     } catch {
       vaultKeyRef.current = null
       setError('Failed to unlock vault. Check your master password.')
@@ -242,20 +298,32 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       onProgress?.(0.1)
       let oldVaultKey = vaultKeyRef.current
       if (!oldVaultKey) {
-        const kek = await deriveKek(currentPassword, material.encryptionSalt)
+        const kek = await deriveKek(
+          currentPassword,
+          material.encryptionSalt,
+          material.kdfIterations,
+          material.kdfMemory,
+          material.kdfParallelism
+        )
         oldVaultKey = await unwrapVaultKey(kek, material.wrappedVaultKey)
       }
 
       onProgress?.(0.4)
       const newSalt = bytesToBase64(generateRandomBytes(16))
-      const newKek = await deriveKek(newPassword, newSalt)
+      const newKek = await deriveKek(newPassword, newSalt) // uses recommended defaults automatically
       const newWrapped = await wrapVaultKey(newKek, oldVaultKey)
 
       onProgress?.(0.6)
       const authSalt = material.authSalt
       if (!authSalt) throw new Error('No auth salt found. Please log in again.')
-      const currentAuthHash = await derivePasswordHash(currentPassword, authSalt)
-      const newAuthHash = await derivePasswordHash(newPassword, authSalt)
+      const currentAuthHash = await derivePasswordHash(
+        currentPassword,
+        authSalt,
+        material.kdfIterations,
+        material.kdfMemory,
+        material.kdfParallelism
+      )
+      const newAuthHash = await derivePasswordHash(newPassword, authSalt) // uses recommended defaults automatically
 
       onProgress?.(0.8)
       const res = await changePassword({
@@ -270,6 +338,9 @@ export function VaultProvider({ children }: { children: ReactNode }) {
         encryptionSalt: res.encryptionSalt,
         wrappedVaultKey: res.wrappedVaultKey,
         encryptionVersion: res.encryptionVersion,
+        kdfIterations: res.kdfIterations,
+        kdfMemory: res.kdfMemory,
+        kdfParallelism: res.kdfParallelism,
       })
       setTokens(res.accessToken)
 

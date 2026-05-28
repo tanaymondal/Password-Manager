@@ -24,7 +24,16 @@ public class TwoFactorLoginResponse {
     @JsonProperty("twoFactorMethods")
     private List<String> twoFactorMethods;
 
-    public static TwoFactorLoginResponse requireTwoFactor(String userId, String email, String challengeId, String authSalt, List<String> twoFactorMethods) {
-        return new TwoFactorLoginResponse(true, userId, email, challengeId, authSalt, twoFactorMethods);
+    @JsonProperty("kdfIterations")
+    private Integer kdfIterations;
+
+    @JsonProperty("kdfMemory")
+    private Integer kdfMemory;
+
+    @JsonProperty("kdfParallelism")
+    private Integer kdfParallelism;
+
+    public static TwoFactorLoginResponse requireTwoFactor(String userId, String email, String challengeId, String authSalt, List<String> twoFactorMethods, Integer kdfIterations, Integer kdfMemory, Integer kdfParallelism) {
+        return new TwoFactorLoginResponse(true, userId, email, challengeId, authSalt, twoFactorMethods, kdfIterations, kdfMemory, kdfParallelism);
     }
 }

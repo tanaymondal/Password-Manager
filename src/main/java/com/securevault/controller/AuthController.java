@@ -192,6 +192,16 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.success("Account deleted successfully", ""));
     }
 
+    @PostMapping("/upgrade-kdf")
+    public ResponseEntity<ApiResponse<String>> upgradeKdf(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @Valid @RequestBody com.securevault.dto.UpgradeKdfRequest request) {
+        UUID userId = UserUtils.getUserId(userDetails);
+        log.info("KDF parameter upgrade request for user: {}", userId);
+        authService.upgradeKdf(userId, request);
+        return ResponseEntity.ok(ApiResponse.success("KDF parameters upgraded successfully", ""));
+    }
+
     private void setRefreshTokenCookie(HttpServletRequest request, HttpServletResponse response, String refreshToken) {
         if (refreshToken == null) return;
         Cookie cookie = new Cookie("refreshToken", refreshToken);

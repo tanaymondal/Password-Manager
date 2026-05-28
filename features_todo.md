@@ -25,7 +25,7 @@
 - [ ] **Remove hardcoded secrets from docker-compose.yaml** — DB password, JWT secret, Redis password all hardcoded and committed. Use `${VAR}` references or Docker secrets.
 - [ ] **Add payload size limits** — `VaultEntryRequest.encryptedData` has no `@Size(max=...)`. Storage exhaustion attack vector.
 - [ ] **Resolve CSP inconsistency** — Backend sets `script-src 'self'` (blocks WASM), nginx sets `'wasm-unsafe-eval'` (allows it). Behavior depends on whether request hits nginx or backend directly.
-- [ ] **Add KDF parameters per user** — `encryptionVersion` exists but no per-user KDF memory/iterations. Future KDF upgrades break existing sessions.
+- [x] **Add KDF parameters per user** — `encryptionVersion` exists but no per-user KDF memory/iterations. Future KDF upgrades break existing sessions.
 - [ ] **Configure mobile cleartext traffic** — Android `network_security_config.xml` permits cleartext globally. iOS hardcodes `http://` URL.
 - [ ] **Disable Android backup** — `android:allowBackup="true"` in AndroidManifest. Device backup can leak app data.
 - [ ] **Enable ProGuard/R8** — Android release build has `isMinifyEnabled = false`. No obfuscation or optimization.

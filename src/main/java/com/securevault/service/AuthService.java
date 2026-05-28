@@ -113,6 +113,22 @@ public class AuthService {
         user.setFailedLoginAttempts(0);
         user.setPasswordUpdatedAt(LocalDateTime.now());
 
+        if (request.getKdfIterations() != null) {
+            user.setKdfIterations(request.getKdfIterations());
+        } else {
+            user.setKdfIterations(com.securevault.config.EncryptionConstants.DEFAULT_KDF_ITERATIONS);
+        }
+        if (request.getKdfMemory() != null) {
+            user.setKdfMemory(request.getKdfMemory());
+        } else {
+            user.setKdfMemory(com.securevault.config.EncryptionConstants.DEFAULT_KDF_MEMORY);
+        }
+        if (request.getKdfParallelism() != null) {
+            user.setKdfParallelism(request.getKdfParallelism());
+        } else {
+            user.setKdfParallelism(com.securevault.config.EncryptionConstants.DEFAULT_KDF_PARALLELISM);
+        }
+
         user = userRepository.save(user);
 
         log.info("User registered successfully: {}", user.getEmail());
@@ -122,11 +138,21 @@ public class AuthService {
     public PreLoginResponse prelogin(String email) {
         String normalizedEmail = email.toLowerCase().trim();
         return userRepository.findByEmail(normalizedEmail)
-                .map(user -> new PreLoginResponse(user.getAuthSalt()))
+                .map(user -> new PreLoginResponse(
+                        user.getAuthSalt(),
+                        user.getKdfIterations() != null ? user.getKdfIterations() : com.securevault.config.EncryptionConstants.DEFAULT_KDF_ITERATIONS,
+                        user.getKdfMemory() != null ? user.getKdfMemory() : com.securevault.config.EncryptionConstants.DEFAULT_KDF_MEMORY,
+                        user.getKdfParallelism() != null ? user.getKdfParallelism() : com.securevault.config.EncryptionConstants.DEFAULT_KDF_PARALLELISM
+                ))
                 .orElseGet(() -> {
                     byte[] randomSalt = new byte[16];
                     new java.security.SecureRandom().nextBytes(randomSalt);
-                    return new PreLoginResponse(java.util.Base64.getEncoder().encodeToString(randomSalt));
+                    return new PreLoginResponse(
+                            java.util.Base64.getEncoder().encodeToString(randomSalt),
+                            com.securevault.config.EncryptionConstants.DEFAULT_KDF_ITERATIONS,
+                            com.securevault.config.EncryptionConstants.DEFAULT_KDF_MEMORY,
+                            com.securevault.config.EncryptionConstants.DEFAULT_KDF_PARALLELISM
+                    );
                 });
     }
 
@@ -182,7 +208,10 @@ public class AuthService {
                 null,
                 challengeId,
                 user.getAuthSalt(),
-                twoFactorMethods
+                twoFactorMethods,
+                user.getKdfIterations() != null ? user.getKdfIterations() : com.securevault.config.EncryptionConstants.DEFAULT_KDF_ITERATIONS,
+                user.getKdfMemory() != null ? user.getKdfMemory() : com.securevault.config.EncryptionConstants.DEFAULT_KDF_MEMORY,
+                user.getKdfParallelism() != null ? user.getKdfParallelism() : com.securevault.config.EncryptionConstants.DEFAULT_KDF_PARALLELISM
         );
     }
 
@@ -347,6 +376,9 @@ public class AuthService {
         user.setEncryptionSalt(newEncryptionSalt);
         user.setWrappedVaultKey(newWrappedVaultKey);
         user.setEncryptionVersion(com.securevault.config.EncryptionConstants.CURRENT_ENCRYPTION_VERSION);
+        user.setKdfIterations(com.securevault.config.EncryptionConstants.DEFAULT_KDF_ITERATIONS);
+        user.setKdfMemory(com.securevault.config.EncryptionConstants.DEFAULT_KDF_MEMORY);
+        user.setKdfParallelism(com.securevault.config.EncryptionConstants.DEFAULT_KDF_PARALLELISM);
         user.setPasswordUpdatedAt(LocalDateTime.now());
         user.setFailedLoginAttempts(0);
         user.setLockedUntil(null);
@@ -378,6 +410,31 @@ public class AuthService {
         userRepository.delete(user);
 
         log.info("Account deleted for user: {}", user.getEmail());
+    }
+
+    @Transactional
+    public void upgradeKdf(UUID userId, com.securevault.dto.UpgradeKdfRequest request) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+
+        if (user.isLocked()) {
+            throw new BadCredentialsException("Account is temporarily locked. Please try again later.");
+        }
+
+        String newSalt = generateSalt();
+        String newServerHash = serverSideHash(request.getAuthHash(), newSalt);
+
+        user.setPasswordHash(newServerHash);
+        user.setPasswordSalt(newSalt);
+        user.setWrappedVaultKey(request.getWrappedVaultKey());
+        user.setKdfIterations(request.getKdfIterations());
+        user.setKdfMemory(request.getKdfMemory());
+        user.setKdfParallelism(request.getKdfParallelism());
+        user.setEncryptionVersion(com.securevault.config.EncryptionConstants.CURRENT_ENCRYPTION_VERSION);
+        user.setPasswordUpdatedAt(LocalDateTime.now());
+
+        userRepository.save(user);
+        log.info("KDF parameters upgraded in background for user: {}", user.getEmail());
     }
 
     private void checkPasswordHistory(User user, String newAuthHash) {
@@ -462,7 +519,10 @@ public class AuthService {
                 user.getAuthSalt(),
                 user.getEncryptionSalt(),
                 user.getWrappedVaultKey(),
-                user.getEncryptionVersion() != null ? user.getEncryptionVersion() : com.securevault.config.EncryptionConstants.CURRENT_ENCRYPTION_VERSION
+                user.getEncryptionVersion() != null ? user.getEncryptionVersion() : com.securevault.config.EncryptionConstants.CURRENT_ENCRYPTION_VERSION,
+                user.getKdfIterations() != null ? user.getKdfIterations() : com.securevault.config.EncryptionConstants.DEFAULT_KDF_ITERATIONS,
+                user.getKdfMemory() != null ? user.getKdfMemory() : com.securevault.config.EncryptionConstants.DEFAULT_KDF_MEMORY,
+                user.getKdfParallelism() != null ? user.getKdfParallelism() : com.securevault.config.EncryptionConstants.DEFAULT_KDF_PARALLELISM
         );
     }
 
@@ -485,7 +545,10 @@ public class AuthService {
                 user.getId().toString(),
                 user.getEmail(),
                 user.getWrappedVaultKey(),
-                user.getEncryptionVersion() != null ? user.getEncryptionVersion() : com.securevault.config.EncryptionConstants.CURRENT_ENCRYPTION_VERSION
+                user.getEncryptionVersion() != null ? user.getEncryptionVersion() : com.securevault.config.EncryptionConstants.CURRENT_ENCRYPTION_VERSION,
+                user.getKdfIterations() != null ? user.getKdfIterations() : com.securevault.config.EncryptionConstants.DEFAULT_KDF_ITERATIONS,
+                user.getKdfMemory() != null ? user.getKdfMemory() : com.securevault.config.EncryptionConstants.DEFAULT_KDF_MEMORY,
+                user.getKdfParallelism() != null ? user.getKdfParallelism() : com.securevault.config.EncryptionConstants.DEFAULT_KDF_PARALLELISM
         );
     }
 

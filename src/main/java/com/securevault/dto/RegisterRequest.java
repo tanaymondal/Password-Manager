@@ -32,5 +32,9 @@ public class RegisterRequest {
     @NotNull(message = "Encryption version is required")
     private Integer encryptionVersion;
 
+    private Integer kdfIterations;
+    private Integer kdfMemory;
+    private Integer kdfParallelism;
+
     private String deviceId;
 }

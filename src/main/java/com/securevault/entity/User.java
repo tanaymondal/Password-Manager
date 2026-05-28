@@ -132,6 +132,15 @@ public class User {
     @Column(name = "encryption_version")
     private Integer encryptionVersion = 1;
 
+    @Column(name = "kdf_iterations", nullable = false)
+    private Integer kdfIterations = com.securevault.config.EncryptionConstants.DEFAULT_KDF_ITERATIONS;
+
+    @Column(name = "kdf_memory", nullable = false)
+    private Integer kdfMemory = com.securevault.config.EncryptionConstants.DEFAULT_KDF_MEMORY;
+
+    @Column(name = "kdf_parallelism", nullable = false)
+    private Integer kdfParallelism = com.securevault.config.EncryptionConstants.DEFAULT_KDF_PARALLELISM;
+
     /**
      * Account creation timestamp.
      */

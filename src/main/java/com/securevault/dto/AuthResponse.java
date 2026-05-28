@@ -25,4 +25,13 @@ public class AuthResponse {
 
     @JsonProperty("encryptionVersion")
     private Integer encryptionVersion;
+
+    @JsonProperty("kdfIterations")
+    private Integer kdfIterations;
+
+    @JsonProperty("kdfMemory")
+    private Integer kdfMemory;
+
+    @JsonProperty("kdfParallelism")
+    private Integer kdfParallelism;
 }

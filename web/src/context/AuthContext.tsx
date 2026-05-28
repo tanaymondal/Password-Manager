@@ -17,7 +17,15 @@ import {
   type TwoFactorLoginResponse,
 } from '../api/auth'
 import { setTokens, clearTokens } from '../api/client'
-import { derivePasswordHash, deriveKek, generateSalt, generateVaultKey } from '../crypto/argon2'
+import {
+  derivePasswordHash,
+  deriveKek,
+  generateSalt,
+  generateVaultKey,
+  DEFAULT_KDF_ITERATIONS,
+  DEFAULT_KDF_MEMORY,
+  DEFAULT_KDF_PARALLELISM,
+} from '../crypto/argon2'
 import { unwrapVaultKey, wrapVaultKey } from '../crypto/vaultKey'
 import {
   setCryptoMaterial,
@@ -122,7 +130,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const pre = await apiPrelogin(email)
     const res = await apiLogin({
       email,
-      authHash: await derivePasswordHash(password, pre.authSalt),
+      authHash: await derivePasswordHash(
+        password,
+        pre.authSalt,
+        pre.kdfIterations,
+        pre.kdfMemory,
+        pre.kdfParallelism
+      ),
       deviceName: 'Web Browser',
       deviceId: getDeviceId(),
     })
@@ -130,7 +144,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (res.twoFactorMethods && !res.twoFactorMethods.includes('totp')) {
       const authRes = await apiVerifyTwoFactor({ email, challengeId: res.challengeId, code: '' })
       try {
-        const kek = await deriveKek(password, authRes.encryptionSalt)
+        const kek = await deriveKek(
+          password,
+          authRes.encryptionSalt,
+          authRes.kdfIterations,
+          authRes.kdfMemory,
+          authRes.kdfParallelism
+        )
         const vaultKey = await unwrapVaultKey(kek, authRes.wrappedVaultKey)
         setAutoUnlockVaultKey(vaultKey)
       } catch {
@@ -141,6 +161,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         encryptionSalt: authRes.encryptionSalt,
         wrappedVaultKey: authRes.wrappedVaultKey,
         encryptionVersion: authRes.encryptionVersion,
+        kdfIterations: authRes.kdfIterations,
+        kdfMemory: authRes.kdfMemory,
+        kdfParallelism: authRes.kdfParallelism,
       })
       setState({
         user: { id: authRes.userId, email: authRes.email },
@@ -161,6 +184,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       encryptionSalt: res.encryptionSalt,
       wrappedVaultKey: res.wrappedVaultKey,
       encryptionVersion: res.encryptionVersion,
+      kdfIterations: res.kdfIterations,
+      kdfMemory: res.kdfMemory,
+      kdfParallelism: res.kdfParallelism,
     })
     setState({
       user: { id: res.userId, email: res.email },
@@ -189,6 +215,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       encryptionSalt,
       wrappedVaultKey,
       encryptionVersion: 2,
+      kdfIterations: DEFAULT_KDF_ITERATIONS,
+      kdfMemory: DEFAULT_KDF_MEMORY,
+      kdfParallelism: DEFAULT_KDF_PARALLELISM,
       deviceId: getDeviceId(),
     })
     setTokens(res.accessToken)
@@ -197,6 +226,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       encryptionSalt: res.encryptionSalt,
       wrappedVaultKey: res.wrappedVaultKey,
       encryptionVersion: res.encryptionVersion,
+      kdfIterations: res.kdfIterations,
+      kdfMemory: res.kdfMemory,
+      kdfParallelism: res.kdfParallelism,
     })
     setState({
       user: { id: res.userId, email: res.email },
@@ -229,6 +261,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     </AuthContext.Provider>
   )
 }
+
+
 
 export function useAuth() {
   const ctx = useContext(AuthContext)

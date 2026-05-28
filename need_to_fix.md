@@ -831,12 +831,12 @@ Backend requires a code to disable 2FA, but web client sent no body. Users would
 
 ## Phase 3 — Defense in depth
 
-### 3.1 Argon2id parameter tuning ❌
+### 3.1 Argon2id parameter tuning ✅
 [source: need_to_fix 3.1]
 
 Bump to 96MB memory, store params per-user, background re-hash on next login.
 
-**Status**: ❌ Open.
+**Status**: ✅ Fixed.
 
 ---
 

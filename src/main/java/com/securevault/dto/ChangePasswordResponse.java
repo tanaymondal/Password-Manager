@@ -25,4 +25,13 @@ public class ChangePasswordResponse {
 
     @JsonProperty("encryptionVersion")
     private Integer encryptionVersion;
+
+    @JsonProperty("kdfIterations")
+    private Integer kdfIterations;
+
+    @JsonProperty("kdfMemory")
+    private Integer kdfMemory;
+
+    @JsonProperty("kdfParallelism")
+    private Integer kdfParallelism;
 }

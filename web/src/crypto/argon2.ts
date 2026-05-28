@@ -1,18 +1,25 @@
 import { argon2id } from 'hash-wasm'
 import { base64ToBytes, bytesToBase64, generateRandomBytes } from './util'
 
+export const DEFAULT_KDF_ITERATIONS = 4
+export const DEFAULT_KDF_MEMORY = 98304 // 96MB in KiB
+export const DEFAULT_KDF_PARALLELISM = 4
+
 export async function derivePasswordHash(
   password: string,
   salt: string,
+  iterations: number = DEFAULT_KDF_ITERATIONS,
+  memorySize: number = DEFAULT_KDF_MEMORY,
+  parallelism: number = DEFAULT_KDF_PARALLELISM,
 ): Promise<string> {
   const saltBytes = new TextEncoder().encode(salt)
 
   const hashBytes = await argon2id({
     password,
     salt: saltBytes,
-    parallelism: 4,
-    iterations: 4,
-    memorySize: 65536,
+    parallelism,
+    iterations,
+    memorySize,
     hashLength: 32,
     outputType: 'binary',
   })
@@ -23,15 +30,18 @@ export async function derivePasswordHash(
 export async function deriveKek(
   password: string,
   saltBase64: string,
+  iterations: number = DEFAULT_KDF_ITERATIONS,
+  memorySize: number = DEFAULT_KDF_MEMORY,
+  parallelism: number = DEFAULT_KDF_PARALLELISM,
 ): Promise<CryptoKey> {
   const salt = base64ToBytes(saltBase64)
 
   const keyBytes = await argon2id({
     password,
     salt,
-    parallelism: 4,
-    iterations: 4,
-    memorySize: 65536,
+    parallelism,
+    iterations,
+    memorySize,
     hashLength: 32,
     outputType: 'binary',
   })
