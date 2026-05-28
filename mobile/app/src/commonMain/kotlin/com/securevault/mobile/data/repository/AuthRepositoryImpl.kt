@@ -42,7 +42,8 @@ class AuthRepositoryImpl(
             val deviceId = getOrCreateDeviceId()
 
             val defaultKdfIterations = 4
-            val defaultKdfMemory = 98304
+
+            val defaultKdfMemory = 65536
             val defaultKdfParallelism = 4
             val response = api.register(
                 RegisterRequest(email, authHash, authSalt, encryptionSalt, wrappedVaultKey, 2, deviceId,
