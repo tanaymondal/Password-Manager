@@ -19,7 +19,10 @@ data class RegisterRequest(
     val encryptionSalt: String,
     val wrappedVaultKey: String,
     val encryptionVersion: Int,
-    val deviceId: String? = null
+    val deviceId: String? = null,
+    @SerialName("kdfIterations") val kdfIterations: Int? = null,
+    @SerialName("kdfMemory") val kdfMemory: Int? = null,
+    @SerialName("kdfParallelism") val kdfParallelism: Int? = null
 )
 
 @Serializable
@@ -33,7 +36,10 @@ data class AuthResponse(
     @SerialName("wrappedVaultKey") val wrappedVaultKey: String? = null,
     @SerialName("encryptionVersion") val encryptionVersion: Int = 2,
     @SerialName("twoFactorRequired") val twoFactorRequired: Boolean = false,
-    @SerialName("twoFactorMethods") val twoFactorMethods: List<String> = emptyList()
+    @SerialName("twoFactorMethods") val twoFactorMethods: List<String> = emptyList(),
+    @SerialName("kdfIterations") val kdfIterations: Int? = null,
+    @SerialName("kdfMemory") val kdfMemory: Int? = null,
+    @SerialName("kdfParallelism") val kdfParallelism: Int? = null
 )
 
 @Serializable
@@ -71,5 +77,8 @@ data class PreLoginRequest(
 
 @Serializable
 data class PreLoginResponse(
-    val authSalt: String
+    val authSalt: String,
+    @SerialName("kdfIterations") val kdfIterations: Int? = null,
+    @SerialName("kdfMemory") val kdfMemory: Int? = null,
+    @SerialName("kdfParallelism") val kdfParallelism: Int? = null
 )

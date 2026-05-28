@@ -28,7 +28,7 @@ class CryptoEngine(
 
     private fun deriveKek(): ByteArray = deriveKekForPassword(getPassword(), getEncryptionSalt())
 
-    fun deriveKekForPassword(password: String, encryptionSalt: String): ByteArray {
+    fun deriveKekForPassword(password: String, encryptionSalt: String, iterations: Int = 4, memory: Int = 65536, parallelism: Int = 4): ByteArray {
         if (encryptionSalt.isEmpty()) throw IllegalStateException("Encryption salt not available")
         val saltBytes = Base64.getDecoder().decode(encryptionSalt)
         val loader = soLoaderShim ?: object : SoLoaderShim {
@@ -39,9 +39,9 @@ class CryptoEngine(
             mode = Argon2Mode.ARGON2_ID,
             password = password.toByteArray(Charsets.UTF_8),
             salt = saltBytes,
-            tCostInIterations = argon2Iterations,
-            mCostInKibibyte = argon2MemoryKb,
-            parallelism = argon2Parallelism,
+            tCostInIterations = iterations,
+            mCostInKibibyte = memory,
+            parallelism = parallelism,
             hashLengthInBytes = keyLength
         )
         return result.rawHashAsByteArray()

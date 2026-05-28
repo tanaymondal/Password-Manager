@@ -17,6 +17,9 @@ object SessionManager {
     private const val KEY_WRAPPED_VAULT_KEY = "wrapped_vault_key"
     private const val KEY_DEVICE_ID = "device_id"
     private const val KEY_BIOMETRIC_ENABLED = "biometric_enabled"
+    private const val KEY_KDF_ITERATIONS = "kdf_iterations"
+    private const val KEY_KDF_MEMORY = "kdf_memory"
+    private const val KEY_KDF_PARALLELISM = "kdf_parallelism"
 
     private var encryptedPrefs: SharedPreferences? = null
     private var appContext: Context? = null
@@ -107,6 +110,24 @@ object SessionManager {
 
     fun setBiometricEnabled(value: Boolean) {
         encryptedPrefs?.edit()?.putBoolean(KEY_BIOMETRIC_ENABLED, value)?.apply()
+    }
+
+    fun getKdfIterations(): Int = encryptedPrefs?.getInt(KEY_KDF_ITERATIONS, 4) ?: 4
+
+    fun setKdfIterations(value: Int) {
+        encryptedPrefs?.edit()?.putInt(KEY_KDF_ITERATIONS, value)?.apply()
+    }
+
+    fun getKdfMemory(): Int = encryptedPrefs?.getInt(KEY_KDF_MEMORY, 98304) ?: 98304
+
+    fun setKdfMemory(value: Int) {
+        encryptedPrefs?.edit()?.putInt(KEY_KDF_MEMORY, value)?.apply()
+    }
+
+    fun getKdfParallelism(): Int = encryptedPrefs?.getInt(KEY_KDF_PARALLELISM, 4) ?: 4
+
+    fun setKdfParallelism(value: Int) {
+        encryptedPrefs?.edit()?.putInt(KEY_KDF_PARALLELISM, value)?.apply()
     }
 
     val isLoggedIn: Boolean

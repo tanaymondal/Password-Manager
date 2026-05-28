@@ -8,6 +8,7 @@ import com.lambdapioneer.argon2kt.Argon2Mode
 import com.securevault.mobile.data.model.VaultEntryRequest
 import com.securevault.mobile.data.model.VaultEntryResponse
 import com.securevault.mobile.data.repository.EntryEncryptor
+import com.securevault.mobile.data.repository.SessionManager
 import com.securevault.mobile.data.repository.VaultKeyManager
 import com.securevault.mobile.domain.model.VaultEntry
 import kotlinx.serialization.json.Json
@@ -21,10 +22,6 @@ class AndroidEntryEncryptor : EntryEncryptor, VaultKeyManager {
     private val gcmIvLength = 12
     private val gcmTagLength = 128
     private val keyLength = 32
-
-    private val argon2Iterations = 4
-    private val argon2MemoryKb = 65536
-    private val argon2Parallelism = 4
 
     private var cachedVaultKey: ByteArray? = null
     private val autoLockHandler = Handler(Looper.getMainLooper())
@@ -40,6 +37,10 @@ class AndroidEntryEncryptor : EntryEncryptor, VaultKeyManager {
         autoLockHandler.removeCallbacks(autoLockRunnable)
         autoLockHandler.postDelayed(autoLockRunnable, autoLockDelayMs)
     }
+
+    private val argon2Iterations: Int get() = SessionManager.getKdfIterations()
+    private val argon2MemoryKb: Int get() = SessionManager.getKdfMemory()
+    private val argon2Parallelism: Int get() = SessionManager.getKdfParallelism()
 
     private fun deriveKek(password: String, saltBytes: ByteArray): ByteArray {
         val argon2Kt = Argon2Kt()

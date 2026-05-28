@@ -41,8 +41,12 @@ class AuthRepositoryImpl(
             val wrappedVaultKey = cryptoEngine.wrapVaultKey(vaultKey, kek)
             val deviceId = getOrCreateDeviceId()
 
+            val defaultKdfIterations = 4
+            val defaultKdfMemory = 98304
+            val defaultKdfParallelism = 4
             val response = api.register(
-                RegisterRequest(email, authHash, authSalt, encryptionSalt, wrappedVaultKey, 2, deviceId)
+                RegisterRequest(email, authHash, authSalt, encryptionSalt, wrappedVaultKey, 2, deviceId,
+                    kdfIterations = defaultKdfIterations, kdfMemory = defaultKdfMemory, kdfParallelism = defaultKdfParallelism)
             )
             response.fold(
                 onSuccess = { authResponse ->
@@ -62,7 +66,10 @@ class AuthRepositoryImpl(
                         userId = userId,
                         email = userEmail ?: email,
                         encryptionVersion = authResponse.encryptionVersion,
-                        wrappedVaultKey = authResponse.wrappedVaultKey
+                        wrappedVaultKey = authResponse.wrappedVaultKey,
+                        kdfIterations = authResponse.kdfIterations,
+                        kdfMemory = authResponse.kdfMemory,
+                        kdfParallelism = authResponse.kdfParallelism
                     )
                     Result.Success(getCurrentAuthState())
                 },
@@ -80,8 +87,12 @@ class AuthRepositoryImpl(
     override suspend fun login(email: String, password: String): Result<LoginResponse> {
         return try {
             val preloginResult = api.prelogin(PreLoginRequest(email))
-            val authSalt = preloginResult.getOrNull()?.authSalt ?: email
-            val authHash = cryptoEngine.generateAuthHash(password, authSalt)
+            val pre = preloginResult.getOrNull()
+            val authSalt = pre?.authSalt ?: email
+            val kdfIter = pre?.kdfIterations ?: 4
+            val kdfMem = pre?.kdfMemory ?: 65536
+            val kdfPar = pre?.kdfParallelism ?: 4
+            val authHash = cryptoEngine.generateAuthHash(password, authSalt, kdfIter, kdfMem, kdfPar)
             val deviceId = getOrCreateDeviceId()
             val response = api.login(LoginRequest(email, authHash, deviceName = "Mobile App", deviceId = deviceId))
 
@@ -124,10 +135,12 @@ class AuthRepositoryImpl(
                     if (encSalt == null || accessToken == null || refreshToken == null || userId == null) {
                         return@fold Result.Error("Incomplete 2FA verification response from server")
                     }
+                    val kdfIter = authResponse.kdfIterations ?: 4
+                    val kdfMem = authResponse.kdfMemory ?: 65536
+                    val kdfPar = authResponse.kdfParallelism ?: 4
                     val vaultKey = deriveVaultKey(
-                        password,
-                        encSalt,
-                        authResponse.wrappedVaultKey
+                        password, encSalt, authResponse.wrappedVaultKey,
+                        kdfIter, kdfMem, kdfPar
                     )
                     if (vaultKey != null) {
                         vaultKeyManager.setCachedVaultKey(vaultKey)
@@ -139,7 +152,10 @@ class AuthRepositoryImpl(
                         userId = userId,
                         email = email,
                         encryptionVersion = authResponse.encryptionVersion,
-                        wrappedVaultKey = authResponse.wrappedVaultKey
+                        wrappedVaultKey = authResponse.wrappedVaultKey,
+                        kdfIterations = authResponse.kdfIterations,
+                        kdfMemory = authResponse.kdfMemory,
+                        kdfParallelism = authResponse.kdfParallelism
                     )
                     Result.Success(getCurrentAuthState())
                 },
@@ -190,7 +206,10 @@ class AuthRepositoryImpl(
                         userId = userId,
                         email = userEmail ?: SessionManager.getUserEmail(),
                         encryptionVersion = authResponse.encryptionVersion,
-                        wrappedVaultKey = authResponse.wrappedVaultKey
+                        wrappedVaultKey = authResponse.wrappedVaultKey,
+                        kdfIterations = authResponse.kdfIterations,
+                        kdfMemory = authResponse.kdfMemory,
+                        kdfParallelism = authResponse.kdfParallelism
                     )
                     Result.Success(getCurrentAuthState())
                 },
@@ -214,7 +233,10 @@ class AuthRepositoryImpl(
                 return Result.Error("Vault key material not available. Please login again.")
             }
 
-            val vaultKey = deriveVaultKey(password, encryptionSalt, wrappedVaultKey)
+            val kdfIter = SessionManager.getKdfIterations()
+            val kdfMem = SessionManager.getKdfMemory()
+            val kdfPar = SessionManager.getKdfParallelism()
+            val vaultKey = deriveVaultKey(password, encryptionSalt, wrappedVaultKey, kdfIter, kdfMem, kdfPar)
             if (vaultKey != null) {
                 vaultKeyManager.setCachedVaultKey(vaultKey)
             }
@@ -259,9 +281,10 @@ class AuthRepositoryImpl(
         return newId
     }
 
-    private fun deriveVaultKey(password: String, encryptionSalt: String, wrappedVaultKey: String?): String? {
+    private fun deriveVaultKey(password: String, encryptionSalt: String, wrappedVaultKey: String?,
+                               iterations: Int = 4, memory: Int = 65536, parallelism: Int = 4): String? {
         if (wrappedVaultKey.isNullOrEmpty()) return null
-        val kek = cryptoEngine.deriveKek(password, encryptionSalt)
+        val kek = cryptoEngine.deriveKek(password, encryptionSalt, iterations, memory, parallelism)
         return cryptoEngine.unwrapVaultKey(wrappedVaultKey, kek)
     }
 
@@ -272,7 +295,10 @@ class AuthRepositoryImpl(
         userId: String,
         email: String,
         encryptionVersion: Int,
-        wrappedVaultKey: String? = null
+        wrappedVaultKey: String? = null,
+        kdfIterations: Int? = null,
+        kdfMemory: Int? = null,
+        kdfParallelism: Int? = null
     ) {
         SessionManager.setAccessToken(accessToken)
         SessionManager.setRefreshToken(refreshToken)
@@ -282,6 +308,15 @@ class AuthRepositoryImpl(
         SessionManager.setEncryptionVersion(encryptionVersion)
         if (wrappedVaultKey != null) {
             SessionManager.setWrappedVaultKey(wrappedVaultKey)
+        }
+        if (kdfIterations != null) {
+            SessionManager.setKdfIterations(kdfIterations)
+        }
+        if (kdfMemory != null) {
+            SessionManager.setKdfMemory(kdfMemory)
+        }
+        if (kdfParallelism != null) {
+            SessionManager.setKdfParallelism(kdfParallelism)
         }
         _authState.value = AuthState(
             user = User(userId.hashCode().toLong(), email),

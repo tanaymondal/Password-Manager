@@ -55,14 +55,14 @@ Password login no longer issues any tokens or encryption material in the login r
 
 ---
 
-### 0.5 Upgrade client-side KDF (mobile) ❌
+### 0.5 Upgrade client-side KDF (mobile) ✅
 [source: need_to_fix 0.5]
 
 Android already uses Argon2id matching backend. iOS is not implemented at all — throws `NotImplementedError`. No per-user KDF params stored for future upgrades.
 
 **Files**: `IosEntryEncryptor.kt`, `AndroidEntryEncryptor.kt:24-49`
 
-**Status**: ❌ Open.
+**Status**: ✅ Fixed — Android reads per-user KDF params from server responses; SessionManager stores kdfIterations/kdfMemory/kdfParallelism from AuthResponse/PreLoginResponse; CryptoEngine accepts KDF params; AndroidEntryEncryptor uses SessionManager KDF params. iOS CryptoEngine and IosEntryEncryptor fully implemented with CommonCrypto (PBKDF2 + AES-GCM).
 
 ---
 

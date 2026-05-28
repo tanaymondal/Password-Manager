@@ -13,9 +13,6 @@ actual class CryptoEngine {
 
     private val secureRandom = SecureRandom()
     private val argon2Kt = Argon2Kt()
-    private val argon2Iterations = 4
-    private val argon2MemoryKb = 65536
-    private val argon2Parallelism = 4
     private val keyLength = 32
 
     actual fun generateSalt(): String {
@@ -24,15 +21,15 @@ actual class CryptoEngine {
         return Base64.getEncoder().encodeToString(salt)
     }
 
-    actual fun generateAuthHash(password: String, salt: String): String {
+    actual fun generateAuthHash(password: String, salt: String, iterations: Int, memory: Int, parallelism: Int): String {
         val saltBytes = salt.toByteArray(Charsets.UTF_8)
         val hash = argon2Kt.hash(
             mode = Argon2Mode.ARGON2_ID,
             password = password.toByteArray(Charsets.UTF_8),
             salt = saltBytes,
-            tCostInIterations = argon2Iterations,
-            mCostInKibibyte = argon2MemoryKb,
-            parallelism = argon2Parallelism,
+            tCostInIterations = iterations,
+            mCostInKibibyte = memory,
+            parallelism = parallelism,
             hashLengthInBytes = keyLength
         )
         return Base64.getEncoder().encodeToString(hash.rawHashAsByteArray())
@@ -44,15 +41,15 @@ actual class CryptoEngine {
         return Base64.getEncoder().encodeToString(key)
     }
 
-    actual fun deriveKek(password: String, encryptionSalt: String): ByteArray {
+    actual fun deriveKek(password: String, encryptionSalt: String, iterations: Int, memory: Int, parallelism: Int): ByteArray {
         val saltBytes = Base64.getDecoder().decode(encryptionSalt)
         val hash = argon2Kt.hash(
             mode = Argon2Mode.ARGON2_ID,
             password = password.toByteArray(Charsets.UTF_8),
             salt = saltBytes,
-            tCostInIterations = argon2Iterations,
-            mCostInKibibyte = argon2MemoryKb,
-            parallelism = argon2Parallelism,
+            tCostInIterations = iterations,
+            mCostInKibibyte = memory,
+            parallelism = parallelism,
             hashLengthInBytes = keyLength
         )
         return hash.rawHashAsByteArray()
