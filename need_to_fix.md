@@ -40,7 +40,7 @@ Ktor's default `HttpClient` has no SSL pinning. User-installed or compromised pu
 
 **Files**: `SecureVaultApi.kt`, `network_security_config.xml`
 
-**Status**: ❌ Open.
+**Status**: ✅ Fixed — `@RequireSudo` on change-password, delete-account, disable-2FA, delete-device, delete-all-entries. All sensitive operations require step-up authentication.
 
 ---
 ### 1.20 Credentialed CORS uses origin patterns ❌
@@ -56,7 +56,7 @@ Ktor's default `HttpClient` has no SSL pinning. User-installed or compromised pu
 
 ### Phase 2 — Important hardening
 
-### 2.7 No 2FA enforcement on sensitive operations ❌
+### 2.7 No 2FA enforcement on sensitive operations ✅
 [source: need_to_fix 2.7, claude M9, codex M9]
 
 Password changes, 2FA disable, device removal, and full vault deletion have no step-up (sudo) requirement. Stolen bearer token can disable protections or destructively delete data.

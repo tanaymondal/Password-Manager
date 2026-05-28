@@ -4,6 +4,7 @@ import com.securevault.dto.ApiResponse;
 import com.securevault.dto.VaultEntriesResponse;
 import com.securevault.dto.VaultEntryRequest;
 import com.securevault.dto.VaultEntryResponse;
+import com.securevault.security.RequireSudo;
 import com.securevault.service.AuditService;
 import com.securevault.service.VaultService;
 import com.securevault.util.ClientIpResolver;
@@ -145,6 +146,7 @@ public class VaultController {
         return ResponseEntity.ok(ApiResponse.success("Entry deleted successfully", ""));
     }
 
+    @RequireSudo
     @DeleteMapping
     public ResponseEntity<ApiResponse<String>> deleteAllEntries(
             @AuthenticationPrincipal UserDetails userDetails,
