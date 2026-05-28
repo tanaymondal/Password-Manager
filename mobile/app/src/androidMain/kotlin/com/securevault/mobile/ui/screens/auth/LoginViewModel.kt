@@ -77,7 +77,7 @@ class LoginViewModel(
                 setState { copy(isLoading = false) }
                 when (val r = result.getOrNull()) {
                     is LoginResult.TwoFactorRequired -> {
-                        if (r.info.twoFactorMethods.isNotEmpty()) {
+                        if (r.info.twoFactorMethods.contains("totp")) {
                             setState { copy(twoFactorInfo = r.info) }
                         } else {
                             runInBackground(

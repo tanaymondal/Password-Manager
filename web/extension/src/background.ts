@@ -101,7 +101,7 @@ async function handleMessage(message: any, sender: chrome.runtime.MessageSender)
           deviceId: crypto.randomUUID(),
         })
 
-        if (loginRes.twoFactorMethods?.length) {
+        if (loginRes.twoFactorMethods?.includes('totp')) {
           return { success: false, error: '2fa_required', challengeId: loginRes.challengeId, email }
         }
 

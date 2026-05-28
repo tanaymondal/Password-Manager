@@ -126,35 +126,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       deviceName: 'Web Browser',
       deviceId: getDeviceId(),
     })
-    if (!res.twoFactorRequired && res.accessToken) {
+
+    if (res.twoFactorMethods && !res.twoFactorMethods.includes('totp')) {
+      const authRes = await apiVerifyTwoFactor({ email, challengeId: res.challengeId, code: '' })
       try {
-        const kek = await deriveKek(password, res.encryptionSalt!)
-        const vaultKey = await unwrapVaultKey(kek, res.wrappedVaultKey!)
+        const kek = await deriveKek(password, authRes.encryptionSalt)
+        const vaultKey = await unwrapVaultKey(kek, authRes.wrappedVaultKey)
         setAutoUnlockVaultKey(vaultKey)
       } catch {
       }
-      setTokens(res.accessToken)
+      setTokens(authRes.accessToken)
       setCryptoMaterial({
-        authSalt: res.authSalt,
-        encryptionSalt: res.encryptionSalt!,
-        wrappedVaultKey: res.wrappedVaultKey!,
-        encryptionVersion: res.encryptionVersion!,
+        authSalt: authRes.authSalt,
+        encryptionSalt: authRes.encryptionSalt,
+        wrappedVaultKey: authRes.wrappedVaultKey,
+        encryptionVersion: authRes.encryptionVersion,
       })
       setState({
-        user: { id: res.userId, email: res.email },
+        user: { id: authRes.userId, email: authRes.email },
         isAuthenticated: true,
         isLoading: false,
-        authData: {
-          accessToken: res.accessToken,
-          userId: res.userId,
-          email: res.email,
-          authSalt: res.authSalt,
-          encryptionSalt: res.encryptionSalt!,
-          wrappedVaultKey: res.wrappedVaultKey!,
-          encryptionVersion: res.encryptionVersion!,
-        },
+        authData: authRes,
       })
     }
+
     return res
   }, [])
 

@@ -50,7 +50,8 @@ export function LoginPage() {
     setSubmitting(true)
     try {
       const res = await login(data.email, data.password)
-      if (res.twoFactorRequired) {
+      const methods = res.twoFactorMethods ?? []
+      if (methods.includes('totp')) {
         setTwoFactorRequired(true)
         setPendingEmail(data.email)
         setPendingChallengeId(res.challengeId)

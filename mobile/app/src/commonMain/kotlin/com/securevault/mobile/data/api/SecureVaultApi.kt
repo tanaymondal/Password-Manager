@@ -352,6 +352,9 @@ class SecureVaultApi(
         val encryptionVersion = dataObj?.get("encryptionVersion")?.jsonPrimitive?.content?.toIntOrNull() ?: 2
         val twoFactorRequired = dataObj?.get("twoFactorRequired")?.jsonPrimitive?.content?.toBoolean() ?: false
         val challengeId = dataObj?.get("challengeId")?.jsonPrimitive?.content
+        val twoFactorMethods = dataObj?.get("twoFactorMethods")?.jsonArray?.map {
+            it.jsonPrimitive.content
+        } ?: emptyList()
 
         if (twoFactorRequired) {
             if (userId == null || email == null || encryptionSalt == null || challengeId == null) {
@@ -364,7 +367,8 @@ class SecureVaultApi(
                 encryptionSalt = encryptionSalt,
                 wrappedVaultKey = wrappedVaultKey,
                 encryptionVersion = encryptionVersion,
-                twoFactorRequired = true
+                twoFactorRequired = true,
+                twoFactorMethods = twoFactorMethods
             )
         } else {
             AuthResponse(
