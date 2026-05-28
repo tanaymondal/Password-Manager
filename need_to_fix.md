@@ -749,14 +749,14 @@ Unlimited device registrations. `publicKey` field removed (dead code for unimple
 
 ---
 
-### 2.34 `RequestLoggingInterceptor` logs wrong IP behind proxy 💡NEW
+### 2.34 `RequestLoggingInterceptor` logs wrong IP behind proxy ✅
 [source: discovered during fix session]
 
 Uses `request.getRemoteAddr()` instead of `ClientIpResolver`. All request logs show Docker network IP, not real client.
 
-**File**: `RequestLoggingInterceptor.java:29`
+**Fix**: Already fixed in item 1.3 — `RequestLoggingInterceptor.java:34` uses `clientIpResolver.getClientIp(request)` which respects `X-Forwarded-For`.
 
-**Status**: ❌ Open.
+**Status**: ✅ Fixed (duplicate of 1.3).
 
 ---
 
