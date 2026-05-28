@@ -219,14 +219,18 @@ Android caches vault key as Base64 String in `AndroidEntryEncryptor.cachedVaultK
 
 ---
 
-### 1.10 Browser token and key-material storage ❌
+### 1.10 Browser token and key-material storage ⏳
 [source: need_to_fix 1.10, claude C1, codex C1, claude H5, codex H5]
 
-Web app stores tokens and vault key material in browser memory/localStorage. Refresh token returned in JSON body (defeats HttpOnly cookie). Extension persists raw vault key bytes in `chrome.storage.session` — holds raw key bytes outside non-extractable `CryptoKey`, eliminating WebCrypto isolation.
+Web app stores tokens and vault key material in browser memory/localStorage. Refresh token returned in JSON body (defeats HttpOnly cookie).
 
-**Files**: `AuthResponse.java:12`, `ChangePasswordResponse.java:12`, `TwoFactorLoginResponse.java:31`, `AuthService.java:385,408`, `AuthContext.tsx:49-58`, `VaultContext.tsx:72-85`, `background.ts:93-94`, `storage.ts:48-50`
+**Extension vault key fixed**: ✅ Raw vault key bytes no longer stored in `chrome.storage.session`. Vault key is now wrapped using AES-GCM with a session-specific wrapping key (32-byte random seed). The in-memory `CryptoKey` is imported with `extractable: false` — `crypto.subtle.exportKey('raw', vaultKey)` throws.
 
-**Status**: ❌ Open — refresh token still serialized in JSON body (3 DTOs). Extension key persistence not addressed.
+**Files**: `vaultKey.ts` (split into `unwrapVaultKeyBytes` + `importVaultKey`), `storage.ts` (`persistVaultKey`/`restoreVaultKey`/`clearVaultKey`), `background.ts` (`deriveAndPersistVaultKey`)
+
+**Remaining**: Refresh token still serialized in JSON body in `AuthResponse.java`, `ChangePasswordResponse.java`, and `TwoFactorLoginResponse.java`/`AuthService.java`. Would require HttpOnly cookie refactor across all clients.
+
+**Status**: ⏳ Partially fixed — extension vault key no longer extractable from WebCrypto. JSON body refresh token still open (larger scope).
 
 ---
 
@@ -1121,6 +1125,7 @@ Many `Result.Error(it.message ...)` paths surface backend error messages in mobi
 - `VaultCache.kt` removed — dead plaintext DataStore cache (zero references)
 - `RequestLoggingInterceptor` — uses `ClientIpResolver.getClientIp()` instead of `request.getRemoteAddr()`
 - `RateLimitingFilter` — skips OPTIONS requests (CORS preflight no longer counts against rate limit)
+- Extension vault key: raw bytes no longer stored in session storage. Wrapped with AES-GCM via session wrapping key; in-memory `CryptoKey` is non-extractable (`exportKey` throws)
 
 ---
 
@@ -1129,11 +1134,11 @@ Many `Result.Error(it.message ...)` paths surface backend error messages in mobi
 | Category | Total | ✅ Fixed | ⏳ Partial | ❌ Remaining |
 |----------|-------|----------|-----------|--------------|
 | Phase 0 — Stop the bleeding | 9 | 7 | 0 | 2 |
-| Phase 1 — Critical hardening | 25 | 8 | 3 | 14 |
+| Phase 1 — Critical hardening | 25 | 8 | 4 | 13 |
 | Phase 2 — Important hardening | 37 | 7 | 1 | 29 |
 | Phase 3 — Defense in depth | 29 | 0 | 0 | 29 |
 | Phase 4 — Operational maturity | 12 | 0 | 0 | 12 |
-| **Total** | **112** | **22** | **4** | **86** |
+| **Total** | **112** | **22** | **5** | **85** |
 
 ### Verification
 - Backend `mvn -q test`: passed (6/6)

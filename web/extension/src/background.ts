@@ -1,10 +1,10 @@
 import { derivePasswordHash, deriveKek } from './lib/argon2'
-import { unwrapVaultKey } from './lib/vaultKey'
+import { unwrapVaultKeyBytes, importVaultKey } from './lib/vaultKey'
 import { decryptEntry, parseEntryFields, type EntryFields } from './lib/entries'
 import {
   getCryptoMaterial, setCryptoMaterial, clearCryptoMaterial,
   getTokens, setTokens, clearTokens, clearAll,
-  setVaultKeyBytes, getVaultKeyBytes, clearVaultKeyBytes,
+  persistVaultKey, restoreVaultKey, clearVaultKey,
   type CryptoMaterial,
 } from './lib/storage'
 import { apiLogin, apiPrelogin, apiGetVaultEntries, apiLogout, verifyTwoFactor } from './lib/api'
@@ -14,20 +14,13 @@ let cachedEntries: { id: string; fields: EntryFields }[] = []
 let currentEmail: string = ''
 
 chrome.runtime.onInstalled.addListener(async () => {
-  const bytes = await getVaultKeyBytes()
-  if (bytes) {
-    vaultKey = await crypto.subtle.importKey('raw', bytes, 'AES-GCM', true, ['encrypt', 'decrypt'])
-  }
+  vaultKey = await restoreVaultKey()
 })
 
 async function ensureVaultKey(): Promise<boolean> {
   if (vaultKey) return true
-  const bytes = await getVaultKeyBytes()
-  if (bytes) {
-    vaultKey = await crypto.subtle.importKey('raw', bytes, 'AES-GCM', true, ['encrypt', 'decrypt'])
-    return true
-  }
-  return false
+  vaultKey = await restoreVaultKey()
+  return vaultKey !== null
 }
 
 async function fetchAndCacheEntries() {
@@ -58,6 +51,16 @@ chrome.runtime.onMessage.addListener((message: any, sender: chrome.runtime.Messa
   return true
 })
 
+async function deriveAndPersistVaultKey(password: string, encryptionSalt: string, wrappedVaultKey: string): Promise<CryptoKey> {
+  const kek = await deriveKek(password, encryptionSalt)
+  const rawBytes = await unwrapVaultKeyBytes(kek, wrappedVaultKey)
+
+  const extractableKey = await importVaultKey(rawBytes, true)
+  await persistVaultKey(extractableKey)
+
+  return importVaultKey(rawBytes, false)
+}
+
 async function handleVerifySuccess(res: {
   authSalt: string
   encryptionSalt: string
@@ -77,12 +80,7 @@ async function handleVerifySuccess(res: {
   await setCryptoMaterial(cm)
   await setTokens({ accessToken: res.accessToken, refreshToken: res.refreshToken })
 
-  const kek = await deriveKek(password, cm.encryptionSalt)
-  vaultKey = await unwrapVaultKey(kek, cm.wrappedVaultKey)
-
-  const rawKey = await crypto.subtle.exportKey('raw', vaultKey)
-  await setVaultKeyBytes(new Uint8Array(rawKey))
-
+  vaultKey = await deriveAndPersistVaultKey(password, cm.encryptionSalt, cm.wrappedVaultKey)
   currentEmail = email
   await fetchAndCacheEntries()
 
@@ -130,12 +128,7 @@ async function handleMessage(message: any, sender: chrome.runtime.MessageSender)
         const cm = await getCryptoMaterial()
         if (!cm) return { success: false, error: 'Not logged in. Please login first.' }
 
-        const kek = await deriveKek(password, cm.encryptionSalt)
-        vaultKey = await unwrapVaultKey(kek, cm.wrappedVaultKey)
-
-        const rawKey = await crypto.subtle.exportKey('raw', vaultKey)
-        await setVaultKeyBytes(new Uint8Array(rawKey))
-
+        vaultKey = await deriveAndPersistVaultKey(password, cm.encryptionSalt, cm.wrappedVaultKey)
         currentEmail = cm.email
         await fetchAndCacheEntries()
 
@@ -149,7 +142,7 @@ async function handleMessage(message: any, sender: chrome.runtime.MessageSender)
       vaultKey = null
       cachedEntries = []
       currentEmail = ''
-      await clearVaultKeyBytes()
+      await clearVaultKey()
       await apiLogout()
       await clearAll()
       return { success: true }
