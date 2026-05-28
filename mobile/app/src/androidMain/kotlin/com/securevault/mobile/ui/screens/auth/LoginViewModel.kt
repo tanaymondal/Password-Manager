@@ -74,7 +74,6 @@ class LoginViewModel(
         runInBackground(
             block = { loginUseCase(email, password) },
             onResult = { result ->
-                setState { copy(isLoading = false) }
                 when (val r = result.getOrNull()) {
                     is LoginResult.TwoFactorRequired -> {
                         if (r.info.twoFactorMethods.contains("totp")) {
@@ -93,8 +92,8 @@ class LoginViewModel(
                         }
                     }
                     is LoginResult.Success -> setEffect(LoginEffect.NavigateToVault)
-                    is LoginResult.Error -> setState { copy(error = r.message) }
-                    null -> setState { copy(error = result.exceptionOrNull()?.message ?: "Unknown error") }
+                    is LoginResult.Error -> setState { copy(isLoading = false, error = r.message) }
+                    null -> setState { copy(isLoading = false, error = result.exceptionOrNull()?.message ?: "Unknown error") }
                 }
             }
         )
