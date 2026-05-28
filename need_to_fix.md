@@ -44,16 +44,14 @@ Password login no longer issues any tokens or encryption material in the login r
 
 ---
 
-### 0.4 TOTP secret stored in plaintext ❌
+### 0.4 TOTP secret stored in plaintext ✅
 [source: need_to_fix 0.4]
 
-`twoFactorSecret` stored unencrypted in `User.java`. DB breach → attacker can generate valid TOTP codes for any user.
+`twoFactorSecret` is stored encrypted at rest using AES-256-GCM via `TwoFactorSecretConverter` (JPA `@Convert`). Key derived from `ENCRYPTION_KEY` (base64, 32 bytes). Decrypted transparently during TOTP verification.
 
-**File**: `User.java:80-81`
+**File**: `TwoFactorSecretConverter.java`, `User.java:91-93`
 
-**Fix**: Encrypt TOTP secret at rest using AES-256-GCM with a server-side key. Decrypt only during code verification.
-
-**Status**: ❌ Open.
+**Status**: ✅ Fixed — AES-256-GCM encryption via JPA attribute converter.
 
 ---
 
@@ -1076,6 +1074,7 @@ Many `Result.Error(it.message ...)` paths surface backend error messages in mobi
 | 0.1 | DEK/wrapped vault key model | Password change no longer destroys existing vault entries |
 | 0.2 | 2FA login challenge binding | Challenge created at login and validated at verify-2fa; unified response shape; conditional TOTP check |
 | 0.3 | Enforce 2FA at login | Login returns no tokens or crypto material before 2FA; all clients updated |
+| 0.4 | TOTP secret encrypted at rest | AES-256-GCM via `TwoFactorSecretConverter` (JPA `@Convert`), key from `ENCRYPTION_KEY` |
 | 1.1 | Refresh token hashing | SHA-256 hash stored in DB instead of raw JWT |
 | 1.2 | Password reuse prevention | Salt-aware password history comparison |
 | 1.4 | Failed logins not audit-logged | `logFailedLogin()` now called from `AuthService.login()` catch path |
@@ -1119,12 +1118,12 @@ Many `Result.Error(it.message ...)` paths surface backend error messages in mobi
 
 | Category | Total | ✅ Fixed | ⏳ Partial | ❌ Remaining |
 |----------|-------|----------|-----------|--------------|
-| Phase 0 — Stop the bleeding | 9 | 3 | 0 | 6 |
+| Phase 0 — Stop the bleeding | 9 | 4 | 0 | 5 |
 | Phase 1 — Critical hardening | 25 | 8 | 3 | 14 |
 | Phase 2 — Important hardening | 37 | 7 | 1 | 29 |
 | Phase 3 — Defense in depth | 29 | 0 | 0 | 29 |
 | Phase 4 — Operational maturity | 12 | 0 | 0 | 12 |
-| **Total** | **112** | **18** | **4** | **90** |
+| **Total** | **112** | **19** | **4** | **89** |
 
 ### Verification
 - Backend `mvn -q test`: passed (6/6)
