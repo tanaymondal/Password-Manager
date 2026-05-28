@@ -197,14 +197,14 @@ Default secret `SecureVaultSecretKeyForJWTTokenGeneration2024` not random. Falls
 
 ---
 
-### 1.8 Short access-token TTL + revocation list ⏳
+### 1.8 Short access-token TTL + revocation list ❌
 [source: need_to_fix 1.8, claude M5, codex M4, claude H11, codex H11]
 
 Access tokens: current TTL 1 hour, `jti` exists but no denylist, logout doesn't revoke active tokens, locked user's tokens still work. Refresh tokens: lack `jti`, `email`, `pwdUpdatedAt` claims — missing `jti` prevents token-family tracking from JWT claims alone (though DB-level hash lookup compensates). JWT also lacks `iss`/`aud` validation.
 
 **New issue found**: `JwtTokenProvider.java:67-77` — `generateRefreshToken()` only sets `sub`, `iat`, `exp`; no `jti`, `email`, or `pwdUpdatedAt` claims.
 
-**Status**: ⏳ Partially fixed — `jti` added to access tokens, deactivated-user denylist added in Redis (`deleted_user:{userId}` checked before DB lookup in `JwtAuthenticationFilter`). Remaining: shorten TTL to 15min, add iss/aud, refresh token jti, active token revocation on logout/lockout.
+**Status**: ❌ Open — `jti` added to access tokens, `pwdUpdatedAt` claim checked in filter, but no token denylist on logout/lockout, no refresh token `jti`, no iss/aud validation.
 
 ---
 
@@ -274,7 +274,7 @@ Spring Security grants `permitAll` to everything under `/api/v1/auth/**`, includ
 
 **File**: `SecurityConfig.java:32`
 
-**Status**: ❌ Open.
+**Status**: ❌ Open — `auth.requestMatchers("/api/v1/auth/**").permitAll()` still in place.
 
 ---
 
@@ -285,7 +285,7 @@ Token rotation provides no family binding. Reuse of old token throws generic fai
 
 **File**: `AuthService.java:189` (refresh token path)
 
-**Status**: ❌ Open.
+**Status**: ❌ Open — no `familyId` or `parentTokenId` on `RefreshToken` entity; reuse detection is hash-not-found only, no family revocation.
 
 ---
 
@@ -1138,11 +1138,11 @@ Many `Result.Error(it.message ...)` paths surface backend error messages in mobi
 | Category | Total | ✅ Fixed | ⏳ Partial | ❌ Remaining |
 |----------|-------|----------|-----------|--------------|
 | Phase 0 — Stop the bleeding | 9 | 7 | 0 | 2 |
-| Phase 1 — Critical hardening | 25 | 10 | 3 | 12 |
+| Phase 1 — Critical hardening | 25 | 9 | 2 | 14 |
 | Phase 2 — Important hardening | 37 | 7 | 1 | 29 |
 | Phase 3 — Defense in depth | 29 | 0 | 0 | 29 |
 | Phase 4 — Operational maturity | 12 | 0 | 0 | 12 |
-| **Total** | **112** | **24** | **4** | **84** |
+| **Total** | **112** | **23** | **3** | **86** |
 
 ### Verification
 - Backend `mvn -q test`: passed (6/6)
