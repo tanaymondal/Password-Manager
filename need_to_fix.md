@@ -105,14 +105,14 @@ Allowed `adb backup` and Google Auto Backup to copy app data including caches an
 
 ---
 
-### 0.9 Android cleartext traffic permitted globally ❌
+### 0.9 Android cleartext traffic permitted globally ✅
 [source: claude C8, codex C8]
 
 `<base-config cleartextTrafficPermitted="true">` applies to every host, not just localhost. Downgrade attacks against production domain succeed silently — leaking tokens and auth hashes on the network.
 
 **File**: `network_security_config.xml`
 
-**Status**: ❌ Open.
+**Status**: ✅ Fixed — changed `base-config` to `cleartextTrafficPermitted="false"`. Localhost/10.0.2.2 still allowed for development via `domain-config`.
 
 ---
 
