@@ -9,6 +9,7 @@ import com.securevault.util.UserUtils;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.http.ResponseCookie;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -213,22 +214,25 @@ public class AuthController {
 
     private void setRefreshTokenCookie(HttpServletRequest request, HttpServletResponse response, String refreshToken) {
         if (refreshToken == null) return;
-        Cookie cookie = new Cookie("refreshToken", refreshToken);
-        cookie.setHttpOnly(true);
-        cookie.setSecure(true);
-        cookie.setPath("/api/v1/auth");
-        cookie.setMaxAge((int) (refreshTokenExpirationMs / 1000));
-        cookie.setAttribute("SameSite", "Strict");
-        response.addCookie(cookie);
+        ResponseCookie cookie = ResponseCookie.from("refreshToken", refreshToken)
+                .httpOnly(true)
+                .secure(true)
+                .path("/api/v1/auth")
+                .maxAge(java.time.Duration.ofMillis(refreshTokenExpirationMs))
+                .sameSite("Strict")
+                .build();
+        response.addHeader("Set-Cookie", cookie.toString());
     }
 
     private void clearRefreshTokenCookie(HttpServletRequest request, HttpServletResponse response) {
-        Cookie cookie = new Cookie("refreshToken", null);
-        cookie.setHttpOnly(true);
-        cookie.setSecure(true);
-        cookie.setPath("/api/v1/auth");
-        cookie.setMaxAge(0);
-        response.addCookie(cookie);
+        ResponseCookie cookie = ResponseCookie.from("refreshToken", "")
+                .httpOnly(true)
+                .secure(true)
+                .path("/api/v1/auth")
+                .maxAge(0)
+                .sameSite("Strict")
+                .build();
+        response.addHeader("Set-Cookie", cookie.toString());
     }
 
     private boolean isMobileClient(HttpServletRequest request) {
@@ -263,10 +267,4 @@ public class AuthController {
         }
         return null;
     }
-}
-            }
-        }
-        return null;
-    }
-
 }

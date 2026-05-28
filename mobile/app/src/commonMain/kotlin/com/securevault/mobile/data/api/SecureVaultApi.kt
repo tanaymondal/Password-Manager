@@ -390,7 +390,7 @@ class SecureVaultApi(
             val client = HttpClient {
                 install(ContentNegotiation) {
                     json(Json {
-                        prettyPrint = true
+                        prettyPrint = false
                         ignoreUnknownKeys = true
                     })
                 }

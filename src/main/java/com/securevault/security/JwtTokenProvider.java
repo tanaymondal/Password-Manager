@@ -113,7 +113,6 @@ public class JwtTokenProvider {
                 .getPayload()
                 .getExpiration();
     }
-}
 
     public UUID getUserIdFromToken(String token) {
         Claims claims = Jwts.parser()

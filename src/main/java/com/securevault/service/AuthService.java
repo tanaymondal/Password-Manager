@@ -315,9 +315,10 @@ public class AuthService {
         }
 
         String deviceId = storedToken.getDeviceId();
+        AuthResponse response = generateAuthResponse(user, deviceId);
         refreshTokenRepository.delete(storedToken);
 
-        return generateAuthResponse(user, deviceId);
+        return response;
     }
 
     @Transactional
@@ -332,10 +333,21 @@ public class AuthService {
         try {
             if (jwtTokenProvider.validateRefreshToken(refreshToken)) {
                 String tokenHash = hashToken(refreshToken);
+                String rateLimitKey = "logout:refresh:" + tokenHash;
+                Long count = redisTemplate.opsForValue().increment(rateLimitKey);
+                if (count != null && count == 1) {
+                    redisTemplate.expire(rateLimitKey, 300, java.util.concurrent.TimeUnit.SECONDS);
+                }
+                if (count != null && count > 3) {
+                    log.warn("Logout rate limit exceeded for refresh token");
+                    throw new RateLimitExceededException("Too many logout attempts. Please try again later.");
+                }
                 refreshTokenRepository.findByTokenHash(tokenHash).ifPresent(token ->
                     refreshTokenRepository.delete(token)
                 );
             }
+        } catch (RateLimitExceededException e) {
+            throw e;
         } catch (Exception e) {
             log.warn("Logout by refresh token failed: {}", e.getMessage());
         }

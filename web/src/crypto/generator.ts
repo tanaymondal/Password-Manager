@@ -14,8 +14,14 @@ const SYMBOLS = '!@#$%^&*()_+-=[]{}|;:,.<>?'
 const AMBIGUOUS = '0OIl1'
 
 function getRandomChar(charset: string): string {
-  const index = Math.floor(crypto.getRandomValues(new Uint32Array(1))[0] / (0xffffffff + 1) * charset.length)
-  return charset[index]
+  const max = charset.length
+  const array = new Uint32Array(1)
+  // Rejection sampling to eliminate modulo bias
+  const maxValid = 0xffffffff - (0xffffffff % max)
+  do {
+    crypto.getRandomValues(array)
+  } while (array[0] >= maxValid)
+  return charset[array[0] % max]
 }
 
 export function generatePassword(options: PasswordOptions): string {
