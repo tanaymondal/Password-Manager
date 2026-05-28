@@ -1,5 +1,7 @@
 package com.securevault.mobile.data.local
 
+import android.os.Handler
+import android.os.Looper
 import android.util.Base64
 import com.lambdapioneer.argon2kt.Argon2Kt
 import com.lambdapioneer.argon2kt.Argon2Mode
@@ -24,20 +26,36 @@ class AndroidEntryEncryptor : EntryEncryptor, VaultKeyManager {
     private val argon2MemoryKb = 65536
     private val argon2Parallelism = 4
 
-    private var cachedVaultKey: String? = null
+    private var cachedVaultKey: ByteArray? = null
+    private val autoLockHandler = Handler(Looper.getMainLooper())
+    private val autoLockDelayMs = 300000L
+    private val autoLockRunnable = Runnable { clearCachedVaultKey() }
+
+    private fun scheduleAutoLock() {
+        autoLockHandler.removeCallbacks(autoLockRunnable)
+        autoLockHandler.postDelayed(autoLockRunnable, autoLockDelayMs)
+    }
+
+    private fun touchAutoLock() {
+        autoLockHandler.removeCallbacks(autoLockRunnable)
+        autoLockHandler.postDelayed(autoLockRunnable, autoLockDelayMs)
+    }
 
     private fun deriveKek(password: String, saltBytes: ByteArray): ByteArray {
         val argon2Kt = Argon2Kt()
+        val passwordBytes = password.toByteArray(Charsets.UTF_8)
 
         val result = argon2Kt.hash(
             mode = Argon2Mode.ARGON2_ID,
-            password = password.toByteArray(Charsets.UTF_8),
+            password = passwordBytes,
             salt = saltBytes,
             tCostInIterations = argon2Iterations,
             mCostInKibibyte = argon2MemoryKb,
             parallelism = argon2Parallelism,
             hashLengthInBytes = keyLength
         )
+
+        passwordBytes.fill(0)
 
         return result.rawHashAsByteArray()
     }
@@ -47,6 +65,8 @@ class AndroidEntryEncryptor : EntryEncryptor, VaultKeyManager {
 
         val saltBytes = Base64.decode(encryptionSalt, Base64.NO_WRAP)
         val kekBytes = deriveKek(password, saltBytes)
+        saltBytes.fill(0)
+
         val combined = Base64.decode(wrappedVaultKey, Base64.NO_WRAP)
 
         val iv = combined.copyOfRange(0, gcmIvLength)
@@ -58,12 +78,18 @@ class AndroidEntryEncryptor : EntryEncryptor, VaultKeyManager {
         cipher.init(Cipher.DECRYPT_MODE, secretKey, gcmSpec)
 
         val decrypted = cipher.doFinal(encrypted)
-        cachedVaultKey = Base64.encodeToString(decrypted, Base64.NO_WRAP)
+        cachedVaultKey = decrypted
+
+        kekBytes.fill(0)
+
+        scheduleAutoLock()
     }
 
     override fun wrapVaultKey(vaultKey: String, password: String, encryptionSalt: String): String {
         val saltBytes = Base64.decode(encryptionSalt, Base64.NO_WRAP)
         val kekBytes = deriveKek(password, saltBytes)
+        saltBytes.fill(0)
+
         val vaultKeyBytes = Base64.decode(vaultKey, Base64.NO_WRAP)
 
         val iv = ByteArray(gcmIvLength)
@@ -75,10 +101,13 @@ class AndroidEntryEncryptor : EntryEncryptor, VaultKeyManager {
         cipher.init(Cipher.ENCRYPT_MODE, secretKey, gcmSpec)
 
         val encrypted = cipher.doFinal(vaultKeyBytes)
+        vaultKeyBytes.fill(0)
 
         val combined = ByteArray(iv.size + encrypted.size)
         System.arraycopy(iv, 0, combined, 0, iv.size)
         System.arraycopy(encrypted, 0, combined, iv.size, encrypted.size)
+
+        kekBytes.fill(0)
 
         return Base64.encodeToString(combined, Base64.NO_WRAP)
     }
@@ -86,8 +115,15 @@ class AndroidEntryEncryptor : EntryEncryptor, VaultKeyManager {
     override fun generateVaultKey(): String {
         val keyBytes = ByteArray(keyLength)
         java.security.SecureRandom().nextBytes(keyBytes)
+
+        val previous = cachedVaultKey
+        if (previous != null) previous.fill(0)
+
+        cachedVaultKey = keyBytes.copyOf()
         val vaultKey = Base64.encodeToString(keyBytes, Base64.NO_WRAP)
-        cachedVaultKey = vaultKey
+        keyBytes.fill(0)
+
+        scheduleAutoLock()
         return vaultKey
     }
 
@@ -97,21 +133,33 @@ class AndroidEntryEncryptor : EntryEncryptor, VaultKeyManager {
         return Base64.encodeToString(saltBytes, Base64.NO_WRAP)
     }
 
-    override fun getCachedVaultKey(): String? = cachedVaultKey
+    override fun getCachedVaultKey(): String? {
+        touchAutoLock()
+        return cachedVaultKey?.let { Base64.encodeToString(it, Base64.NO_WRAP) }
+    }
 
     override fun setCachedVaultKey(key: String) {
-        cachedVaultKey = key
+        val previous = cachedVaultKey
+        if (previous != null) previous.fill(0)
+
+        cachedVaultKey = Base64.decode(key, Base64.NO_WRAP)
+        scheduleAutoLock()
     }
 
     override fun clearCachedVaultKey() {
-        cachedVaultKey = null
+        val previous = cachedVaultKey
+        if (previous != null) {
+            previous.fill(0)
+            cachedVaultKey = null
+        }
+        autoLockHandler.removeCallbacks(autoLockRunnable)
     }
 
     private fun getEncryptionKey(): SecretKeySpec {
         val vaultKey = cachedVaultKey
             ?: throw IllegalStateException("Vault key not available. Please login first.")
-        val keyBytes = Base64.decode(vaultKey, Base64.NO_WRAP)
-        return SecretKeySpec(keyBytes, "AES")
+        touchAutoLock()
+        return SecretKeySpec(vaultKey, "AES")
     }
 
     override fun encrypt(entry: VaultEntry): VaultEntryRequest {
@@ -123,6 +171,7 @@ class AndroidEntryEncryptor : EntryEncryptor, VaultKeyManager {
         val plaintext = Json.encodeToString(VaultEntry.serializer(), entry)
         val plaintextBytes = plaintext.toByteArray(Charsets.UTF_8)
         val encryptedBytes = cipher.doFinal(plaintextBytes)
+        plaintextBytes.fill(0)
 
         val encryptedData = Base64.encodeToString(encryptedBytes, Base64.NO_WRAP)
         val ivString = Base64.encodeToString(iv, Base64.NO_WRAP)
@@ -145,6 +194,7 @@ class AndroidEntryEncryptor : EntryEncryptor, VaultKeyManager {
 
         val decryptedBytes = cipher.doFinal(encryptedBytes)
         val plaintext = String(decryptedBytes, Charsets.UTF_8)
+        decryptedBytes.fill(0)
 
         return Json.decodeFromString(VaultEntry.serializer(), plaintext).copy(id = response.id.hashCode().toLong())
     }
@@ -155,7 +205,9 @@ class AndroidEntryEncryptor : EntryEncryptor, VaultKeyManager {
         val cipher = Cipher.getInstance(algorithm)
         cipher.init(Cipher.ENCRYPT_MODE, key)
         val iv = cipher.iv
-        val ciphertext = cipher.doFinal(plaintext.toByteArray(Charsets.UTF_8))
+        val plaintextBytes = plaintext.toByteArray(Charsets.UTF_8)
+        val ciphertext = cipher.doFinal(plaintextBytes)
+        plaintextBytes.fill(0)
         val combined = ByteArray(iv.size + ciphertext.size)
         System.arraycopy(iv, 0, combined, 0, iv.size)
         System.arraycopy(ciphertext, 0, combined, iv.size, ciphertext.size)
@@ -172,6 +224,8 @@ class AndroidEntryEncryptor : EntryEncryptor, VaultKeyManager {
         val spec = GCMParameterSpec(gcmTagLength, iv)
         cipher.init(Cipher.DECRYPT_MODE, key, spec)
         val decrypted = cipher.doFinal(encrypted)
-        return String(decrypted, Charsets.UTF_8)
+        val result = String(decrypted, Charsets.UTF_8)
+        decrypted.fill(0)
+        return result
     }
 }

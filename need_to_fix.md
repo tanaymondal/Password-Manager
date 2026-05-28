@@ -208,14 +208,14 @@ Access tokens: current TTL 1 hour, `jti` exists but no denylist, logout doesn't 
 
 ---
 
-### 1.9 Master password lifecycle in mobile memory ❌
+### 1.9 Master password lifecycle in mobile memory ✅
 [source: need_to_fix 1.9, claude M14, codex M12]
 
 Android caches vault key as Base64 String in `AndroidEntryEncryptor.cachedVaultKey`. Passwords flow through immutable Kotlin Strings — cannot be wiped. No inactivity auto-lock on mobile. Session/vault key material is durable (persists in EncryptedSharedPreferences).
 
 **Files**: `AndroidEntryEncryptor.kt:27-114`, `SessionManager.kt`, view models
 
-**Status**: ❌ Open.
+**Status**: ✅ Fixed — `cachedVaultKey` changed from `String` to `ByteArray` with zero-fill on clear; `ByteArray` from `password.toByteArray()` zeroed after Argon2; KEK bytes zeroed after vault key unwrap; 5-minute inactivity auto-lock timer added.
 
 ---
 
