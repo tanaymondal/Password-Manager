@@ -41,7 +41,7 @@ val appModule = module {
 
     // Repositories
     single<AuthRepository> { AuthRepositoryImpl(get(), get(), get(), get()) }
-    single<VaultRepository> { CachedVaultRepository(androidContext(), VaultRepositoryImpl(get(), get())) }
+    single<VaultRepository> { CachedVaultRepository(androidContext(), VaultRepositoryImpl(get(), get()), get()) }
     single<DeviceRepository> { DeviceRepositoryImpl(get()) }
     single<TwoFactorRepository> { TwoFactorRepositoryImpl(get()) }
 

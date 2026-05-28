@@ -5,6 +5,7 @@ import com.securevault.mobile.data.local.DatabaseKeyManager
 import com.securevault.mobile.data.local.SecureVaultDatabase
 import com.securevault.mobile.data.local.VaultEntryDao
 import com.securevault.mobile.data.local.VaultEntryEntity
+import com.securevault.mobile.data.repository.EntryEncryptor
 import com.securevault.mobile.domain.model.Result
 import com.securevault.mobile.domain.model.VaultEntry
 import com.securevault.mobile.domain.repository.VaultRepository
@@ -12,7 +13,8 @@ import kotlinx.coroutines.flow.first
 
 class CachedVaultRepository(
     private val context: Context,
-    private val apiRepository: VaultRepository
+    private val apiRepository: VaultRepository,
+    private val encryptor: EntryEncryptor
 ) : VaultRepository {
 
     private val daoLock = Any()
@@ -152,9 +154,9 @@ class CachedVaultRepository(
         id = id,
         title = title,
         username = username,
-        password = password,
+        password = if (password.startsWith("e1:")) encryptor.decryptField(password.removePrefix("e1:")) else password,
         url = url,
-        notes = notes,
+        notes = if (notes?.startsWith("e1:") == true) encryptor.decryptField(notes.removePrefix("e1:")) else notes,
         folder = folder
     )
 
@@ -162,9 +164,9 @@ class CachedVaultRepository(
         id = id,
         title = title,
         username = username,
-        password = password,
+        password = "e1:" + encryptor.encryptField(password),
         url = url,
-        notes = notes,
+        notes = notes?.let { "e1:" + encryptor.encryptField(it) },
         folder = folder,
         isSynced = isSynced
     )

@@ -148,4 +148,30 @@ class AndroidEntryEncryptor : EntryEncryptor, VaultKeyManager {
 
         return Json.decodeFromString(VaultEntry.serializer(), plaintext).copy(id = response.id.hashCode().toLong())
     }
+
+    override fun encryptField(plaintext: String): String {
+        if (plaintext.isEmpty()) return ""
+        val key = getEncryptionKey()
+        val cipher = Cipher.getInstance(algorithm)
+        cipher.init(Cipher.ENCRYPT_MODE, key)
+        val iv = cipher.iv
+        val ciphertext = cipher.doFinal(plaintext.toByteArray(Charsets.UTF_8))
+        val combined = ByteArray(iv.size + ciphertext.size)
+        System.arraycopy(iv, 0, combined, 0, iv.size)
+        System.arraycopy(ciphertext, 0, combined, iv.size, ciphertext.size)
+        return Base64.encodeToString(combined, Base64.NO_WRAP)
+    }
+
+    override fun decryptField(ciphertext: String): String {
+        if (ciphertext.isEmpty()) return ""
+        val key = getEncryptionKey()
+        val combined = Base64.decode(ciphertext, Base64.NO_WRAP)
+        val iv = combined.copyOfRange(0, gcmIvLength)
+        val encrypted = combined.copyOfRange(gcmIvLength, combined.size)
+        val cipher = Cipher.getInstance(algorithm)
+        val spec = GCMParameterSpec(gcmTagLength, iv)
+        cipher.init(Cipher.DECRYPT_MODE, key, spec)
+        val decrypted = cipher.doFinal(encrypted)
+        return String(decrypted, Charsets.UTF_8)
+    }
 }

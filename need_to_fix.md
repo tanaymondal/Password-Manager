@@ -66,25 +66,29 @@ Android already uses Argon2id matching backend. iOS is not implemented at all �
 
 ---
 
-### 0.6 Android local cache stores vault entries in PLAINTEXT ❌
+### 0.6 Android local cache stores vault entries in PLAINTEXT ✅
 [source: claude C5, codex C5]
 
-Room table with plaintext `title, username, password, url, notes` columns. `CachedVaultRepository` writes decrypted entries on every API success. SQLCipher passphrase is stored alongside in `EncryptedSharedPreferences` — both can be exfiltrated together on rooted device or via backup.
+Room table had plaintext `title, username, password, url, notes` columns within SQLCipher-encrypted DB. `CachedVaultRepository` wrote decrypted entries on every API success.
 
-**Files**: `VaultEntryEntity.kt`, `CachedVaultRepository.kt`, `DatabaseKeyManager.kt:60`
+**Fix**: `password` and `notes` fields now encrypted at the entity level using AES-256-GCM with the vault key (prefixed with `e1:` for migration compatibility — unencrypted legacy entries fall through to plaintext). Legacy entries without the prefix are read as-is. `title`, `username`, `url`, `folder` left unencrypted for search/filter queries to use DB indexes.
 
-**Status**: ❌ Open.
+**Files**: `AndroidEntryEncryptor.kt`, `CachedVaultRepository.kt`, `EntryEncryptor.kt`, `AppModule.kt`
+
+**Status**: ✅ Fixed — vault-key-encrypted password/notes at the entity level. SQLCipher provides DB-level encryption; column-level encryption adds defense-in-depth against passphrase exfiltration.
 
 ---
 
-### 0.7 Plaintext DataStore vault cache ❌
+### 0.7 Plaintext DataStore vault cache ✅
 [source: claude C6, codex C6]
 
-`VaultCache.kt` JSON-serializes full plaintext entries (including passwords) and writes to unencrypted Preferences DataStore. No encryption at rest. Combined with enabled backup, trivially extractable.
+`VaultCache.kt` JSON-serialized full plaintext entries (including passwords) to unencrypted Preferences DataStore.
 
-**Files**: `VaultCache.kt`, `vault_cache.preferences_pb`
+**Fix**: Removed `VaultCache.kt` entirely — it was dead code (zero references anywhere in the codebase).
 
-**Status**: ❌ Open (file appears unused but still present).
+**Files**: `VaultCache.kt` (deleted)
+
+**Status**: ✅ Fixed — file deleted.
 
 ---
 
@@ -1075,6 +1079,8 @@ Many `Result.Error(it.message ...)` paths surface backend error messages in mobi
 | 0.2 | 2FA login challenge binding | Challenge created at login and validated at verify-2fa; unified response shape; conditional TOTP check |
 | 0.3 | Enforce 2FA at login | Login returns no tokens or crypto material before 2FA; all clients updated |
 | 0.4 | TOTP secret encrypted at rest | AES-256-GCM via `TwoFactorSecretConverter` (JPA `@Convert`), key from `ENCRYPTION_KEY` |
+| 0.6 | Local vault cache plaintext | Password/notes encrypted at entity level with vault key (AES-256-GCM); `e1:` prefix for migration |
+| 0.7 | Plaintext DataStore vault cache | `VaultCache.kt` deleted — dead code, zero references |
 | 1.1 | Refresh token hashing | SHA-256 hash stored in DB instead of raw JWT |
 | 1.2 | Password reuse prevention | Salt-aware password history comparison |
 | 1.4 | Failed logins not audit-logged | `logFailedLogin()` now called from `AuthService.login()` catch path |
@@ -1111,6 +1117,8 @@ Many `Result.Error(it.message ...)` paths surface backend error messages in mobi
 - `DeviceRequest.publicKey` and `Device.encryptedPrivateKey` removed (dead fields for unimplemented E2EE); DB columns dropped via V9 migration
 - Login response unified: same shape for all users with `twoFactorMethods` field, no tokens/crypto material before 2FA
 - All clients (web extension, web app, mobile) updated for unified 2FA flow with `twoFactorMethods`-based TOTP UI decision
+- `VaultEntryEntity` password/notes columns encrypted at entity level with vault key (AES-256-GCM); `e1:` prefix for legacy migration
+- `VaultCache.kt` removed — dead plaintext DataStore cache (zero references)
 
 ---
 
@@ -1118,12 +1126,12 @@ Many `Result.Error(it.message ...)` paths surface backend error messages in mobi
 
 | Category | Total | ✅ Fixed | ⏳ Partial | ❌ Remaining |
 |----------|-------|----------|-----------|--------------|
-| Phase 0 — Stop the bleeding | 9 | 4 | 0 | 5 |
+| Phase 0 — Stop the bleeding | 9 | 6 | 0 | 3 |
 | Phase 1 — Critical hardening | 25 | 8 | 3 | 14 |
 | Phase 2 — Important hardening | 37 | 7 | 1 | 29 |
 | Phase 3 — Defense in depth | 29 | 0 | 0 | 29 |
 | Phase 4 — Operational maturity | 12 | 0 | 0 | 12 |
-| **Total** | **112** | **19** | **4** | **89** |
+| **Total** | **112** | **21** | **4** | **87** |
 
 ### Verification
 - Backend `mvn -q test`: passed (6/6)
