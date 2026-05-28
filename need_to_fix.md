@@ -647,12 +647,14 @@ Blocks camera/mic/geo/payment but not `interest-cohort=()`, `browsing-topics=()`
 
 ---
 
-### 2.24 HSTS always configured (even in dev) ❌
+### 2.24 HSTS always configured (even in dev) ✅
 [source: claude M9, codex M15]
 
-HSTS with `maxAge=1y, includeSubDomains, preload` configured unconditionally in `SecurityConfig.java:37`. Dev deployment on localhost could pin browsers to HTTPS for a year.
+HSTS with `maxAge=1y, includeSubDomains, preload` configured unconditionally in `SecurityConfig.java`. Dev deployment on localhost could pin browsers to HTTPS for a year.
 
-**Status**: ❌ Open.
+**Fix**: `SecurityConfig.java:62-70` — HSTS headers only set when `spring.profiles.active` includes `prod`. Dev/local profiles skip HSTS entirely.
+
+**Status**: ✅ Fixed.
 
 ---
 
@@ -1193,9 +1195,9 @@ Many `Result.Error(it.message ...)` paths surface backend error messages in mobi
 | Phase 0 — Stop the bleeding | 9 | 7 | 0 | 2 |
 | Phase 1 — Critical hardening | 25 | 12 | 1 | 12 |
 
-| Phase 2 — Important hardening | 37 | 21 | 1 | 15 |
+| Phase 2 — Important hardening | 37 | 22 | 1 | 14 |
 
-| **Total** | **112** | **40** | **2** | **70** |
+| **Total** | **112** | **41** | **2** | **69** |
 
 ### Verification
 - Backend `mvn -q test`: passed (6/6)

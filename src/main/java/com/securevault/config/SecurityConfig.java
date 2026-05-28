@@ -57,15 +57,18 @@ public class SecurityConfig {
                     auth.anyRequest().authenticated();
                 })
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
-                .headers(headers -> headers
-                        .frameOptions(frame -> frame.deny())
-                        .httpStrictTransportSecurity(hsts -> hsts
+                .headers(headers -> {
+                    headers.frameOptions(frame -> frame.deny());
+                    headers.contentTypeOptions(contentType -> {});
+                    headers.cacheControl(cache -> {});
+                    boolean isProd = Arrays.asList(environment.getActiveProfiles()).contains("prod");
+                    if (isProd) {
+                        headers.httpStrictTransportSecurity(hsts -> hsts
                                 .includeSubDomains(true)
                                 .maxAgeInSeconds(31536000)
-                                .preload(true))
-                        .contentTypeOptions(contentType -> {})
-                        .cacheControl(cache -> {})
-                );
+                                .preload(true));
+                    }
+                });
 
         return http.build();
     }
