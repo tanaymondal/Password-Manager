@@ -707,14 +707,16 @@ Biometric unlock encrypts the raw vault key and stores it locally. No rate-limit
 
 ---
 
-### 2.30 Mobile uses `!!` non-null assertions on server responses ❌
+### 2.30 Mobile uses `!!` non-null assertions on server responses ✅
 [source: claude M13, codex M11]
 
 Many `authResponse.accessToken!!` — malformed server response causes instant NPE crash.
 
-**Files**: `AuthRepositoryImpl.kt:49-55,96-104,134-141`
+**Fix**: All 17 `!!` occurrences in `AuthRepositoryImpl.kt` replaced with explicit null checks. Each method (`register`, `login`, `verifyTwoFactor`, `refreshToken`) now checks required fields before use and returns `Result.Error("Incomplete ... response from server")` if any are null.
 
-**Status**: ❌ Open.
+**Files**: `AuthRepositoryImpl.kt:51-56,84-89,109-115,161-167`
+
+**Status**: ✅ Fixed.
 
 ---
 
@@ -1176,9 +1178,9 @@ Many `Result.Error(it.message ...)` paths surface backend error messages in mobi
 | Phase 0 — Stop the bleeding | 9 | 7 | 0 | 2 |
 | Phase 1 — Critical hardening | 25 | 12 | 1 | 12 |
 
-| Phase 2 — Important hardening | 37 | 17 | 1 | 19 |
+| Phase 2 — Important hardening | 37 | 18 | 1 | 18 |
 
-| **Total** | **112** | **36** | **2** | **74** |
+| **Total** | **112** | **37** | **2** | **73** |
 
 ### Verification
 - Backend `mvn -q test`: passed (6/6)

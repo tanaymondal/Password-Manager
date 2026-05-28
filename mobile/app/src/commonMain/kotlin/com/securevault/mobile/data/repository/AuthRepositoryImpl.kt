@@ -46,15 +46,23 @@ class AuthRepositoryImpl(
             )
             response.fold(
                 onSuccess = { authResponse ->
+                    val accessToken = authResponse.accessToken
+                    val refreshToken = authResponse.refreshToken
+                    val encSalt = authResponse.encryptionSalt
+                    val userId = authResponse.userId
+                    val userEmail = authResponse.email
+                    if (accessToken == null || refreshToken == null || encSalt == null || userId == null) {
+                        return@fold Result.Error("Incomplete registration response from server")
+                    }
                     vaultKeyManager.setCachedVaultKey(vaultKey)
                     saveSession(
-                        authResponse.accessToken!!,
-                        authResponse.refreshToken!!,
-                        authResponse.encryptionSalt!!,
-                        authResponse.userId!!,
-                        authResponse.email!!,
-                        authResponse.encryptionVersion,
-                        authResponse.wrappedVaultKey
+                        accessToken = accessToken,
+                        refreshToken = refreshToken,
+                        encryptionSalt = encSalt,
+                        userId = userId,
+                        email = userEmail ?: email,
+                        encryptionVersion = authResponse.encryptionVersion,
+                        wrappedVaultKey = authResponse.wrappedVaultKey
                     )
                     Result.Success(getCurrentAuthState())
                 },
@@ -79,10 +87,15 @@ class AuthRepositoryImpl(
 
             response.fold(
                 onSuccess = { authResponse ->
+                    val userId = authResponse.userId
+                    val challengeId = authResponse.challengeId
+                    if (userId == null || challengeId == null) {
+                        return@fold Result.Error("Incomplete login response from server")
+                    }
                     val info = TwoFactorInfo(
-                        userId = authResponse.userId!!,
+                        userId = userId,
                         email = email,
-                        challengeId = authResponse.challengeId!!,
+                        challengeId = challengeId,
                         twoFactorMethods = authResponse.twoFactorMethods
                     )
                     Result.Success(LoginResponse.TwoFactorRequired(info))
@@ -104,22 +117,29 @@ class AuthRepositoryImpl(
             val response = api.verifyTwoFactor(email, challengeId, code)
             response.fold(
                 onSuccess = { authResponse ->
+                    val encSalt = authResponse.encryptionSalt
+                    val accessToken = authResponse.accessToken
+                    val refreshToken = authResponse.refreshToken
+                    val userId = authResponse.userId
+                    if (encSalt == null || accessToken == null || refreshToken == null || userId == null) {
+                        return@fold Result.Error("Incomplete 2FA verification response from server")
+                    }
                     val vaultKey = deriveVaultKey(
                         password,
-                        authResponse.encryptionSalt!!,
+                        encSalt,
                         authResponse.wrappedVaultKey
                     )
                     if (vaultKey != null) {
                         vaultKeyManager.setCachedVaultKey(vaultKey)
                     }
                     saveSession(
-                        authResponse.accessToken!!,
-                        authResponse.refreshToken!!,
-                        authResponse.encryptionSalt!!,
-                        authResponse.userId!!,
-                        email,
-                        authResponse.encryptionVersion,
-                        authResponse.wrappedVaultKey
+                        accessToken = accessToken,
+                        refreshToken = refreshToken,
+                        encryptionSalt = encSalt,
+                        userId = userId,
+                        email = email,
+                        encryptionVersion = authResponse.encryptionVersion,
+                        wrappedVaultKey = authResponse.wrappedVaultKey
                     )
                     Result.Success(getCurrentAuthState())
                 },
@@ -155,14 +175,22 @@ class AuthRepositoryImpl(
             val response = api.refreshToken(RefreshTokenRequest(currentRefreshToken))
             response.fold(
                 onSuccess = { authResponse ->
+                    val accessToken = authResponse.accessToken
+                    val newRefreshToken = authResponse.refreshToken
+                    val encSalt = authResponse.encryptionSalt
+                    val userId = authResponse.userId
+                    val userEmail = authResponse.email
+                    if (accessToken == null || newRefreshToken == null || encSalt == null || userId == null) {
+                        return@fold Result.Error("Incomplete refresh response from server")
+                    }
                     saveSession(
-                        authResponse.accessToken!!,
-                        authResponse.refreshToken!!,
-                        authResponse.encryptionSalt!!,
-                        authResponse.userId!!,
-                        authResponse.email!!,
-                        authResponse.encryptionVersion,
-                        authResponse.wrappedVaultKey
+                        accessToken = accessToken,
+                        refreshToken = newRefreshToken,
+                        encryptionSalt = encSalt,
+                        userId = userId,
+                        email = userEmail ?: SessionManager.getUserEmail(),
+                        encryptionVersion = authResponse.encryptionVersion,
+                        wrappedVaultKey = authResponse.wrappedVaultKey
                     )
                     Result.Success(getCurrentAuthState())
                 },
