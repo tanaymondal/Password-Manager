@@ -146,13 +146,24 @@ export function VaultProvider({ children }: { children: ReactNode }) {
             )
             const newWrapped = await wrapVaultKey(newKek, vaultKeyDerived)
 
+            // Obtain a sudo token by re-deriving the current auth hash with the
+            // existing (pre-upgrade) KDF params so the server can verify it.
+            const currentAuthHash = await derivePasswordHash(
+              password,
+              material.authSalt,
+              material.kdfIterations,
+              material.kdfMemory,
+              material.kdfParallelism
+            )
+            const sudo = await requestSudo(currentAuthHash)
+
             await upgradeKdf({
               authHash: newAuthHash,
               wrappedVaultKey: newWrapped,
               kdfIterations: DEFAULT_KDF_ITERATIONS,
               kdfMemory: DEFAULT_KDF_MEMORY,
               kdfParallelism: DEFAULT_KDF_PARALLELISM,
-            })
+            }, sudo.sudoToken)
 
             // Update local material in store
             setCryptoMaterial({

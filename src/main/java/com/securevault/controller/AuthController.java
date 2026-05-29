@@ -219,6 +219,7 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.success("Account deleted successfully", ""));
     }
 
+    @RequireSudo
     @PostMapping("/upgrade-kdf")
     public ResponseEntity<ApiResponse<String>> upgradeKdf(
             @AuthenticationPrincipal UserDetails userDetails,

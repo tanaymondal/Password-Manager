@@ -60,9 +60,14 @@ export interface UpgradeKdfRequest {
   kdfParallelism: number
 }
 
-export function upgradeKdf(data: UpgradeKdfRequest) {
+export function upgradeKdf(data: UpgradeKdfRequest, sudoToken?: string) {
+  const headers: Record<string, string> = {}
+  if (sudoToken) {
+    headers['X-Sudo-Token'] = sudoToken
+  }
   return apiClient<void>('/auth/upgrade-kdf', {
     method: 'POST',
+    headers,
     body: JSON.stringify(data),
   })
 }
