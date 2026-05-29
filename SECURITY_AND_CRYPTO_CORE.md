@@ -32,6 +32,12 @@
 9. [What's done / what's pending](#9-whats-done--whats-pending)
 10. [Complete replacement plan (all steps)](#10-complete-replacement-plan-all-steps)
 11. [File inventory & commands](#11-file-inventory--commands)
+12. [Evolving the cryptography (how to update crypto safely)](#12-evolving-the-cryptography-how-to-update-crypto-safely)
+13. [Golden vectors explained](#13-golden-vectors-explained)
+14. [Threat model — how safe is the vault from an attacker](#14-threat-model--how-safe-is-the-vault-from-an-attacker)
+15. [Making it unbreakable: weak password + full server/DB breach](#15-making-it-unbreakable-weak-password--full-serverdb-breach)
+16. [Storing the Secret Key (end-user UX)](#16-storing-the-secret-key-end-user-ux)
+17. [Competitive security comparison (Bitwarden / 1Password / Proton Pass)](#17-competitive-security-comparison-bitwarden--1password--proton-pass)
 
 ---
 
@@ -1418,3 +1424,415 @@ mvn -o compile        # or ./mvnw compile
 # Web (type-check)
 cd web && npx tsc -p tsconfig.app.json --noEmit
 ```
+
+---
+
+## 12. Evolving the cryptography (how to update crypto safely)
+
+> Captures the discussion on "how should I approach updating the cryptography?" The
+> governing constraint: **this is zero-knowledge, so the server can never re-encrypt anyone's
+> data — only the client, holding the password, can.** Every migration is therefore
+> client-side and lazy.
+
+### 12.1 Step 1 — Classify the change (this decides the effort)
+
+| Type | Examples | Format/byte-layout change? | Effort |
+|------|----------|----------------------------|--------|
+| **A. Parameter tuning** | Raise Argon2 memory/iterations; raise `MIN_PARAMS` | No — same algorithm & layout | Low |
+| **B. Format / algorithm change** | AES-GCM → XChaCha20-Poly1305; add AAD; change envelope layout; change KDF | Yes | High |
+| **C. Add data to the envelope** | New header field, key-id, AAD | Yes (new version) | Medium |
+
+The deciding question: **does the ciphertext byte layout or the algorithm change?**
+No → Type A (cheap; the machinery already exists). Yes → Type B/C (versioning + dual-read).
+
+### 12.2 Step 2 — The rules that ALWAYS apply
+
+1. **Version every ciphertext.** Already partly in place: `encryptionVersion` per account
+   (`CURRENT_ENCRYPTION_VERSION = 2`) and the `"v1:"` prefix on entry/field envelopes. A real
+   format change must introduce a **new discriminator** (`"v2:"` prefix or bumped
+   `encryptionVersion`) so `decrypt` can dispatch to the correct scheme.
+2. **Never drop the ability to read old versions.** Decryption stays multi-version *forever*.
+   You add a new branch; you don't replace the old one. Old golden vectors stay in the suite
+   permanently.
+3. **Migration is lazy and client-side.** You can only re-wrap/re-encrypt when the user
+   supplies the password (on unlock/login) — exactly how `upgrade-kdf` works today.
+4. **All clients must READ the new version before ANY client WRITES it.** Otherwise a vault
+   re-encrypted by an updated web client won't open on an old mobile client. This forces a
+   two-phase rollout (deploy readers first, enable writers later).
+5. **Cross-client byte-for-byte parity**, enforced by golden vectors (the reason for the
+   Rust core).
+
+### 12.3 Step 3 — The procedure per type
+
+**Type A — parameter tuning (e.g. bump Argon2 memory):**
+1. Raise the default (`DEFAULT_PARAMS` in the core / `DEFAULT_KDF_*` clients /
+   `EncryptionConstants` server).
+2. Existing accounts keep old params; on next unlock the **`upgrade-kdf` lazy migration**
+   re-derives KEK + auth hash with the new params and re-wraps.
+3. Optionally raise `MIN_PARAMS` (the downgrade floor) — but **only to a value ≤ the oldest
+   legitimately-issued params**, or you'll lock out vaults you can no longer derive. Keep
+   `validate_params` separate from `derive_*` (derivation must reproduce ANY params).
+4. Add a golden vector at the new params; keep the old one.
+   *No format change, no version bump, no dual-read.*
+
+**Type B/C — format or algorithm change:**
+1. Design the new scheme in the Rust core behind a new version constant (`v3`) with its own
+   envelope discriminator. Leave `v2` decrypt untouched.
+2. Add golden vectors for the new version (keep all old ones).
+3. **Dual-read:** `decrypt` dispatches on prefix/version → v2 or v3. `encrypt` is gated by a
+   flag so you control *when* it starts writing v3.
+4. **Rollout phase 1 — readers everywhere:** ship the new core (v3 *read* support) to web,
+   Android, iOS. Do NOT enable v3 writing. Wait until all platforms are updated in the field.
+5. **Rollout phase 2 — enable writers:** flip the write flag. Lazily on unlock, clients
+   re-encrypt v2 → v3 (same pattern as `upgrade-kdf`) and bump the account's
+   `encryptionVersion`.
+6. **Long tail:** v2 data lingers for users who haven't logged in — fine, dual-read handles
+   it. Drop v2 *write* (done in phase 2); **never** drop v2 *read*.
+
+### 12.4 Where the Rust core makes this safe
+With one core: a crypto change is **one branch in one codebase** (not three hand-synced
+impls); **golden vectors** pin every version on every platform (mismatch fails CI instead of
+locking users out); the version/prefix dispatch lives in one auditable place. Until the core
+is adopted, a Type B change means making the identical change correctly in TS + Kotlin +
+Swift and proving they agree — the exact drift problem that left iOS broken.
+
+### 12.5 Safety gates (don't skip)
+- ✅ New **and all old** versions pass golden vectors on **every** platform.
+- ✅ "Reads an existing (old-version) vault" verified per platform — proves no data loss.
+- ✅ Writers enabled only **after** all clients can read the new version.
+- ✅ Feature-flagged rollout with a rollback path; monitor decrypt/unlock-failure rates.
+- ✅ `MIN_PARAMS`/floor never exceeds the weakest params you must still derive.
+
+**TL;DR:** Ask *"does the byte layout/algorithm change?"* If no → bump params, let the lazy
+`upgrade-kdf` mechanism migrate on unlock. If yes → new `encryptionVersion`, keep old decrypt
+forever, ship **read** to all clients first, then enable **write** (lazy re-encryption),
+pinned by golden vectors in the single Rust core.
+
+---
+
+## 13. Golden vectors explained
+
+> Captures the "what are golden vectors?" discussion.
+
+**Definition.** A golden vector (a.k.a. test vector / known-answer test / KAT) is a **fixed
+input paired with its known-correct output**, used to verify an implementation produces
+exactly the right bytes. For crypto: pick a *fixed* password, salt, key, and nonce (never
+random), run them through a trusted implementation once, and **record the exact output**. Any
+other implementation must reproduce that output byte-for-byte or it is wrong. The name: the
+recorded output is the "gold standard" source of truth.
+
+**Why they're essential.** Crypto has a nasty property: **wrong code often still "works."**
+If nonce handling or an Argon2 parameter order is subtly wrong, encrypt/decrypt can still
+round-trip *on the same machine* — it just produces *different bytes than everyone else*. You
+won't notice until a vault written on web fails to open on iOS. Round-trip tests can't catch
+this (both halves share the bug); golden vectors can, because they compare against an
+**external fixed expected value**.
+
+**Concrete example (this project, `test-vectors/vectors.json`):**
+```json
+{
+  "op": "encrypt_entry",
+  "input": {
+    "vault_key_raw_b64": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+    "plaintext_json": "{\"password\":\"hunter2\",...}",
+    "nonce_b64": "oKGio6Slpqeoqaqr"
+  },
+  "expected": {
+    "encrypted_data": "v1:nToMTDa4ddAQAaXpJRK1sATJKyKwm2AY9XpK412RV0Sq...",
+    "iv": "oKGio6Slpqeoqaqr"
+  }
+}
+```
+- **input** = fixed vault key + plaintext + nonce (nonce pinned so output is reproducible; in
+  production the nonce is always random).
+- **expected** = the exact ciphertext **Node's WebCrypto** (what the web app uses) produced.
+
+The Rust core runs the same input and asserts it gets the same `expected` bytes. When we ran
+`cargo test` it matched → the Rust impl is byte-compatible with the web impl. The **negative
+control** (tampering one byte of `expected`) made the test *fail* — proving the test really
+checks rather than silently passing.
+
+**How they're used here.** `vectors.json` is the **cross-platform contract**: web, Android,
+iOS, and the Rust core all run the same vectors in CI. If any platform's output differs from
+the golden value, that platform can't read vaults written by the others — and CI fails
+*before* shipping, instead of users getting locked out in production. Retaining old vectors
+forever is what makes evolving the crypto (§12) safe.
+
+**Real-world precedent:** published standards ship these too — RFC 9106 (Argon2) and NIST's
+AES test vectors include fixed input→output pairs precisely so every implementation can prove
+conformance.
+
+---
+
+## 14. Threat model — how safe is the vault from an attacker
+
+> Captures the "how safe is this from an attacker?" assessment. Verdict in one line:
+> **strong design, not yet production-hardened — and safety depends heavily on platform and
+> master-password strength.**
+
+### 14.1 Threat-by-threat
+
+**1. Server / database breach — the defining test → Strong (web/Android).** A stolen DB gives
+only `serverSideHash(authHash)`, the **encrypted** `wrappedVaultKey`, salts, and KDF params.
+To get passwords the attacker must brute-force the **master password** offline through
+Argon2id (64 MB, t=4) then unwrap. Strong password → effectively uncrackable; weak password →
+still at risk (`t=4` is on the low side). The KDF-downgrade bug that could have *weakened*
+this wall was **fixed this session**.
+
+**2. Network attacker (MITM) → Moderate, with real gaps.** TLS is the main defense, but: no
+**cert pinning** on mobile, no **client-side KDF floor** (a MITM tampering the prelogin
+response could push `iterations=1`), the **extension autofills on plain `http://`**, and iOS
+ships an `http://localhost` base URL.
+
+**3. Stolen access token / session → Limited blast radius now.** Tokens are short-lived
+(~1h); sensitive actions require sudo re-auth, and the one that didn't (`upgrade-kdf`) was
+fixed. IDOR/ownership checks are correct (token for A can't touch B's data).
+
+**4. Online password guessing → Mostly mitigated, with bypasses.** Rate limiting + lockout
+exist, but IP limits can be **bypassed via `X-Forwarded-For` spoofing** (behind a trusted
+proxy that doesn't strip it), and the TOTP verify path has a wider brute-force surface.
+
+**5. Device access (lost/stolen, malware) → Platform-dependent.**
+- Web: vault key in memory only, 5-min auto-lock (no lock on blur/background). Reasonable.
+- Android: decent (FLAG_SECURE, no backup) but local DB key not auth-gated (recoverable on a
+  **rooted** device); titles/usernames cached **unencrypted**.
+- iOS: ❌ no secure storage, unauthenticated crypto, no screenshot protection.
+- Extension: weak — **refresh token in plaintext on disk**, no auto-lock.
+
+**6. Malicious website / browser attacker → Weak (extension users).** The content script runs
+on **every site** with **no sender/origin validation** → a hostile page could solicit
+decrypted entries or trigger autofill in the wrong context. The web app itself has no XSS
+sinks (good).
+
+**7. Application-logic attacks → Solid.** No IDOR, no 2FA bypass found, `upgrade-kdf` takeover
+fixed.
+
+### 14.2 Who's actually safe?
+
+| You are… | strong master password | weak master password |
+|----------|------------------------|----------------------|
+| Web user + 2FA | 🟢 Safe, incl. vs server breach | 🟡 Mostly — weak password is the risk |
+| Android user | 🟢 Good (local risks need root) | 🟡 Moderate |
+| Browser-extension user | 🟡 Browser-attack + on-disk-token risks | 🔴 Multiple weak points |
+| iOS user | 🔴 **Not safe** (broken crypto & storage) | 🔴 Not safe |
+
+### 14.3 The fixes that move the needle most
+1. **Strong, unique master password + 2FA** — dominates real-world safety.
+2. **Fix iOS** (authenticated crypto + Keychain).
+3. **Lock down the extension** (no `http://` autofill, restrict origins, token off disk).
+4. **Client-side KDF floor + mobile cert pinning** (closes MITM-downgrade).
+5. **Fix `X-Forwarded-For` trust** (restores brute-force protection).
+
+**Bottom line:** a well-built, genuinely zero-knowledge architecture; as shipped today it's
+safe for a **web/Android user with a strong master password and 2FA**, **not yet safe for
+iOS**, with **meaningful gaps for extension users and against active network attackers**.
+
+---
+
+## 15. Making it unbreakable: weak password + full server/DB breach
+
+> Captures the discussion on surviving the worst case: **weak master password AND attacker
+> has full server + database access** (ignoring iOS).
+
+### 15.1 The hard truth: the KDF alone cannot do it
+A weak password has **low entropy**. Argon2id only makes each guess *expensive* — it
+multiplies cost, it doesn't add entropy. Against an attacker with the full DB and unlimited
+offline compute, low entropy always falls eventually. So this goal is **impossible** while the
+*only* secret protecting the vault is derived from the password and present (wrapped) in the
+DB. You must add **a secret that is never in the database and never on the server.**
+
+### 15.2 The direct answer — a client-side "Secret Key" (1Password model)
+At signup the client generates a **high-entropy random secret** (128–256 bits) that is
+generated **on-device**, **never sent to the server**, and stored on the user's devices
+(shown once for backup). The KEK is derived from **both** password and Secret Key:
+```
+KEK = HKDF( Argon2id(password, salt, params)  ||/XOR  SecretKey )
+```
+In this repo that's a change to `deriveKek` (`web/src/crypto/argon2.ts` / Rust `derive_kek`):
+fold the Secret Key into the Argon2 output before it becomes the AES-GCM key that unwraps
+`wrappedVaultKey`.
+
+**Why it works:** the attacker now needs `password × SecretKey`. Even with `password123` and
+the entire database, they're missing 128+ bits of true random entropy **that was never on the
+server**. Offline brute force is infeasible — there's nothing to brute-force toward.
+
+**The cost:** usability. A new device needs the Secret Key (via backup/QR); recovery requires
+it. That trade-off *is* the security. (See §16 for storage UX.)
+
+### 15.3 Reinforcing layer — rate-limited HSM (server pepper / OPRF)
+Add a secret the server *uses* but never stores in the DB, ideally inside an **HSM/KMS that
+performs the operation without exporting the key**:
+- **Minimum:** a secret **pepper** mixed into `serverSideHash` (today PBKDF2 only). Defeats
+  **DB-only** theft (SQLi, stolen backup) where the app secrets/HSM aren't taken.
+- **Strong:** an **OPRF** in the KEK path. The client blinds the password, the server applies
+  its HSM-held secret, returns the result; the client derives the KEK from it. Every guess
+  requires the HSM. If the HSM rate-limits, even **full server RCE** turns an offline,
+  unlimited attack into an online, throttled one — survivable behind lockout.
+
+Key distinction: a pepper in a **config file** dies with full server compromise; a secret in
+a **true HSM that only evaluates and never releases the key** survives it (usable as a live,
+rate-limited oracle, not extractable for offline use).
+
+### 15.4 Reinforcing layer — hardware factor in the key path (WebAuthn-PRF)
+Bind the KEK to a **hardware authenticator** via WebAuthn's **PRF / `hmac-secret`** extension:
+```
+KEK = HKDF( Argon2id(password) || SecretKey || WebAuthnPRF(authenticator) )
+```
+The vault then cannot be opened without the **physical device**, whose secret never touches
+the server — the same "entropy the server never has" property, rooted in hardware, and it also
+resists theft of the Secret Key backup.
+
+### 15.5 The strongest practical combination
+```
+password ──Argon2id(strong params)──┐
+device Secret Key (never on server) ─┤─ HKDF ─▶ KEK ─▶ unwrap wrappedVaultKey ─▶ vault key
+optional: WebAuthn-PRF / server OPRF ┘            (DB only stores the wrapped key + salts)
+```
+- **Baseline (still do):** raise Argon2id from `t=4` toward higher time/memory.
+- **#1 Secret Key** → the thing that actually answers the question.
+- **#2 HSM pepper/OPRF** → defense-in-depth + rate-limits full-compromise.
+- **#3 WebAuthn-PRF** → hardware-rooted, optional per user.
+
+### 15.6 Fitting it into this codebase
+- **Where:** `deriveKek` / `derive_kek` gains a Secret-Key input; registration generates +
+  displays it; `serverSideHash` gains the HSM pepper/OPRF. The server stores **nothing new
+  that's crackable**.
+- **Migration:** bump `encryptionVersion` (v3), ship **read** support everywhere, then
+  **lazily re-wrap** on unlock (the `upgrade-kdf` pattern) so existing vaults gain the Secret
+  Key without a forced reset.
+- **Golden vectors:** add v3 vectors; keep v2 forever.
+
+### 15.7 The honest boundary of "unbreakable"
+Achievable: **full server + DB compromise + weak password → vault stays safe.** ✅
+Still NOT covered (no design can):
+- Compromise of the **user's own device** (where the Secret Key + decrypted vault live).
+- **Phishing** capturing password *and* Secret Key together.
+- A backdoored client binary.
+
+Honest claim you can make: *"Even if our entire server and database are stolen, your vault
+cannot be decrypted — regardless of how weak your master password is — because a high-entropy
+secret we never possess is required to open it."* That's the bar 1Password meets.
+
+---
+
+## 16. Storing the Secret Key (end-user UX)
+
+> Captures the "how does the end user store the Secret Key?" discussion. The crux of the
+> Secret Key model — get this wrong and it's either insecure or unusable.
+
+**Reframe:** the user almost never types or manually stores it. A 128-bit key can't be
+memorized, so **devices hold it**; the human only handles it at enrollment and recovery.
+
+### 16.1 The three touchpoints
+1. **First device (signup):** the client generates the Secret Key and saves it into that
+   device's **secure storage** (Keychain / Keystore / `EncryptedSharedPreferences` / web
+   secure storage). The device then opens the vault with just the master password; the Secret
+   Key is supplied silently. The user is shown it once with a prompt to **back it up**.
+2. **Adding another device:** don't make the user retype 128 bits. The normal UX is
+   **device-to-device transfer** — an existing device shows a **QR code** (Secret Key +
+   account info) the new device scans (1Password's "scan to set up"); or the user enters it
+   from their backup. The new device then stores it in *its* secure storage too. N devices
+   each independently hold it; none got it from the server.
+3. **Disaster recovery (all devices lost):** the only case requiring a user-held **backup** —
+   the **Emergency Kit** (a PDF/printout with the Secret Key, *not* the password). Without it
+   *and* without a logged-in device, the account is unrecoverable — which is the point (the
+   server never had it).
+
+### 16.2 Where to keep the backup — and the one rule
+- **Print it** and store with important documents / a home safe (recommended).
+- Save the PDF to secure storage that is **NOT the same place as the master password**.
+- Store in a second password manager / hardware backup.
+
+**Non-negotiable rule:** the Secret Key and master password must be kept **separately** — the
+whole benefit is that they're two independent factors from two different places. If the user
+keeps both together, a breach of that one place recombines them and you're back to "weak
+password = cracked." The UI must warn against this.
+
+### 16.3 Never sync it through your server
+The Secret Key must **never** travel through or rest on the backend (that would put it exactly
+where a breaching attacker is). Transfer is device-to-device (QR/local) or via the user's own
+backup.
+
+### 16.4 The friendlier alternative — let hardware be the storage
+If safeguarding a secret string feels too fragile (it is the model's main weakness), use a
+**passkey / WebAuthn-PRF** as the second factor instead. Then "how do I store it?" becomes
+**"you don't — your authenticator does."** The high-entropy secret lives in the device's
+secure enclave or a YubiKey; the user just taps. Passkeys can sync across the user's own
+devices (iCloud Keychain / Google Password Manager), solving multi-device enrollment.
+Trade-off: need backup authenticators + reliance on the passkey ecosystem.
+
+### 16.5 Recommended hybrid
+Device-held secret auto-stored in each device's secure storage + **QR enrollment** for new
+devices + a printed **Emergency Kit** cold-backup (with the "keep separate" warning) +
+optional **passkey** for users who'd rather tap hardware than guard a string.
+
+### 16.6 The honest cost
+You're trading **recoverability for security**. With a server-independent secret: lose every
+device *and* the backup → **permanently locked out; the provider cannot reset it.** That's the
+property that makes full server+DB compromise survivable. So the UX must invest heavily in the
+backup moment (force acknowledgement, easy Emergency Kit, multiple recovery
+authenticators/contacts).
+
+---
+
+## 17. Competitive security comparison (Bitwarden / 1Password / Proton Pass)
+
+> Captures the "compare this vs Bitwarden vs 1Password vs Proton Pass on security"
+> discussion. Caveat: SecureVault is assessed from this review; the others from their
+> *published* security models (white papers, audits, OSS) — exact parameters evolve, so treat
+> commercial specifics as "as documented."
+
+### 17.1 At-a-glance
+
+| Dimension | **SecureVault** | **Bitwarden** | **1Password** | **Proton Pass** |
+|---|---|---|---|---|
+| Zero-knowledge / E2E | ✅ web/Android (❌ iOS) | ✅ | ✅ | ✅ |
+| KDF | Argon2id 64MB/t4 | PBKDF2-600k default; Argon2id optional | PBKDF2 + **Secret Key** | Argon2 / SRP key hierarchy |
+| Cipher | AES-256-GCM | AES-256-CBC + HMAC | AES-256-GCM | AES-256-GCM |
+| **Weak pwd survives server+DB breach?** | ❌ No | ❌ No | ✅ **Yes** (Secret Key) | ❌ No |
+| Auth model | authHash + server PBKDF2 pepper | master-pwd hash (similar) | **SRP** | **SRP** |
+| Open source | repo, **unaudited** | ✅ OSS, audited | ❌ closed (white paper + audits) | ✅ OSS clients, audited |
+| Independent audits | ❌ none | ✅ recurring | ✅ recurring | ✅ |
+| Bug bounty / security team | ❌ | ✅ | ✅ | ✅ |
+| Known unpatched High/Critical | ✅ several | maintained | maintained | maintained |
+| Maturity | early / single-dev | years, large scale | years, large scale | years, Proton ecosystem |
+
+### 17.2 The dimension that actually separates them
+**"Can a weak master password survive total server compromise?"**
+- **1Password: Yes** — its **Secret Key** (128-bit, on-device, never sent to server) is
+  combined with the master password. Strongest of the four for this threat — and exactly the
+  upgrade described in §15.
+- **Bitwarden, Proton Pass, SecureVault: No** — single secret derived from the master
+  password. Strong KDF mitigates but doesn't eliminate weak-password-after-breach.
+
+On *architecture alone*, SecureVault sits in the **same category as Bitwarden and Proton**
+(single-secret, KDF-protected, zero-knowledge) and **behind 1Password** on this property.
+
+### 17.3 Per product
+- **Bitwarden** — strongest mix of transparency + trust: fully open source, audited,
+  self-hostable, mature. Conservative crypto (AES-CBC+HMAC). No Secret Key. Real security team
+  + bug bounty.
+- **1Password** — strongest *threat model* via Secret Key + SRP (server never receives
+  password-equivalent material). Closed source but detailed white paper + audits. Trade-off:
+  Secret Key recovery/usability burden, closed client.
+- **Proton Pass** — strong privacy posture (Swiss, open-source audited clients, SRP,
+  integrated email aliases). Solid crypto. Single-secret, same weak-password caveat. Younger
+  but backed by an established security org.
+- **SecureVault** — respectable *design* (real zero-knowledge, Argon2id, AES-GCM, correct
+  authz/IDOR, sensible lazy-KDF-upgrade, the one Critical fixed) but **not in the same league
+  operationally**: iOS broken, extension weaknesses, MITM gaps, **no audit, no bug bounty,
+  single-dev, early-stage**, several High findings open.
+
+### 17.4 Honest verdict
+- **For the "weak password + full breach" guarantee:** 1Password > (Bitwarden ≈ Proton ≈
+  SecureVault-by-design). Only the Secret Key model wins here.
+- **For overall real-world security *today*:** Bitwarden, 1Password, and Proton Pass are in a
+  **different tier** than SecureVault — not because their core designs beat SecureVault's
+  *intent*, but because they're audited, battle-tested, fully implemented across platforms,
+  actively maintained, and free of known unpatched Critical/High issues.
+
+**Put plainly: SecureVault's blueprint is competitive with Bitwarden/Proton; its current
+implementation and operational maturity are not.** To close the gap: fix iOS + the extension,
+get an independent audit, add cert pinning + a client KDF floor, and — to actually *beat* the
+Bitwarden/Proton tier on the breach scenario — add the **Secret Key** (§15), which would put
+it on par with 1Password's strongest property.
