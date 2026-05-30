@@ -416,6 +416,105 @@ Bitwarden supports rotating the vault encryption key independently of the master
 
 ---
 
+### 4.14 Browser extension (Chrome/Firefox) ❌
+**Why**: Autofill is the killer feature for a password manager. No browser integration exists.
+
+**Implementation**: Chrome MV3 extension with WASM crypto, credential autofill, and vault management.
+
+**Status**: ❌ Open.
+
+---
+
+### 4.15 CSV import (Bitwarden, 1Password, LastPass, Chrome) ❌
+**Why**: No migration path from other password managers. Users are locked in.
+
+**Implementation**: Parse standard CSV formats from major password managers. Client-side decrypt/encrypt during import.
+
+**Status**: ❌ Open.
+
+---
+
+### 4.16 Folders / collections / tags ❌
+**Why**: Flat entry list with no organizational structure.
+
+**Implementation**: Backend: add folder/collection entities. Frontend: folder tree view, drag-and-drop, filtering.
+
+**Status**: ❌ Open.
+
+---
+
+### 4.17 Favorites / pinning ❌
+**Why**: No way to mark frequently used entries for quick access.
+
+**Implementation**: Add `favorite` boolean field to vault entry. Filter/sort by favorites.
+
+**Status**: ❌ Open.
+
+---
+
+### 4.18 Built-in TOTP code generator ❌
+**Why**: 2FA supported for login but no in-app TOTP generation for third-party accounts. Users need a separate authenticator app.
+
+**Implementation**: Store TOTP seed encrypted alongside vault entries. Generate 6-digit codes client-side using Web Crypto API.
+
+**Status**: ❌ Open.
+
+---
+
+### 4.19 Onboarding tour ❌
+**Why**: First-time users get no explanation of zero-knowledge model or master password importance.
+
+**Implementation**: Multi-step guided tour on first login explaining key concepts, master password best practices, and emergency access.
+
+**Status**: ❌ Open.
+
+---
+
+### 4.20 Dark/light theme toggle ❌
+**Why**: Only dark theme exists currently.
+
+**Implementation**: Theme toggle in settings. Persist preference in localStorage. Support system preference via `prefers-color-scheme`.
+
+**Status**: ❌ Open.
+
+---
+
+### 4.21 Bulk operations (select multiple entries) ❌
+**Why**: Can only delete/export one entry at a time.
+
+**Implementation**: Multi-select mode with batch delete, export, move to folder.
+
+**Status**: ❌ Open.
+
+---
+
+### 4.22 Global search ❌
+**Why**: Vault page has inline search but no dedicated search view across all entries.
+
+**Implementation**: Global search bar in header with keyboard shortcut (Ctrl+K). Search across titles, usernames, URLs, notes.
+
+**Status**: ❌ Open.
+
+---
+
+### 4.23 iOS autofill (Credential Provider) ❌
+**Why**: No autofill capability on iOS. Users must manually copy/paste passwords.
+
+**Implementation**: iOS Credential Provider extension using KMP shared code for crypto operations.
+
+**Status**: ❌ Open.
+
+---
+
+### 4.24 Staged deploys (blue/green or canary) ❌
+**Why**: Every push to main immediately deploys to production. No rollout control.
+
+**Implementation**: GitHub Actions deployment workflow with manual approval gate. Blue/green strategy for database-compatible changes.
+
+**Status**: ❌ Open.
+
+---
+
 ## Phase 5 — Infrastructure & Operations
 
 ### 5.1 CI pipeline (GitHub Actions) ❌
@@ -1600,10 +1699,10 @@ Many `Result.Error(it.message ...)` paths surface backend error messages in mobi
 | Phase 1 — Critical hardening | 27 | 21 | 6 |
 | Phase 2 — Important hardening | 46 | 28 | 18 |
 | Phase 3 — Defense in depth | 33 | 23 | 10 |
-| Phase 4 — Product security | 13 | 0 | 13 |
+| Phase 4 — Product security | 24 | 0 | 24 |
 | Phase 5 — Infrastructure & Operations | 9 | 0 | 9 |
 | Phase 6 — Tech Debt | 19 | 0 | 19 |
-| **Total** | **156** | **81** | **75** |
+| **Total** | **167** | **81** | **86** |
 
 > **Note**: Item 3.15 (logout without auth) is listed in the Fixed Issues section but
 > remains ❌ Open. The counts above reflect actual status.
