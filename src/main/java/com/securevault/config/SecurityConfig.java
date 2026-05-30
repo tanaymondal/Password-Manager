@@ -57,6 +57,7 @@ public class SecurityConfig {
                     auth.requestMatchers("/api/v1/auth/login").permitAll();
                     auth.requestMatchers("/api/v1/auth/verify-2fa").permitAll();
                     auth.requestMatchers("/api/v1/auth/refresh").permitAll();
+                    auth.requestMatchers("/api/v1/auth/logout").permitAll();
                     auth.requestMatchers("/api/v1/health").permitAll();
                     auth.requestMatchers("/swagger-ui/**", "/v3/api-docs/**").denyAll();
                     auth.anyRequest().authenticated();
