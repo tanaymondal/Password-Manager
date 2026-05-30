@@ -38,3 +38,8 @@ export async function getKdfConfig(): Promise<KdfConfig> {
 
   return fetchPromise
 }
+
+export function resetKdfConfig() {
+  cachedConfig = null
+  fetchPromise = null
+}

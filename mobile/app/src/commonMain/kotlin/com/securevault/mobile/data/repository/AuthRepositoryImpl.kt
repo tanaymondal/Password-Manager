@@ -181,11 +181,13 @@ class AuthRepositoryImpl(
             api.logout()
             vaultKeyManager.clearCachedVaultKey()
             SessionManager.clearSession()
+            KdfConfigManager.reset()
             _authState.value = AuthState.unauthenticated()
             Result.Success(Unit)
         } catch (e: Exception) {
             vaultKeyManager.clearCachedVaultKey()
             SessionManager.clearSession()
+            KdfConfigManager.reset()
             _authState.value = AuthState.unauthenticated()
             Result.Success(Unit)
         }

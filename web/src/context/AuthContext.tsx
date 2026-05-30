@@ -24,6 +24,7 @@ import {
   generateVaultKey,
 } from '../crypto/argon2'
 import { getKdfConfig } from '../crypto/kdfConfig'
+import { resetKdfConfig } from '../crypto/kdfConfig'
 import { unwrapVaultKey, wrapVaultKey } from '../crypto/vaultKey'
 import {
   setCryptoMaterial,
@@ -246,6 +247,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     clearTokens()
     clearAll()
+    resetKdfConfig()
     setState({
       user: null,
       isAuthenticated: false,
