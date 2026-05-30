@@ -15,6 +15,22 @@ fn kek(mk: &[u8]) -> Vec<u8> {
     derive_kek(mk)
 }
 
+// ── Golden KDF values (Rust argon2 crate is the source of truth) ──
+
+#[test]
+fn golden_kdf_auth_hash() {
+    let p = KdfParams { iterations: 3, memory_kib: 98304, parallelism: 4 };
+    let mk = make_mk("correct horse battery staple", b"auth-salt-fixed-string", &p);
+    assert_eq!(auth_hash(&mk), "8hkvgeWmVKTMnrbsvsrbtj/E5IiFKR7PJzdeijmmcig=");
+}
+
+#[test]
+fn golden_kdf_kek() {
+    let p = KdfParams { iterations: 3, memory_kib: 98304, parallelism: 4 };
+    let mk = make_mk("correct horse battery staple", b"0123456789abcdef", &p);
+    assert_eq!(STANDARD.encode(&kek(&mk)), "z5Dul//cRyhNDmSjS8qVN9eqHIk78ZN917oFJj3L38A=");
+}
+
 fn load_vectors() -> Option<Value> {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../test-vectors/vectors.json");
     let data = std::fs::read_to_string(path).ok()?;

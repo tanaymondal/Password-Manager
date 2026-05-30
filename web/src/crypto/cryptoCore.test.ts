@@ -23,10 +23,12 @@ function unb64(s: string): Uint8Array {
 }
 
 describe('golden vectors (cross-platform parity)', () => {
+  // KDF golden values: computed by Rust argon2 crate (source of truth)
+  // All platforms (WASM, JNI, C-FFI) use the same Rust binary
+
   it('all platforms produce same auth_hash', async () => {
     const hash = await derivePasswordHash('correct horse battery staple', b64('auth-salt-fixed-string'), 3, 98304, 4)
-    expect(hash).toBeTruthy()
-    expect(hash.length).toBe(44)
+    expect(hash).toBe('8hkvgeWmVKTMnrbsvsrbtj/E5IiFKR7PJzdeijmmcig=')
   })
 
   it('all platforms produce same kek', async () => {

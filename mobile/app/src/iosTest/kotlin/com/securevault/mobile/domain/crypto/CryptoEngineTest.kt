@@ -19,8 +19,7 @@ class CryptoEngineTest {
         ) ?: error("deriveMasterKey returned null")
         val got = SecureVaultCryptoCore.securevault_derive_auth_hash(mkB64.toKString())
             ?: error("deriveAuthHash returned null")
-        assertNotNull(got)
-        assertEquals(44, got.toKString().length, "auth hash must be 44 chars")
+        assertEquals("8hkvgeWmVKTMnrbsvsrbtj/E5IiFKR7PJzdeijmmcig=", got.toKString(), "auth hash must match Rust")
     }
 
     @Test
@@ -32,8 +31,7 @@ class CryptoEngineTest {
         ) ?: error("deriveMasterKey returned null")
         val got = SecureVaultCryptoCore.securevault_derive_kek(mkB64.toKString())
             ?: error("deriveKek returned null")
-        assertNotNull(got)
-        assertTrue(got.toKString().length > 20, "KEK base64 length must be reasonable")
+        assertEquals("z5Dul//cRyhNDmSjS8qVN9eqHIk78ZN917oFJj3L38A=", got.toKString(), "kek must match Rust")
     }
 
     @Test
