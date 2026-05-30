@@ -11,6 +11,10 @@ const b64 = (bytes) => Buffer.from(bytes).toString('base64')
 const unb64 = (s) => new Uint8Array(Buffer.from(s, 'base64'))
 const utf8 = (s) => new TextEncoder().encode(s)
 
+async function sha256(data) {
+  return new Uint8Array(await subtle.digest('SHA-256', data))
+}
+
 async function aesGcmEncrypt(keyBytes, iv, plaintextBytes) {
   const key = await subtle.importKey('raw', keyBytes, 'AES-GCM', false, ['encrypt'])
   const ct = await subtle.encrypt({ name: 'AES-GCM', iv, tagLength: 128 }, key, plaintextBytes)
@@ -29,32 +33,38 @@ async function argon(password, saltBytes, p) {
   })
 }
 
-const PARAMS = { iterations: 4, memory_kib: 65536, parallelism: 4 }
+const PARAMS = { iterations: 3, memory_kib: 98304, parallelism: 4 }
 const PASSWORD = 'correct horse battery staple'
-const AUTH_SALT = 'auth-salt-fixed-string'
-const ENC_SALT_B64 = b64(utf8('0123456789abcdef'))
+const SALT_B64 = b64(utf8('0123456789abcdef'))
+const AUTH_SALT_B64 = b64(utf8('auth-salt-fixed-string'))
 const VAULT_KEY = new Uint8Array(32).map((_, i) => i)
 const NONCE = new Uint8Array(12).map((_, i) => 0xa0 + i)
 const ENTRY_JSON = '{"password":"hunter2","title":"Example","url":"https://example.com","username":"alice"}'
 
 const cases = []
 
-let kek
+let masterKey, kek
 if (argon2id) {
+  masterKey = await argon(PASSWORD, unb64(SALT_B64), PARAMS)
+
+  // Auth hash: SHA256(masterKey || "securevault-auth")
+  const authHash = await sha256(new Uint8Array([...masterKey, ...utf8('securevault-auth')]))
   cases.push({
     name: 'auth_hash/default-params',
     op: 'derive_auth_hash',
     params: PARAMS,
-    input: { password: PASSWORD, salt_str: AUTH_SALT },
-    expected: { auth_hash_b64: b64(await argon(PASSWORD, utf8(AUTH_SALT), PARAMS)) },
+    input: { password: PASSWORD, salt_b64: AUTH_SALT_B64 },
+    expected: { auth_hash_b64: b64(authHash) },
   })
 
-  kek = await argon(PASSWORD, unb64(ENC_SALT_B64), PARAMS)
+  // KEK: SHA256(masterKey || "securevault-kek")
+  const kekBytes = await sha256(new Uint8Array([...masterKey, ...utf8('securevault-kek')]))
+  kek = kekBytes
   cases.push({
     name: 'kek/default-params',
     op: 'derive_kek',
     params: PARAMS,
-    input: { password: PASSWORD, salt_b64: ENC_SALT_B64 },
+    input: { password: PASSWORD, salt_b64: SALT_B64 },
     expected: { kek_raw_b64: b64(kek) },
   })
 } else {

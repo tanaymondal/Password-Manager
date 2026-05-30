@@ -14,35 +14,13 @@ unsafe fn cstr_to_str<'a>(ptr: *const c_char) -> &'a str {
     CStr::from_ptr(ptr).to_str().unwrap_or_default()
 }
 
-/// Derive an Argon2id auth hash.
-///
-/// # Safety
-/// `password` and `salt` must be valid null-terminated C strings.
-/// Returns a C string that must be freed with `securevault_free_string`.
-#[no_mangle]
-pub unsafe extern "C" fn securevault_derive_auth_hash(
-    password: *const c_char,
-    salt: *const c_char,
-    iterations: i32,
-    memory: i32,
-    parallelism: i32,
-) -> *mut c_char {
-    let password = cstr_to_str(password);
-    let salt = cstr_to_str(salt);
-    let params = KdfParams { iterations: iterations as u32, memory_kib: memory as u32, parallelism: parallelism as u32 };
-    match derive_auth_hash(password, salt, &params) {
-        Ok(hash) => CString::new(hash).unwrap_or_default().into_raw(),
-        Err(_) => std::ptr::null_mut(),
-    }
-}
-
-/// Derive a KEK from password and base64-encoded salt.
+/// Derive a master key via Argon2id.
 ///
 /// # Safety
 /// `password` and `salt_b64` must be valid null-terminated C strings.
-/// Returns a base64-encoded C string that must be freed with `securevault_free_string`.
+/// Returns base64-encoded master key — must be freed with `securevault_free_string`.
 #[no_mangle]
-pub unsafe extern "C" fn securevault_derive_kek(
+pub unsafe extern "C" fn securevault_derive_master_key(
     password: *const c_char,
     salt_b64: *const c_char,
     iterations: i32,
@@ -50,15 +28,45 @@ pub unsafe extern "C" fn securevault_derive_kek(
     parallelism: i32,
 ) -> *mut c_char {
     let password = cstr_to_str(password);
-    let salt_b64 = cstr_to_str(salt_b64);
+    let salt = match STANDARD.decode(cstr_to_str(salt_b64)) {
+        Ok(s) => s,
+        Err(_) => return ptr::null_mut(),
+    };
     let params = KdfParams { iterations: iterations as u32, memory_kib: memory as u32, parallelism: parallelism as u32 };
-    match derive_kek(password, salt_b64, &params) {
-        Ok(kek) => {
-            let b64 = STANDARD.encode(&kek);
-            CString::new(b64).unwrap_or_default().into_raw()
-        }
-        Err(_) => std::ptr::null_mut(),
+    match derive_master_key(password, &salt, &params) {
+        Ok(mk) => b64_encode(&mk).into_raw(),
+        Err(_) => ptr::null_mut(),
     }
+}
+
+/// Derive an auth hash from a master key.
+///
+/// # Safety
+/// `master_key_b64` must be a valid null-terminated base64 C string.
+#[no_mangle]
+pub unsafe extern "C" fn securevault_derive_auth_hash(
+    master_key_b64: *const c_char,
+) -> *mut c_char {
+    let mk = match STANDARD.decode(cstr_to_str(master_key_b64)) {
+        Ok(m) => m,
+        Err(_) => return ptr::null_mut(),
+    };
+    CString::new(derive_auth_hash(&mk)).unwrap_or_default().into_raw()
+}
+
+/// Derive a KEK from a master key.
+///
+/// # Safety
+/// `master_key_b64` must be a valid null-terminated base64 C string.
+#[no_mangle]
+pub unsafe extern "C" fn securevault_derive_kek(
+    master_key_b64: *const c_char,
+) -> *mut c_char {
+    let mk = match STANDARD.decode(cstr_to_str(master_key_b64)) {
+        Ok(m) => m,
+        Err(_) => return ptr::null_mut(),
+    };
+    b64_encode(&derive_kek(&mk)).into_raw()
 }
 
 /// Wrap a vault key with a KEK using AES-256-GCM.

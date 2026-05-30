@@ -29,7 +29,9 @@ actual class CryptoEngine {
     actual fun generateAuthHash(
         password: String, salt: String, iterations: Int, memory: Int, parallelism: Int
     ): String {
-        val result = SecureVaultCryptoCore.securevault_derive_auth_hash(password, salt, iterations, memory, parallelism)
+        val mkB64 = SecureVaultCryptoCore.securevault_derive_master_key(password, salt, iterations, memory, parallelism)
+            ?: error("Rust deriveMasterKey returned null")
+        val result = SecureVaultCryptoCore.securevault_derive_auth_hash(mkB64 as String)
             ?: error("Rust deriveAuthHash returned null")
         return result as String
     }
@@ -45,7 +47,9 @@ actual class CryptoEngine {
     actual fun deriveKek(
         password: String, encryptionSalt: String, iterations: Int, memory: Int, parallelism: Int
     ): ByteArray {
-        val kekB64 = SecureVaultCryptoCore.securevault_derive_kek(password, encryptionSalt, iterations, memory, parallelism)
+        val mkB64 = SecureVaultCryptoCore.securevault_derive_master_key(password, encryptionSalt, iterations, memory, parallelism)
+            ?: error("Rust deriveMasterKey returned null")
+        val kekB64 = SecureVaultCryptoCore.securevault_derive_kek(mkB64 as String)
             ?: error("Rust deriveKek returned null")
         val data = NSData.create(base64EncodedString = kekB64 as String, options = 0u) ?: return ByteArray(0)
         return ByteArray(data.length.toInt()).apply {

@@ -85,32 +85,52 @@ export function wasm_decrypt_field(vault_key_b64, ciphertext) {
 }
 
 /**
- * @param {string} password
- * @param {string} salt_str
- * @param {WasmKdfParams} p
+ * @param {string} master_key_b64
  * @returns {string}
  */
-export function wasm_derive_auth_hash(password, salt_str, p) {
-    let deferred4_0;
-    let deferred4_1;
+export function wasm_derive_auth_hash(master_key_b64) {
+    let deferred3_0;
+    let deferred3_1;
     try {
-        const ptr0 = passStringToWasm0(password, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const ptr0 = passStringToWasm0(master_key_b64, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
-        const ptr1 = passStringToWasm0(salt_str, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-        const len1 = WASM_VECTOR_LEN;
-        _assertClass(p, WasmKdfParams);
-        const ret = wasm.wasm_derive_auth_hash(ptr0, len0, ptr1, len1, p.__wbg_ptr);
-        var ptr3 = ret[0];
-        var len3 = ret[1];
+        const ret = wasm.wasm_derive_auth_hash(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
         if (ret[3]) {
-            ptr3 = 0; len3 = 0;
+            ptr2 = 0; len2 = 0;
             throw takeFromExternrefTable0(ret[2]);
         }
-        deferred4_0 = ptr3;
-        deferred4_1 = len3;
-        return getStringFromWasm0(ptr3, len3);
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
     } finally {
-        wasm.__wbindgen_free(deferred4_0, deferred4_1, 1);
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * @param {string} master_key_b64
+ * @returns {string}
+ */
+export function wasm_derive_kek(master_key_b64) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(master_key_b64, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasm_derive_kek(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
     }
 }
 
@@ -120,7 +140,7 @@ export function wasm_derive_auth_hash(password, salt_str, p) {
  * @param {WasmKdfParams} p
  * @returns {string}
  */
-export function wasm_derive_kek(password, salt_b64, p) {
+export function wasm_derive_master_key(password, salt_b64, p) {
     let deferred4_0;
     let deferred4_1;
     try {
@@ -129,7 +149,7 @@ export function wasm_derive_kek(password, salt_b64, p) {
         const ptr1 = passStringToWasm0(salt_b64, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len1 = WASM_VECTOR_LEN;
         _assertClass(p, WasmKdfParams);
-        const ret = wasm.wasm_derive_kek(ptr0, len0, ptr1, len1, p.__wbg_ptr);
+        const ret = wasm.wasm_derive_master_key(ptr0, len0, ptr1, len1, p.__wbg_ptr);
         var ptr3 = ret[0];
         var len3 = ret[1];
         if (ret[3]) {

@@ -1,5 +1,6 @@
 import init, {
   WasmKdfParams,
+  wasm_derive_master_key,
   wasm_derive_auth_hash,
   wasm_derive_kek,
   wasm_wrap_vault_key,
@@ -41,9 +42,10 @@ async function resolveParams(
   return { iterations: cfg.kdfIterations, memorySize: cfg.kdfMemory, parallelism: cfg.kdfParallelism }
 }
 
-export async function derivePasswordHash(
+// Single Argon2id call — derive master key
+async function deriveMasterKey(
   password: string,
-  salt: string,
+  saltBase64: string,
   iterations?: number,
   memorySize?: number,
   parallelism?: number,
@@ -51,9 +53,22 @@ export async function derivePasswordHash(
   await ensureInit()
   const p = await resolveParams(iterations, memorySize, parallelism)
   const wp = new WasmKdfParams(p.iterations, p.memorySize, p.parallelism)
-  return wasm_derive_auth_hash(password, salt, wp)
+  return wasm_derive_master_key(password, saltBase64, wp)
 }
 
+// Derive auth hash from master key (SHA256(masterKey || "securevault-auth"))
+export async function derivePasswordHash(
+  password: string,
+  salt: string,
+  iterations?: number,
+  memorySize?: number,
+  parallelism?: number,
+): Promise<string> {
+  const mkB64 = await deriveMasterKey(password, salt, iterations, memorySize, parallelism)
+  return wasm_derive_auth_hash(mkB64)
+}
+
+// Derive KEK from master key (SHA256(masterKey || "securevault-kek"))
 export async function deriveKek(
   password: string,
   saltBase64: string,
@@ -61,10 +76,8 @@ export async function deriveKek(
   memorySize?: number,
   parallelism?: number,
 ): Promise<CryptoKey> {
-  await ensureInit()
-  const p = await resolveParams(iterations, memorySize, parallelism)
-  const wp = new WasmKdfParams(p.iterations, p.memorySize, p.parallelism)
-  const kekB64 = wasm_derive_kek(password, saltBase64, wp)
+  const mkB64 = await deriveMasterKey(password, saltBase64, iterations, memorySize, parallelism)
+  const kekB64 = wasm_derive_kek(mkB64)
   return crypto.subtle.importKey('raw', unb64(kekB64).buffer as ArrayBuffer, 'AES-GCM', true, ['encrypt', 'decrypt'])
 }
 

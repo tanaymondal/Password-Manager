@@ -7,24 +7,24 @@
       "name": "auth_hash/default-params",
       "op": "derive_auth_hash",
       "params": {
-        "iterations": 4,
-        "memory_kib": 65536,
+        "iterations": 3,
+        "memory_kib": 98304,
         "parallelism": 4
       },
       "input": {
         "password": "correct horse battery staple",
-        "salt_str": "auth-salt-fixed-string"
+        "salt_b64": "YXV0aC1zYWx0LWZpeGVkLXN0cmluZw=="
       },
       "expected": {
-        "auth_hash_b64": "g8BLWUGxvI3XdtW2Ig4k2QL2brmIBvGTlLJGIhHbnJU="
+        "auth_hash_b64": "TsMyERpG6iM4HybWFFrgN+OdfmRkisUAh5cjN1KGzTg="
       }
     },
     {
       "name": "kek/default-params",
       "op": "derive_kek",
       "params": {
-        "iterations": 4,
-        "memory_kib": 65536,
+        "iterations": 3,
+        "memory_kib": 98304,
         "parallelism": 4
       },
       "input": {
@@ -32,19 +32,19 @@
         "salt_b64": "MDEyMzQ1Njc4OWFiY2RlZg=="
       },
       "expected": {
-        "kek_raw_b64": "504NmZdCQp2PNGAZA5gq3vh1rwcT/pVLXWHDcJlf18w="
+        "kek_raw_b64": "sq6bUk5Ylxi6LgCQ86urV8m/YdMFvtpGZJ8BBFrelVg="
       }
     },
     {
       "name": "envelope_a/wrap_vault_key",
       "op": "wrap_vault_key",
       "input": {
-        "kek_raw_b64": "504NmZdCQp2PNGAZA5gq3vh1rwcT/pVLXWHDcJlf18w=",
+        "kek_raw_b64": "sq6bUk5Ylxi6LgCQ86urV8m/YdMFvtpGZJ8BBFrelVg=",
         "vault_key_raw_b64": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
         "nonce_b64": "oKGio6Slpqeoqaqr"
       },
       "expected": {
-        "wrapped_b64": "oKGio6Slpqeoqaqr5HHezchyg8dzWdJCk+XMGLZMk70asE0SqeA1rq/ZxqiOHm/fEXwfIT/y2n4NLFHN"
+        "wrapped_b64": "oKGio6SlpqeoqaqrVrvuT6rlMFHX8n4zKlDNFyDdN1Emm6EvQz4YIg2q7nxk6aA8k14wqkd0jFuF2TtJ"
       }
     },
     {

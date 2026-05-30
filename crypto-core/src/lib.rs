@@ -18,6 +18,7 @@ pub use params::{KdfParams, DEFAULT_PARAMS};
 use aead::NONCE_LEN;
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use serde::Serialize;
+use sha2::{Digest, Sha256};
 use zeroize::Zeroize;
 
 const VERSION_PREFIX: &str = "v1:";
@@ -39,21 +40,28 @@ fn random_bytes<const N: usize>() -> Result<[u8; N], CryptoError> {
 }
 
 // ---------------------------------------------------------------------------
-// KDF
+// KDF — single Argon2id call, split output with SHA256
 // ---------------------------------------------------------------------------
 
-pub fn derive_auth_hash(password: &str, salt_str: &str, p: &KdfParams) -> Result<String, CryptoError> {
-    let mut h = kdf::argon2id_raw(password.as_bytes(), salt_str.as_bytes(), p)?;
-    let out = b64e(&h);
-    h.zeroize();
-    Ok(out)
+/// Derive a 32-byte master key from password + salt via Argon2id.
+pub fn derive_master_key(password: &str, salt: &[u8], p: &KdfParams) -> Result<[u8; 32], CryptoError> {
+    kdf::argon2id_raw(password.as_bytes(), salt, p)
 }
 
-pub fn derive_kek(password: &str, salt_b64: &str, p: &KdfParams) -> Result<Vec<u8>, CryptoError> {
-    let mut salt = b64d(salt_b64)?;
-    let h = kdf::argon2id_raw(password.as_bytes(), &salt, p);
-    salt.zeroize();
-    Ok(h?.to_vec())
+/// Derive the auth hash from a master key (SHA256(master_key || b"auth")).
+pub fn derive_auth_hash(master_key: &[u8]) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(master_key);
+    hasher.update(b"securevault-auth");
+    b64e(&hasher.finalize())
+}
+
+/// Derive the KEK from a master key (SHA256(master_key || b"kek")).
+pub fn derive_kek(master_key: &[u8]) -> Vec<u8> {
+    let mut hasher = Sha256::new();
+    hasher.update(master_key);
+    hasher.update(b"securevault-kek");
+    hasher.finalize().to_vec()
 }
 
 // ---------------------------------------------------------------------------

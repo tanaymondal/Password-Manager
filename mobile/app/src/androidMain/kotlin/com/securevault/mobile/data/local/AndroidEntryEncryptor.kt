@@ -44,7 +44,8 @@ class AndroidEntryEncryptor : EntryEncryptor, VaultKeyManager {
 
     private fun deriveKek(password: String, saltBytes: ByteArray): ByteArray {
         val passwordBytes = password.toByteArray(Charsets.UTF_8)
-        val kek = RustCryptoCore.deriveKek(password, Base64.encodeToString(saltBytes, Base64.NO_WRAP), argon2Iterations, argon2MemoryKb, argon2Parallelism)
+        val mk = RustCryptoCore.deriveMasterKey(password, Base64.encodeToString(saltBytes, Base64.NO_WRAP), argon2Iterations, argon2MemoryKb, argon2Parallelism)
+        val kek = RustCryptoCore.deriveKek(mk)
         passwordBytes.fill(0)
         return kek
     }

@@ -65,12 +65,13 @@ fn roundtrips_without_vectors() {
     assert_eq!(decrypt_field(&vk, "").unwrap(), "");
 
     let salt = generate_salt().unwrap();
-    let kek = derive_kek("pw", &salt, &DEFAULT_PARAMS).unwrap();
+    let mk = derive_master_key("pw", &STANDARD.decode(&salt).unwrap(), &DEFAULT_PARAMS).unwrap();
+    let kek = derive_kek(&mk);
     let wrapped = wrap_vault_key(&kek, &vk).unwrap();
     assert_eq!(unwrap_vault_key(&kek, &wrapped).unwrap(), vk);
 
-    let h1 = derive_auth_hash("pw", "saltstring", &DEFAULT_PARAMS).unwrap();
-    let h2 = derive_auth_hash("pw", "saltstring", &DEFAULT_PARAMS).unwrap();
+    let h1 = derive_auth_hash(&mk);
+    let h2 = derive_auth_hash(&mk);
     assert_eq!(h1, h2);
     assert!(unwrap_vault_key(&kek, &STANDARD.encode([0u8; 60])).is_err());
 }

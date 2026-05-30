@@ -19,7 +19,8 @@ actual class CryptoEngine {
     }
 
     actual fun generateAuthHash(password: String, salt: String, iterations: Int, memory: Int, parallelism: Int): String {
-        return RustCryptoCore.deriveAuthHash(password, salt, iterations, memory, parallelism)
+        val mk = RustCryptoCore.deriveMasterKey(password, salt, iterations, memory, parallelism)
+        return RustCryptoCore.deriveAuthHash(mk)
     }
 
     actual fun generateVaultKey(): String {
@@ -29,7 +30,8 @@ actual class CryptoEngine {
     }
 
     actual fun deriveKek(password: String, encryptionSalt: String, iterations: Int, memory: Int, parallelism: Int): ByteArray {
-        return RustCryptoCore.deriveKek(password, encryptionSalt, iterations, memory, parallelism)
+        val mk = RustCryptoCore.deriveMasterKey(password, encryptionSalt, iterations, memory, parallelism)
+        return RustCryptoCore.deriveKek(mk)
     }
 
     actual fun wrapVaultKey(vaultKey: String, kek: ByteArray): String {

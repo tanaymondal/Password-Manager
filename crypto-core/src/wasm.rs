@@ -1,5 +1,4 @@
 use crate::*;
-use base64::{engine::general_purpose::STANDARD, Engine as _};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -24,13 +23,22 @@ impl From<&WasmKdfParams> for KdfParams {
 }
 
 #[wasm_bindgen]
-pub fn wasm_derive_auth_hash(password: &str, salt_str: &str, p: &WasmKdfParams) -> Result<String, JsError> {
-    derive_auth_hash(password, salt_str, &p.into()).map_err(JsError::from)
+pub fn wasm_derive_master_key(password: &str, salt_b64: &str, p: &WasmKdfParams) -> Result<String, JsError> {
+    let salt = crate::b64d(salt_b64).map_err(|_| JsError::new("base64 decode failed"))?;
+    let mk = derive_master_key(password, &salt, &p.into()).map_err(JsError::from)?;
+    Ok(b64e(&mk))
 }
 
 #[wasm_bindgen]
-pub fn wasm_derive_kek(password: &str, salt_b64: &str, p: &WasmKdfParams) -> Result<String, JsError> {
-    derive_kek(password, salt_b64, &p.into()).map(|k| STANDARD.encode(&k)).map_err(JsError::from)
+pub fn wasm_derive_auth_hash(master_key_b64: &str) -> Result<String, JsError> {
+    let mk = crate::b64d(master_key_b64).map_err(|_| JsError::new("base64 decode failed"))?;
+    Ok(derive_auth_hash(&mk))
+}
+
+#[wasm_bindgen]
+pub fn wasm_derive_kek(master_key_b64: &str) -> Result<String, JsError> {
+    let mk = crate::b64d(master_key_b64).map_err(|_| JsError::new("base64 decode failed"))?;
+    Ok(b64e(&derive_kek(&mk)))
 }
 
 #[wasm_bindgen]

@@ -11,9 +11,11 @@ export function wasm_decrypt_entry(vault_key_b64: string, encrypted_data: string
 
 export function wasm_decrypt_field(vault_key_b64: string, ciphertext: string): string;
 
-export function wasm_derive_auth_hash(password: string, salt_str: string, p: WasmKdfParams): string;
+export function wasm_derive_auth_hash(master_key_b64: string): string;
 
-export function wasm_derive_kek(password: string, salt_b64: string, p: WasmKdfParams): string;
+export function wasm_derive_kek(master_key_b64: string): string;
+
+export function wasm_derive_master_key(password: string, salt_b64: string, p: WasmKdfParams): string;
 
 export function wasm_encrypt_entry(vault_key_b64: string, plaintext_json: string): string;
 
@@ -34,8 +36,9 @@ export interface InitOutput {
     readonly __wbg_wasmkdfparams_free: (a: number, b: number) => void;
     readonly wasm_decrypt_entry: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
     readonly wasm_decrypt_field: (a: number, b: number, c: number, d: number) => [number, number, number, number];
-    readonly wasm_derive_auth_hash: (a: number, b: number, c: number, d: number, e: number) => [number, number, number, number];
-    readonly wasm_derive_kek: (a: number, b: number, c: number, d: number, e: number) => [number, number, number, number];
+    readonly wasm_derive_auth_hash: (a: number, b: number) => [number, number, number, number];
+    readonly wasm_derive_kek: (a: number, b: number) => [number, number, number, number];
+    readonly wasm_derive_master_key: (a: number, b: number, c: number, d: number, e: number) => [number, number, number, number];
     readonly wasm_encrypt_entry: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly wasm_encrypt_field: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly wasm_generate_salt: () => [number, number, number, number];
