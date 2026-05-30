@@ -28,6 +28,7 @@ public class RateLimitingFilter implements Filter {
         "/api/v1/auth/login", AUTH_LIMIT,
         "/api/v1/auth/register", STRICT_LIMIT,
         "/api/v1/auth/prelogin", AUTH_LIMIT,
+        "/api/v1/auth/kdf-config", AUTH_LIMIT,
         "/api/v1/auth/verify-2fa", AUTH_LIMIT,
         "/api/v1/auth/refresh", AUTH_LIMIT,
         "/api/v1/auth/change-password", STRICT_LIMIT,

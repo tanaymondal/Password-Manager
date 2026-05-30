@@ -193,14 +193,14 @@ Blocks camera/mic/geo/payment but not `interest-cohort=()`, `browsing-topics=()`
 
 ---
 
-### 2.39 No rate limiting on `/prelogin` endpoint ❌ 💡NEW
+### 2.39 No rate limiting on `/prelogin` endpoint ✅
 [source: 2026-05-30 audit]
 
 The `prelogin` endpoint has zero rate limiting. An attacker can enumerate users through timing (DB lookup vs. random generation), DoS the database with `findByEmail` queries, and waste entropy via `new SecureRandom()` per unknown request.
 
 **File**: `AuthController.java:56-61`, `AuthService.java:147-155`
 
-**Status**: ❌ Open.
+**Status**: ✅ Fixed — rate-limited via `RateLimitingFilter` (20 req/min per IP). `/kdf-config` also added.
 
 ---
 
@@ -1258,9 +1258,9 @@ Many `Result.Error(it.message ...)` paths surface backend error messages in mobi
 |----------|-------|----------|-------------|
 | Phase 0 — Stop the bleeding | 9 | 9 | 0 |
 | Phase 1 — Critical hardening | 27 | 21 | 6 |
-| Phase 2 — Important hardening | 46 | 27 | 19 |
+| Phase 2 — Important hardening | 46 | 28 | 18 |
 | Phase 3 — Defense in depth | 32 | 23 | 9 |
-| **Total** | **114** | **80** | **34** |
+| **Total** | **114** | **81** | **33** |
 
 > **Note**: Item 3.15 (logout without auth) is listed in the Fixed Issues section but
 > remains ❌ Open. The counts above reflect actual status.
