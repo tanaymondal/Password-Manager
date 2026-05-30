@@ -43,7 +43,7 @@ fn random_bytes<const N: usize>() -> Result<[u8; N], CryptoError> {
 }
 
 // ---------------------------------------------------------------------------
-// KDF — single Argon2id call, split output with SHA256
+// KDF — single Argon2id call, split output with HKDF-Expand
 // ---------------------------------------------------------------------------
 
 /// Derive a 32-byte master key from password + salt via Argon2id.
@@ -51,18 +51,25 @@ pub fn derive_master_key(password: &str, salt: &[u8], p: &KdfParams) -> Result<[
     kdf::argon2id_raw(password.as_bytes(), salt, p)
 }
 
-/// Derive the auth hash from a master key (HMAC-SHA256(master_key, tag)).
-pub fn derive_auth_hash(master_key: &[u8]) -> String {
-    let mut mac = Hmac::<Sha256>::new_from_slice(master_key).expect("HMAC accepts 32-byte key");
-    mac.update(AUTH_HASH_TAG);
-    b64e(&mac.finalize().into_bytes())
+/// HKDF-Expand single block: HMAC-SHA256(PRK, info || 0x01)
+fn hkdf_expand(prk: &[u8], info: &[u8]) -> [u8; 32] {
+    let mut mac = Hmac::<Sha256>::new_from_slice(prk).expect("HKDF accepts 32-byte key");
+    mac.update(info);
+    mac.update(&[0x01]);
+    let block = mac.finalize().into_bytes();
+    let mut out = [0u8; 32];
+    out.copy_from_slice(&block);
+    out
 }
 
-/// Derive the KEK from a master key (HMAC-SHA256(master_key, tag)).
+/// Derive the auth hash from a master key (HKDF-Expand).
+pub fn derive_auth_hash(master_key: &[u8]) -> String {
+    b64e(&hkdf_expand(master_key, AUTH_HASH_TAG))
+}
+
+/// Derive the KEK from a master key (HKDF-Expand).
 pub fn derive_kek(master_key: &[u8]) -> Vec<u8> {
-    let mut mac = Hmac::<Sha256>::new_from_slice(master_key).expect("HMAC accepts 32-byte key");
-    mac.update(KEK_TAG);
-    mac.finalize().into_bytes().to_vec()
+    hkdf_expand(master_key, KEK_TAG).to_vec()
 }
 
 // ---------------------------------------------------------------------------

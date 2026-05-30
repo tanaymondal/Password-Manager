@@ -13,8 +13,9 @@ const b64 = (bytes) => Buffer.from(bytes).toString('base64')
 const unb64 = (s) => new Uint8Array(Buffer.from(s, 'base64'))
 const utf8 = (s) => new TextEncoder().encode(s)
 
-function hmacSha256(keyBytes, data) {
-  return createHmac('sha256', Buffer.from(keyBytes)).update(data).digest()
+function hkdfExpand(keyBytes, info) {
+  // HKDF-Expand single block: HMAC-SHA256(key, info || 0x01)
+  return createHmac('sha256', Buffer.from(keyBytes)).update(info).update(Buffer.from([1])).digest()
 }
 
 async function aesGcmEncrypt(keyBytes, iv, plaintextBytes) {
@@ -49,8 +50,8 @@ let masterKey, kek
 if (argon2id) {
   masterKey = await argon(PASSWORD, unb64(SALT_B64), PARAMS)
 
-  // Auth hash: HMAC-SHA256(masterKey, "securevault-auth")
-  const authHash = hmacSha256(masterKey, 'securevault-auth')
+  // Auth hash: HKDF-Expand(MasterKey, "securevault-auth")
+  const authHash = hkdfExpand(masterKey, 'securevault-auth')
   cases.push({
     name: 'auth_hash/default-params',
     op: 'derive_auth_hash',
@@ -59,8 +60,8 @@ if (argon2id) {
     expected: { auth_hash_b64: b64(authHash) },
   })
 
-  // KEK: HMAC-SHA256(masterKey, "securevault-kek")
-  kek = hmacSha256(masterKey, 'securevault-kek')
+  // KEK: HKDF-Expand(MasterKey, "securevault-kek")
+  kek = hkdfExpand(masterKey, 'securevault-kek')
   cases.push({
     name: 'kek/default-params',
     op: 'derive_kek',
