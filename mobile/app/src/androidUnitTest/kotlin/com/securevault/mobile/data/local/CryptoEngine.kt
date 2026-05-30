@@ -28,7 +28,8 @@ class CryptoEngine(
 
     fun deriveKekForPassword(password: String, encryptionSalt: String, iterations: Int = 3, memory: Int = 98304, parallelism: Int = 4): ByteArray {
         if (encryptionSalt.isEmpty()) throw IllegalStateException("Encryption salt not available")
-        return RustCryptoCore.deriveKek(password, encryptionSalt, iterations, memory, parallelism)
+        val mk = RustCryptoCore.deriveMasterKey(password, encryptionSalt, iterations, memory, parallelism)
+        return RustCryptoCore.deriveKek(mk)
     }
 
     fun deriveKekBase64(password: String, encryptionSalt: String): String {

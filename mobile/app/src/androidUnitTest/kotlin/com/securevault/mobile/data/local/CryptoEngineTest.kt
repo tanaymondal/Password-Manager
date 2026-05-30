@@ -28,7 +28,7 @@ class CryptoEngineTest {
             }
             // Verify the native method resolves
             try {
-                val m = NativeBridge::class.java.getMethod("nativeDeriveAuthHash", String::class.java, String::class.java, Int::class.java, Int::class.java, Int::class.java)
+                val m = NativeBridge::class.java.getMethod("nativeDeriveMasterKey", String::class.java, String::class.java, Int::class.java, Int::class.java, Int::class.java)
                 System.err.println("NativeBridge method resolved: ${m.name}")
             } catch (e: Exception) {
                 System.err.println("ERROR: Cannot resolve native method: ${e.message}")
@@ -94,6 +94,7 @@ class CryptoEngineTest {
         val nativeMethods = methods.filter { java.lang.reflect.Modifier.isNative(it.modifiers) }
         assertTrue("RustCryptoCore must have at least 2 native methods", nativeMethods.size >= 2)
         val nativeNames = nativeMethods.map { it.name }.toSet()
+        assertTrue("Must have nativeDeriveMasterKey", nativeNames.contains("nativeDeriveMasterKey"))
         assertTrue("Must have nativeDeriveAuthHash", nativeNames.contains("nativeDeriveAuthHash"))
         assertTrue("Must have nativeDeriveKek", nativeNames.contains("nativeDeriveKek"))
     }
@@ -111,6 +112,21 @@ class CryptoEngineTest {
             // If we can't even find the class, that's a real failure
             fail("RustCryptoCore class should be accessible: ${e.message}")
         }
+    }
+
+    // ── NativeBridge helpers (new two-step flow) ──
+
+    private fun deriveMk(password: String, saltB64: String, iterations: Int, memory: Int, parallelism: Int): String =
+        NativeBridge.nativeDeriveMasterKey(password, saltB64, iterations, memory, parallelism)!!
+
+    private fun nativeAuthHash(password: String, saltB64: String, iterations: Int, memory: Int, parallelism: Int): String {
+        val mk = deriveMk(password, saltB64, iterations, memory, parallelism)
+        return NativeBridge.nativeDeriveAuthHash(mk)!!
+    }
+
+    private fun nativeKek(password: String, saltB64: String, iterations: Int, memory: Int, parallelism: Int): String {
+        val mk = deriveMk(password, saltB64, iterations, memory, parallelism)
+        return NativeBridge.nativeDeriveKek(mk)!!
     }
 
     private lateinit var engine: CryptoEngine
@@ -231,69 +247,69 @@ class CryptoEngineTest {
     @Test
     fun goldenVector_authHash_matchesRustAndWasm() {
         val expected = "g8BLWUGxvI3XdtW2Ig4k2QL2brmIBvGTlLJGIhHbnJU="
-        val got = NativeBridge.nativeDeriveAuthHash("correct horse battery staple", "auth-salt-fixed-string", 4, 65536, 4)!!
+        val got = nativeAuthHash("correct horse battery staple", android.util.Base64.encodeToString("auth-salt-fixed-string".toByteArray(), android.util.Base64.NO_WRAP), 4, 65536, 4)
         assertEquals("Android JNI auth_hash must match Rust/WASM golden vector", expected, got)
     }
 
     @Test
     fun goldenVector_kek_matchesRustAndWasm() {
         val expected = "504NmZdCQp2PNGAZA5gq3vh1rwcT/pVLXWHDcJlf18w="
-        val got = NativeBridge.nativeDeriveKek("correct horse battery staple", "MDEyMzQ1Njc4OWFiY2RlZg==", 4, 65536, 4)!!
+        val got = nativeKek("correct horse battery staple", "MDEyMzQ1Njc4OWFiY2RlZg==", 4, 65536, 4)
         assertEquals("Android JNI kek must match Rust/WASM golden vector", expected, got)
     }
 
     @Test
     fun goldenVector_authHash_worksWithFastParams() {
-        val got = NativeBridge.nativeDeriveAuthHash("correct horse battery staple", "auth-salt-fixed-string", 3, 8192, 1)
+        val got = nativeAuthHash("correct horse battery staple", android.util.Base64.encodeToString("auth-salt-fixed-string".toByteArray(), android.util.Base64.NO_WRAP), 3, 8192, 1)
         assertNotNull("auth hash with fast params must not be null", got)
         assertEquals("auth hash must be 44 chars (base64 of 32 bytes)", 44, got!!.length)
     }
 
     @Test
     fun goldenVector_kek_worksWithFastParams() {
-        val got = NativeBridge.nativeDeriveKek("correct horse battery staple", "MDEyMzQ1Njc4OWFiY2RlZg==", 3, 8192, 1)
+        val got = nativeKek("correct horse battery staple", "MDEyMzQ1Njc4OWFiY2RlZg==", 3, 8192, 1)
         assertNotNull("kek with fast params must not be null", got)
         assertEquals("kek base64 must be 44 chars (base64 of 32 bytes)", 44, got!!.length)
     }
 
     @Test
     fun deriveKek_producesDeterministicOutput() {
-        val kek1 = NativeBridge.nativeDeriveKek(TEST_PASSWORD, TEST_ENCRYPTION_SALT_BASE64, 3, 8192, 1)!!
-        val kek2 = NativeBridge.nativeDeriveKek(TEST_PASSWORD, TEST_ENCRYPTION_SALT_BASE64, 3, 8192, 1)!!
+        val kek1 = nativeKek(TEST_PASSWORD, TEST_ENCRYPTION_SALT_BASE64, 3, 8192, 1)
+        val kek2 = nativeKek(TEST_PASSWORD, TEST_ENCRYPTION_SALT_BASE64, 3, 8192, 1)
         assertEquals("KEK derivation must be deterministic", kek1, kek2)
     }
 
     @Test
     fun deriveKek_produces32ByteOutput() {
-        val kekBytes = Base64.getDecoder().decode(NativeBridge.nativeDeriveKek(TEST_PASSWORD, TEST_ENCRYPTION_SALT_BASE64, 3, 8192, 1)!!)
+        val kekBytes = Base64.getDecoder().decode(nativeKek(TEST_PASSWORD, TEST_ENCRYPTION_SALT_BASE64, 3, 8192, 1))
         assertEquals("KEK must be 32 bytes (256 bits)", 32, kekBytes.size)
     }
 
     @Test
     fun deriveKek_differentPasswordProducesDifferentOutput() {
-        val kek1 = NativeBridge.nativeDeriveKek(TEST_PASSWORD, TEST_ENCRYPTION_SALT_BASE64, 3, 8192, 1)!!
-        val kek2 = NativeBridge.nativeDeriveKek("DifferentPassword!", TEST_ENCRYPTION_SALT_BASE64, 3, 8192, 1)!!
+        val kek1 = nativeKek(TEST_PASSWORD, TEST_ENCRYPTION_SALT_BASE64, 3, 8192, 1)
+        val kek2 = nativeKek("DifferentPassword!", TEST_ENCRYPTION_SALT_BASE64, 3, 8192, 1)
         assertNotEquals("Different passwords must produce different KEKs", kek1, kek2)
     }
 
     @Test
     fun deriveKek_differentSaltProducesDifferentOutput() {
         val differentSalt = Base64.getEncoder().encodeToString(ByteArray(16) { it.toByte() })
-        val kek1 = NativeBridge.nativeDeriveKek(TEST_PASSWORD, TEST_ENCRYPTION_SALT_BASE64, 3, 8192, 1)!!
-        val kek2 = NativeBridge.nativeDeriveKek(TEST_PASSWORD, differentSalt, 3, 8192, 1)!!
+        val kek1 = nativeKek(TEST_PASSWORD, TEST_ENCRYPTION_SALT_BASE64, 3, 8192, 1)
+        val kek2 = nativeKek(TEST_PASSWORD, differentSalt, 3, 8192, 1)
         assertNotEquals("Different salts must produce different KEKs", kek1, kek2)
     }
 
     @Test
     fun kekAndVaultKey_areDifferentKeys() {
-        val kek = Base64.getDecoder().decode(NativeBridge.nativeDeriveKek(TEST_PASSWORD, TEST_ENCRYPTION_SALT_BASE64, 3, 8192, 1)!!)
+        val kek = Base64.getDecoder().decode(nativeKek(TEST_PASSWORD, TEST_ENCRYPTION_SALT_BASE64, 3, 8192, 1))
         val vaultKey = Base64.getDecoder().decode(TEST_VAULT_KEY_BASE64)
         assertFalse("KEK and vaultKey must be different values", kek.contentEquals(vaultKey))
     }
 
     @Test
     fun wrapVaultKey_producesOutputLongerThanInput() {
-        val kek = Base64.getDecoder().decode(NativeBridge.nativeDeriveKek(TEST_PASSWORD, TEST_ENCRYPTION_SALT_BASE64, 3, 8192, 1)!!)
+        val kek = Base64.getDecoder().decode(nativeKek(TEST_PASSWORD, TEST_ENCRYPTION_SALT_BASE64, 3, 8192, 1))
         val vaultKey = engine.generateVaultKey()
         val wrapped = engine.wrapVaultKeyWithKek(vaultKey, kek)
         val wrappedBytes = Base64.getDecoder().decode(wrapped)
@@ -302,7 +318,7 @@ class CryptoEngineTest {
 
     @Test
     fun wrapVaultKey_producesUniqueOutputEachTime() {
-        val kek = Base64.getDecoder().decode(NativeBridge.nativeDeriveKek(TEST_PASSWORD, TEST_ENCRYPTION_SALT_BASE64, 3, 8192, 1)!!)
+        val kek = Base64.getDecoder().decode(nativeKek(TEST_PASSWORD, TEST_ENCRYPTION_SALT_BASE64, 3, 8192, 1))
         val wrapped1 = engine.wrapVaultKeyWithKek(TEST_VAULT_KEY_BASE64, kek)
         val wrapped2 = engine.wrapVaultKeyWithKek(TEST_VAULT_KEY_BASE64, kek)
         assertNotEquals("Same inputs must produce different wrapped keys due to random IV", wrapped1, wrapped2)
@@ -310,7 +326,7 @@ class CryptoEngineTest {
 
     @Test
     fun unwrapVaultKey_roundTripsCorrectly() {
-        val kek = Base64.getDecoder().decode(NativeBridge.nativeDeriveKek(TEST_PASSWORD, TEST_ENCRYPTION_SALT_BASE64, 3, 8192, 1)!!)
+        val kek = Base64.getDecoder().decode(nativeKek(TEST_PASSWORD, TEST_ENCRYPTION_SALT_BASE64, 3, 8192, 1))
         val vaultKey = engine.generateVaultKey()
         val wrapped = engine.wrapVaultKeyWithKek(vaultKey, kek)
         val unwrapped = engine.unwrapVaultKeyWithKek(wrapped, kek)
@@ -319,8 +335,8 @@ class CryptoEngineTest {
 
     @Test
     fun unwrapVaultKey_withWrongKekThrows() {
-        val correctKek = Base64.getDecoder().decode(NativeBridge.nativeDeriveKek(TEST_PASSWORD, TEST_ENCRYPTION_SALT_BASE64, 3, 8192, 1)!!)
-        val wrongKek = Base64.getDecoder().decode(NativeBridge.nativeDeriveKek("WrongPassword!", TEST_ENCRYPTION_SALT_BASE64, 3, 8192, 1)!!)
+        val correctKek = Base64.getDecoder().decode(nativeKek(TEST_PASSWORD, TEST_ENCRYPTION_SALT_BASE64, 3, 8192, 1))
+        val wrongKek = Base64.getDecoder().decode(nativeKek("WrongPassword!", TEST_ENCRYPTION_SALT_BASE64, 3, 8192, 1))
         val wrapped = engine.wrapVaultKeyWithKek(TEST_VAULT_KEY_BASE64, correctKek)
         try {
             engine.unwrapVaultKeyWithKek(wrapped, wrongKek)
@@ -335,7 +351,7 @@ class CryptoEngineTest {
 
     @Test
     fun unwrapVaultKey_withTamperedDataThrows() {
-        val kek = Base64.getDecoder().decode(NativeBridge.nativeDeriveKek(TEST_PASSWORD, TEST_ENCRYPTION_SALT_BASE64, 3, 8192, 1)!!)
+        val kek = Base64.getDecoder().decode(nativeKek(TEST_PASSWORD, TEST_ENCRYPTION_SALT_BASE64, 3, 8192, 1))
         val wrapped = engine.wrapVaultKeyWithKek(TEST_VAULT_KEY_BASE64, kek)
         val wrappedBytes = Base64.getDecoder().decode(wrapped)
         wrappedBytes[12] = (wrappedBytes[12].toInt() xor 0xFF).toByte()
@@ -355,7 +371,7 @@ class CryptoEngineTest {
     fun fullRegistrationFlow() {
         val encryptionSalt = TEST_ENCRYPTION_SALT_BASE64
         val vaultKey = engine.generateVaultKey()
-        val kek = Base64.getDecoder().decode(NativeBridge.nativeDeriveKek(TEST_PASSWORD, encryptionSalt, 3, 8192, 1)!!)
+        val kek = Base64.getDecoder().decode(nativeKek(TEST_PASSWORD, encryptionSalt, 3, 8192, 1))
         val wrappedVaultKey = engine.wrapVaultKeyWithKek(vaultKey, kek)
         val unwrappedVaultKey = engine.unwrapVaultKeyWithKek(wrappedVaultKey, kek)
         assertEquals("Must be able to recover vault key from wrapped form", vaultKey, unwrappedVaultKey)
@@ -364,8 +380,8 @@ class CryptoEngineTest {
     @Test
     fun passwordChangeFlow() {
         val encryptionSalt = TEST_ENCRYPTION_SALT_BASE64
-        val oldKek = Base64.getDecoder().decode(NativeBridge.nativeDeriveKek("OldPassword123!", encryptionSalt, 3, 8192, 1)!!)
-        val newKek = Base64.getDecoder().decode(NativeBridge.nativeDeriveKek("NewPassword456!", encryptionSalt, 3, 8192, 1)!!)
+        val oldKek = Base64.getDecoder().decode(nativeKek("OldPassword123!", encryptionSalt, 3, 8192, 1))
+        val newKek = Base64.getDecoder().decode(nativeKek("NewPassword456!", encryptionSalt, 3, 8192, 1))
         val vaultKey = engine.generateVaultKey()
         val wrappedWithOld = engine.wrapVaultKeyWithKek(vaultKey, oldKek)
         val unwrappedVaultKey = engine.unwrapVaultKeyWithKek(wrappedWithOld, oldKek)
