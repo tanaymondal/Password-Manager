@@ -29,6 +29,9 @@ actual class BiometricStorage actual constructor(context: PlatformContext) {
     private val prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     private val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
 
+    // Cached cipher from successful authentication — used by store/retrieve
+    private var authorizedCipher: Cipher? = null
+
     actual fun isAvailable(): Boolean {
         return BiometricManager.from(appContext).canAuthenticate(
             BiometricManager.Authenticators.BIOMETRIC_STRONG
@@ -72,13 +75,16 @@ actual class BiometricStorage actual constructor(context: PlatformContext) {
         }
         val executor = ContextCompat.getMainExecutor(appContext)
 
-        val cipher = getDecryptionCipher() ?: run {
+        // Try decryption first (existing vault key), fall back to encryption (new enroll)
+        val cipher = getDecryptionCipher() ?: getEncryptionCipher() ?: run {
             onError("Failed to prepare crypto")
             return
         }
+        authorizedCipher = cipher
 
         val callback = object : BiometricPrompt.AuthenticationCallback() {
             override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                authorizedCipher = result.cryptoObject?.cipher ?: cipher
                 resetFailureCount()
                 onSuccess()
             }
@@ -113,13 +119,14 @@ actual class BiometricStorage actual constructor(context: PlatformContext) {
 
     actual fun storeVaultKey(vaultKey: String): Boolean {
         return try {
-            val cipher = getEncryptionCipher() ?: return false
+            val cipher = authorizedCipher ?: return false
             val encrypted = cipher.doFinal(vaultKey.toByteArray(Charsets.UTF_8))
             val iv = cipher.iv
             prefs.edit()
                 .putString(KEY_IV, Base64.encodeToString(iv, Base64.NO_WRAP))
                 .putString(KEY_ENCRYPTED_DATA, Base64.encodeToString(encrypted, Base64.NO_WRAP))
                 .apply()
+            authorizedCipher = null
             true
         } catch (e: Exception) {
             false
@@ -128,10 +135,11 @@ actual class BiometricStorage actual constructor(context: PlatformContext) {
 
     actual fun retrieveVaultKey(): String? {
         return try {
-            val cipher = getDecryptionCipher() ?: return null
+            val cipher = authorizedCipher ?: return null
             val encryptedData = prefs.getString(KEY_ENCRYPTED_DATA, null) ?: return null
             val decrypted = cipher.doFinal(Base64.decode(encryptedData, Base64.NO_WRAP))
             resetFailureCount()
+            authorizedCipher = null
             String(decrypted, Charsets.UTF_8)
         } catch (e: Exception) {
             null
@@ -147,6 +155,7 @@ actual class BiometricStorage actual constructor(context: PlatformContext) {
         if (keyStore.containsAlias(KEY_ALIAS)) {
             keyStore.deleteEntry(KEY_ALIAS)
         }
+        authorizedCipher = null
     }
 
     private fun getOrCreateKey(): SecretKey {

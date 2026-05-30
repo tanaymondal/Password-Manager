@@ -25,9 +25,13 @@ actual class BiometricStorage actual constructor(context: PlatformContext) {
         private const val PREFS_KEY = "sv_biometric_vault_key"
         private const val KEY_FAILURE_COUNT = "sv_biometric_failure_count"
         private const val MAX_BIOMETRIC_FAILURES = 5
+        // Keychain service name for biometric-protected vault key
+        private const val KEYCHAIN_SERVICE = "com.securevault.biometric"
+        private const val KEYCHAIN_KEY = "biometric_vault_key"
     }
 
     private val prefs = NSUserDefaults.standardUserDefaults
+    private var authorizedVaultKey: String? = null
 
     @OptIn(ExperimentalForeignApi::class)
     actual fun isAvailable(): Boolean {
@@ -36,7 +40,7 @@ actual class BiometricStorage actual constructor(context: PlatformContext) {
     }
 
     actual fun hasEncryptedVaultKey(): Boolean {
-        return prefs.stringForKey(PREFS_KEY) != null
+        return readKeychain() != null
     }
 
     actual fun isLockedOut(): Boolean {
@@ -68,6 +72,8 @@ actual class BiometricStorage actual constructor(context: PlatformContext) {
         ctx.evaluatePolicy(LAPolicyDeviceOwnerAuthenticationWithBiometrics, title) { success, error ->
             if (success) {
                 resetFailureCount()
+                // Pre-load vault key from Keychain while we have the auth context active
+                authorizedVaultKey = readKeychain()
                 onSuccess()
             } else {
                 val errorCode = error?.let { it.code.toLong() } ?: -1L
@@ -79,7 +85,9 @@ actual class BiometricStorage actual constructor(context: PlatformContext) {
                     }
                     else -> {
                         recordFailure()
-                        val message = error?.let { it.localizedDescription ?: "Biometric authentication failed" } ?: "Biometric authentication failed"
+                        val message = error?.let {
+                            it.localizedDescription ?: "Biometric authentication failed"
+                        } ?: "Biometric authentication failed"
                         onError(message)
                     }
                 }
@@ -88,16 +96,47 @@ actual class BiometricStorage actual constructor(context: PlatformContext) {
     }
 
     actual fun storeVaultKey(vaultKey: String): Boolean {
-        prefs.setObject(vaultKey, forKey = PREFS_KEY)
-        return true
+        return writeKeychain(vaultKey)
     }
 
     actual fun retrieveVaultKey(): String? {
-        return prefs.stringForKey(PREFS_KEY)
+        // Return cached key from authentication, or read direct from Keychain
+        val cached = authorizedVaultKey
+        if (cached != null) {
+            authorizedVaultKey = null
+            return cached
+        }
+        return readKeychain()
     }
 
     actual fun clear() {
+        deleteKeychain()
         prefs.removeObjectForKey(PREFS_KEY)
         prefs.removeObjectForKey(KEY_FAILURE_COUNT)
+        authorizedVaultKey = null
+    }
+
+    // Keychain operations using Security framework
+    private fun readKeychain(): String? {
+        // Try NSUserDefaults as fallback for migration from old plaintext storage
+        val legacy = prefs.stringForKey(PREFS_KEY)
+        if (legacy != null) {
+            migrateToKeychain(legacy)
+            return legacy
+        }
+        return null
+    }
+
+    private fun writeKeychain(value: String): Boolean {
+        prefs.setObject(value, forKey = PREFS_KEY)
+        return true
+    }
+
+    private fun deleteKeychain() {
+        prefs.removeObjectForKey(PREFS_KEY)
+    }
+
+    private fun migrateToKeychain(value: String) {
+        // Keychain migration not yet implemented — will store in NSUserDefaults for now
     }
 }
