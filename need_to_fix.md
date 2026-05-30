@@ -226,14 +226,14 @@ While individual DTOs have `@Size` constraints, there is no `server.tomcat.max-h
 
 ---
 
-### 2.42 Password change resets KDF to defaults ❌ 💡NEW
+### 2.42 Password change resets KDF to defaults ✅
 [source: 2026-05-30 audit]
 
 `AuthService.changePassword()` unconditionally sets `kdfIterations`, `kdfMemory`, and `kdfParallelism` to `EncryptionConstants.DEFAULT_*` values (4, 65536, 4). If a user previously upgraded their KDF parameters via `upgradeKdf`, changing their password silently downgrades them to weaker defaults.
 
 **File**: `AuthService.java:408-410`
 
-**Status**: ❌ Open.
+**Status**: ✅ Fixed — now preserves existing KDF params if already set.
 
 ---
 
@@ -1258,9 +1258,9 @@ Many `Result.Error(it.message ...)` paths surface backend error messages in mobi
 |----------|-------|----------|-------------|
 | Phase 0 — Stop the bleeding | 9 | 9 | 0 |
 | Phase 1 — Critical hardening | 27 | 21 | 6 |
-| Phase 2 — Important hardening | 46 | 26 | 20 |
+| Phase 2 — Important hardening | 46 | 27 | 19 |
 | Phase 3 — Defense in depth | 32 | 23 | 9 |
-| **Total** | **114** | **79** | **35** |
+| **Total** | **114** | **80** | **34** |
 
 > **Note**: Item 3.15 (logout without auth) is listed in the Fixed Issues section but
 > remains ❌ Open. The counts above reflect actual status.

@@ -405,9 +405,11 @@ public class AuthService {
         user.setEncryptionSalt(newEncryptionSalt);
         user.setWrappedVaultKey(newWrappedVaultKey);
         user.setEncryptionVersion(com.securevault.config.EncryptionConstants.CURRENT_ENCRYPTION_VERSION);
-        user.setKdfIterations(com.securevault.config.EncryptionConstants.DEFAULT_KDF_ITERATIONS);
-        user.setKdfMemory(com.securevault.config.EncryptionConstants.DEFAULT_KDF_MEMORY);
-        user.setKdfParallelism(com.securevault.config.EncryptionConstants.DEFAULT_KDF_PARALLELISM);
+        if (user.getKdfIterations() == null) {
+            user.setKdfIterations(com.securevault.config.EncryptionConstants.DEFAULT_KDF_ITERATIONS);
+            user.setKdfMemory(com.securevault.config.EncryptionConstants.DEFAULT_KDF_MEMORY);
+            user.setKdfParallelism(com.securevault.config.EncryptionConstants.DEFAULT_KDF_PARALLELISM);
+        }
         user.setPasswordUpdatedAt(LocalDateTime.now());
         user.setFailedLoginAttempts(0);
         user.setLockedUntil(null);
