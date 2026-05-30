@@ -9,6 +9,8 @@ object SessionManager {
     fun setRefreshToken(value: String) { storage.putString("sv_rt", value) }
     fun getEncryptionSalt(): String = storage.getString("sv_es", "")
     fun setEncryptionSalt(value: String) { storage.putString("sv_es", value) }
+    fun getAuthSalt(): String = storage.getString("sv_as", "")
+    fun setAuthSalt(value: String) { storage.putString("sv_as", value) }
     fun getUserId(): String = storage.getString("sv_uid", "")
     fun setUserId(value: String) { storage.putString("sv_uid", value) }
     fun getUserEmail(): String = storage.getString("sv_em", "")

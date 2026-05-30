@@ -7,6 +7,7 @@ import com.securevault.mobile.data.model.LoginRequest
 import com.securevault.mobile.data.model.PreLoginRequest
 import com.securevault.mobile.data.model.RefreshTokenRequest
 import com.securevault.mobile.data.model.RegisterRequest
+import com.securevault.mobile.data.model.UpgradeKdfRequest
 import com.securevault.mobile.domain.crypto.CryptoEngine
 import com.securevault.mobile.domain.model.AuthState
 import com.securevault.mobile.domain.model.Result
@@ -58,6 +59,7 @@ class AuthRepositoryImpl(
                         return@fold Result.Error("Incomplete registration response from server")
                     }
                     vaultKeyManager.setCachedVaultKey(vaultKey)
+                    SessionManager.setAuthSalt(authSalt)
                     saveSession(
                         accessToken = accessToken,
                         refreshToken = refreshToken,
@@ -92,6 +94,7 @@ class AuthRepositoryImpl(
             val kdfIter = pre?.kdfIterations ?: defaultCfg.kdfIterations
             val kdfMem = pre?.kdfMemory ?: defaultCfg.kdfMemory
             val kdfPar = pre?.kdfParallelism ?: defaultCfg.kdfParallelism
+            SessionManager.setAuthSalt(authSalt)
             SessionManager.setKdfIterations(kdfIter)
             SessionManager.setKdfMemory(kdfMem)
             SessionManager.setKdfParallelism(kdfPar)
@@ -235,11 +238,40 @@ class AuthRepositoryImpl(
                 return Result.Error("Vault key material not available. Please login again.")
             }
 
-            val defaultCfg = KdfConfigManager.getCachedOrDefault()
-            val vaultKey = deriveVaultKey(password, encryptionSalt, wrappedVaultKey, defaultCfg.kdfIterations, SessionManager.getKdfMemory(), defaultCfg.kdfParallelism)
+            val cfg = KdfConfigManager.getCachedOrDefault()
+            val currentMemory = SessionManager.getKdfMemory()
+            val vaultKey = deriveVaultKey(password, encryptionSalt, wrappedVaultKey, cfg.kdfIterations, currentMemory, cfg.kdfParallelism)
             if (vaultKey != null) {
                 vaultKeyManager.setCachedVaultKey(vaultKey)
             }
+
+            // Background KDF parameter upgrade
+            if (currentMemory < cfg.kdfMemory) {
+                try {
+                    val authSalt = SessionManager.getAuthSalt()
+                    val newAuthHash = cryptoEngine.generateAuthHash(
+                        password, authSalt, cfg.kdfIterations, cfg.kdfMemory, cfg.kdfParallelism
+                    )
+                    val newKek = cryptoEngine.deriveKek(
+                        password, encryptionSalt, cfg.kdfIterations, cfg.kdfMemory, cfg.kdfParallelism
+                    )
+                    val newWrapped = cryptoEngine.wrapVaultKey(vaultKey ?: return@let, newKek)
+                    api.upgradeKdf(UpgradeKdfRequest(
+                        authHash = newAuthHash,
+                        wrappedVaultKey = newWrapped,
+                        kdfIterations = cfg.kdfIterations,
+                        kdfMemory = cfg.kdfMemory,
+                        kdfParallelism = cfg.kdfParallelism
+                    )).onSuccess {
+                        SessionManager.setKdfIterations(cfg.kdfIterations)
+                        SessionManager.setKdfMemory(cfg.kdfMemory)
+                        SessionManager.setKdfParallelism(cfg.kdfParallelism)
+                    }
+                } catch (_: Exception) {
+                    // Background upgrade failure is non-fatal
+                }
+            }
+
             Result.Success(Unit)
         } catch (e: Exception) {
             Result.Error(ErrorMapper.map(e.message, "Failed to unlock vault"))

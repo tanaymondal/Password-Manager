@@ -90,3 +90,12 @@ data class KdfConfigResponse(
     @SerialName("kdfParallelism") val kdfParallelism: Int,
     @SerialName("encryptionVersion") val encryptionVersion: Int
 )
+
+@Serializable
+data class UpgradeKdfRequest(
+    @SerialName("authHash") val authHash: String,
+    @SerialName("wrappedVaultKey") val wrappedVaultKey: String,
+    @SerialName("kdfIterations") val kdfIterations: Int,
+    @SerialName("kdfMemory") val kdfMemory: Int,
+    @SerialName("kdfParallelism") val kdfParallelism: Int
+)

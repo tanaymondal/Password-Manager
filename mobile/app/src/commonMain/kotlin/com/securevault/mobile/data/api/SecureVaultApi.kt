@@ -258,6 +258,17 @@ class SecureVaultApi(
         apiResponse.data ?: throw Exception(apiResponse.message ?: "Failed to fetch KDF config")
     }
 
+    suspend fun upgradeKdf(request: UpgradeKdfRequest): Result<Unit> =
+        authCallVoid { token ->
+            authRequest {
+                httpClient.post("$baseUrl/api/v1/auth/upgrade-kdf") {
+                    bearerAuth(token)
+                    contentType(ContentType.Application.Json)
+                    setBody(request)
+                }
+            }
+        }
+
     private suspend fun <T> authCall(block: suspend (accessToken: String) -> T): Result<T> = runCatching {
         val token = getAccessToken()
         if (token.isEmpty()) throw Exception("Not authenticated")
