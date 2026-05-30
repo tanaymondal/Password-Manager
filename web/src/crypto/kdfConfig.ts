@@ -24,11 +24,11 @@ export async function getKdfConfig(): Promise<KdfConfig> {
 
   fetchPromise = (async () => {
     try {
-      const res = await apiClient<{ data: KdfConfig }>('/auth/kdf-config', {
+      const res = await apiClient<KdfConfig>('/auth/kdf-config', {
         method: 'GET',
       })
-      cachedConfig = res.data
-      return res.data
+      cachedConfig = res
+      return res
     } catch {
       console.warn('Failed to fetch KDF config from server, using fallback')
       cachedConfig = FALLBACK
