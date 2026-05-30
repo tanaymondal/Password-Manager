@@ -52,6 +52,7 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> {
                     auth.requestMatchers("/api/v1/auth/prelogin").permitAll();
+                    auth.requestMatchers("/api/v1/auth/kdf-config").permitAll();
                     auth.requestMatchers("/api/v1/auth/register").permitAll();
                     auth.requestMatchers("/api/v1/auth/login").permitAll();
                     auth.requestMatchers("/api/v1/auth/verify-2fa").permitAll();
