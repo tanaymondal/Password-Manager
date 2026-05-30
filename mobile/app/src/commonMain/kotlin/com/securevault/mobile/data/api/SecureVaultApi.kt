@@ -251,6 +251,13 @@ class SecureVaultApi(
         Json.decodeFromString(body)
     }
 
+    suspend fun kdfConfig(): Result<KdfConfigResponse> = runCatching {
+        val response: HttpResponse = httpClient.get("$baseUrl/api/v1/auth/kdf-config")
+        val body = response.bodyAsText()
+        val apiResponse = Json.decodeFromString<ApiResponse<KdfConfigResponse>>(body)
+        apiResponse.data ?: throw Exception(apiResponse.message ?: "Failed to fetch KDF config")
+    }
+
     private suspend fun <T> authCall(block: suspend (accessToken: String) -> T): Result<T> = runCatching {
         val token = getAccessToken()
         if (token.isEmpty()) throw Exception("Not authenticated")

@@ -82,3 +82,11 @@ data class PreLoginResponse(
     @SerialName("kdfMemory") val kdfMemory: Int? = null,
     @SerialName("kdfParallelism") val kdfParallelism: Int? = null
 )
+
+@Serializable
+data class KdfConfigResponse(
+    @SerialName("kdfIterations") val kdfIterations: Int,
+    @SerialName("kdfMemory") val kdfMemory: Int,
+    @SerialName("kdfParallelism") val kdfParallelism: Int,
+    @SerialName("encryptionVersion") val encryptionVersion: Int
+)
