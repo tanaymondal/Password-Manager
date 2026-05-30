@@ -202,13 +202,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const authSalt = generateSalt()
     const encryptionSalt = generateSalt()
     const vaultKey = await generateVaultKey()
-    const authHash = await derivePasswordHash(password, authSalt)
-    const kek = await deriveKek(password, encryptionSalt)
+    const cfg = await getKdfConfig()
+    const authHash = await derivePasswordHash(password, authSalt, cfg.kdfIterations, cfg.kdfMemory, cfg.kdfParallelism)
+    const kek = await deriveKek(password, encryptionSalt, cfg.kdfIterations, cfg.kdfMemory, cfg.kdfParallelism)
     const wrappedVaultKey = await wrapVaultKey(kek, vaultKey)
     setAutoUnlockVaultKey(vaultKey)
-
-    // Use the KDF params that were used for derivation (fetched from server)
-    const { kdfIterations, kdfMemory, kdfParallelism } = await getKdfConfig()
 
     const res = await apiRegister({
       email,
@@ -217,9 +215,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       encryptionSalt,
       wrappedVaultKey,
       encryptionVersion: 2,
-      kdfIterations,
-      kdfMemory,
-      kdfParallelism,
+      kdfIterations: cfg.kdfIterations,
+      kdfMemory: cfg.kdfMemory,
+      kdfParallelism: cfg.kdfParallelism,
       deviceId: getDeviceId(),
     })
     setTokens(res.accessToken)

@@ -216,10 +216,13 @@ public class AuthController {
     @DeleteMapping("/account")
     public ResponseEntity<ApiResponse<String>> deleteAccount(
             @AuthenticationPrincipal UserDetails userDetails,
-            @Valid @RequestBody DeleteAccountRequest request) {
+            @Valid @RequestBody DeleteAccountRequest request,
+            HttpServletRequest httpRequest) {
         UUID userId = UserUtils.getUserId(userDetails);
         log.info("Account deletion request for user: {}", userId);
         authService.deleteAccount(userId, request.getCurrentAuthHash());
+        auditService.logAction(userId, "ACCOUNT_DELETED", clientIpResolver.getClientIp(httpRequest),
+                httpRequest.getHeader("User-Agent"), null);
         log.info("Account deleted: {}", userId);
         return ResponseEntity.ok(ApiResponse.success("Account deleted successfully", ""));
     }
@@ -228,10 +231,14 @@ public class AuthController {
     @PostMapping("/upgrade-kdf")
     public ResponseEntity<ApiResponse<String>> upgradeKdf(
             @AuthenticationPrincipal UserDetails userDetails,
-            @Valid @RequestBody com.securevault.dto.UpgradeKdfRequest request) {
+            @Valid @RequestBody com.securevault.dto.UpgradeKdfRequest request,
+            HttpServletRequest httpRequest) {
         UUID userId = UserUtils.getUserId(userDetails);
         log.info("KDF parameter upgrade request for user: {}", userId);
         authService.upgradeKdf(userId, request);
+        auditService.logAction(userId, "KDF_UPGRADE", clientIpResolver.getClientIp(httpRequest),
+                httpRequest.getHeader("User-Agent"), "iterations=" + request.getKdfIterations()
+                + ",memory=" + request.getKdfMemory() + ",parallelism=" + request.getKdfParallelism());
         return ResponseEntity.ok(ApiResponse.success("KDF parameters upgraded successfully", ""));
     }
 

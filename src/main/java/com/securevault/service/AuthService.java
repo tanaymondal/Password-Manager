@@ -96,6 +96,16 @@ public class AuthService {
             throw new RateLimitExceededException("Too many registration attempts. Please try again later.");
         }
 
+        String emailRateLimitKey = "register:email:" + request.getEmail().toLowerCase().trim();
+        Long emailCount = redisTemplate.opsForValue().increment(emailRateLimitKey);
+        if (emailCount != null && emailCount == 1) {
+            redisTemplate.expire(emailRateLimitKey, 3600, java.util.concurrent.TimeUnit.SECONDS);
+        }
+        if (emailCount != null && emailCount > 3) {
+            log.warn("Register rate limit exceeded for email: {}", request.getEmail());
+            throw new RateLimitExceededException("Too many registration attempts. Please try again later.");
+        }
+
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new IllegalArgumentException("An account with this email already exists. Please log in instead.");
         }

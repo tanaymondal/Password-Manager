@@ -31,8 +31,11 @@ public class RateLimitingFilter implements Filter {
         "/api/v1/auth/kdf-config", AUTH_LIMIT,
         "/api/v1/auth/verify-2fa", AUTH_LIMIT,
         "/api/v1/auth/refresh", AUTH_LIMIT,
+        "/api/v1/auth/sudo", STRICT_LIMIT,
+        "/api/v1/auth/logout", STRICT_LIMIT,
         "/api/v1/auth/change-password", STRICT_LIMIT,
-        "/api/v1/auth/upgrade-kdf", STRICT_LIMIT
+        "/api/v1/auth/upgrade-kdf", STRICT_LIMIT,
+        "/api/v1/audit", AUTH_LIMIT
     );
 
     private final StringRedisTemplate redisTemplate;
