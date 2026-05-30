@@ -26,7 +26,7 @@ class CryptoEngine(
 
     private fun deriveKek(): ByteArray = deriveKekForPassword(getPassword(), getEncryptionSalt())
 
-    fun deriveKekForPassword(password: String, encryptionSalt: String, iterations: Int = 4, memory: Int = 65536, parallelism: Int = 4): ByteArray {
+    fun deriveKekForPassword(password: String, encryptionSalt: String, iterations: Int = 3, memory: Int = 98304, parallelism: Int = 4): ByteArray {
         if (encryptionSalt.isEmpty()) throw IllegalStateException("Encryption salt not available")
         return RustCryptoCore.deriveKek(password, encryptionSalt, iterations, memory, parallelism)
     }

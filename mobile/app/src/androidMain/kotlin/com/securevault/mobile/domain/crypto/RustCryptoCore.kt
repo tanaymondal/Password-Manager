@@ -35,8 +35,8 @@ object RustCryptoCore {
     fun deriveAuthHash(
         password: String,
         salt: String,
-        iterations: Int = 4,
-        memory: Int = 65536,
+        iterations: Int = 3,
+        memory: Int = 98304,
         parallelism: Int = 4
     ): String {
         ensureLoaded()
@@ -47,8 +47,8 @@ object RustCryptoCore {
     fun deriveKek(
         password: String,
         saltB64: String,
-        iterations: Int = 4,
-        memory: Int = 65536,
+        iterations: Int = 3,
+        memory: Int = 98304,
         parallelism: Int = 4
     ): ByteArray {
         ensureLoaded()

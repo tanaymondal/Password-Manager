@@ -281,7 +281,7 @@ class AuthRepositoryImpl(
     }
 
     private fun deriveVaultKey(password: String, encryptionSalt: String, wrappedVaultKey: String?,
-                               iterations: Int = 4, memory: Int = 65536, parallelism: Int = 4): String? {
+                               iterations: Int = 3, memory: Int = 98304, parallelism: Int = 4): String? {
         if (wrappedVaultKey.isNullOrEmpty()) return null
         val kek = cryptoEngine.deriveKek(password, encryptionSalt, iterations, memory, parallelism)
         return cryptoEngine.unwrapVaultKey(wrappedVaultKey, kek)
