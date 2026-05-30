@@ -62,6 +62,13 @@ class RegisterViewModel(
             return
         }
 
+        // Check password doesn't contain the email's local part
+        val emailLocalPart = email.substringBefore("@").lowercase()
+        if (password.lowercase().contains(emailLocalPart)) {
+            setState { copy(error = "Password cannot be based on your email address") }
+            return
+        }
+
         if (password != confirmPassword) {
             setState { copy(error = "Passwords do not match") }
             return

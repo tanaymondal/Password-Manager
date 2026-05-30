@@ -196,6 +196,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const register = useCallback(async (email: string, password: string) => {
+    if (password.toLowerCase().includes(email.toLowerCase().split('@')[0])) {
+      throw new Error('Password cannot be based on your email address.')
+    }
     if (await checkBreach(password)) {
       throw new Error('This password has been exposed in a data breach. Please choose a different password.')
     }

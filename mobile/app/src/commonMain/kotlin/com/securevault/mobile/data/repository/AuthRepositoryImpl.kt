@@ -30,6 +30,11 @@ class AuthRepositoryImpl(
 
     override suspend fun register(email: String, password: String): Result<AuthState> {
         return try {
+            val emailLocalPart = email.substringBefore("@").lowercase()
+            if (password.lowercase().contains(emailLocalPart)) {
+                return Result.Error("Password cannot be based on your email address")
+            }
+
             val cfg = KdfConfigManager.getConfig(api)
 
             if (BreachChecker.checkBreach(password, cryptoEngine)) {
