@@ -8,8 +8,8 @@ services:
     build:
       context: ./web
       dockerfile: Dockerfile
-    expose:
-      - "80"
+    ports:
+      - "8081:80"
     restart: unless-stopped
     depends_on:
       app:
