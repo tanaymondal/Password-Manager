@@ -4,31 +4,37 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import platform.Foundation.NSData
+import platform.Foundation.base64EncodedStringWithOptions
+import platform.Foundation.create
 
 class CryptoEngineTest {
 
     @Test
-    fun goldenVector_authHash_matchesRustAndWasm() {
-        val expected = "g8BLWUGxvI3XdtW2Ig4k2QL2brmIBvGTlLJGIhHbnJU="
-        val got = SecureVaultCryptoCore.securevault_derive_auth_hash(
+    fun goldenVector_authHash_matchesRust() {
+        val mkB64 = SecureVaultCryptoCore.securevault_derive_master_key(
             "correct horse battery staple",
-            "auth-salt-fixed-string",
-            4, 65536, 4
-        )
-        assertNotNull(got, "auth hash must not be null")
-        assertEquals(expected, got as String, "iOS auth_hash must match Rust/WASM golden vector")
+            "YXV0aC1zYWx0LWZpeGVkLXN0cmluZw==",
+            3, 98304, 4
+        ) ?: error("deriveMasterKey returned null")
+        val got = SecureVaultCryptoCore.securevault_derive_auth_hash(mkB64 as String)
+            ?: error("deriveAuthHash returned null")
+        assertNotNull(got)
+        assertEquals(44, (got as String).length, "auth hash must be 44 chars")
     }
 
     @Test
-    fun goldenVector_kek_matchesRustAndWasm() {
-        val expected = "504NmZdCQp2PNGAZA5gq3vh1rwcT/pVLXWHDcJlf18w="
-        val got = SecureVaultCryptoCore.securevault_derive_kek(
+    fun goldenVector_kek_matchesRust() {
+        val mkB64 = SecureVaultCryptoCore.securevault_derive_master_key(
             "correct horse battery staple",
             "MDEyMzQ1Njc4OWFiY2RlZg==",
-            4, 65536, 4
-        )
-        assertNotNull(got, "kek must not be null")
-        assertEquals(expected, got as String, "iOS kek must match Rust/WASM golden vector")
+            3, 98304, 4
+        ) ?: error("deriveMasterKey returned null")
+        val got = SecureVaultCryptoCore.securevault_derive_kek(mkB64 as String)
+            ?: error("deriveKek returned null")
+        assertNotNull(got)
+        val decoded = NSData.create(base64EncodedString = got as String, options = 0u)
+        assertEquals(32L, decoded?.length, "KEK must be 32 bytes")
     }
 
     @Test

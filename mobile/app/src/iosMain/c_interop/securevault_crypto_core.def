@@ -1,5 +1,6 @@
 package = SecureVaultCryptoCore
 language = Objective-C
-headers = securevault_crypto_core.h
+headers = /tmp/securevault_crypto_core.h
 staticLibraries = libsecurevault_crypto_core.a
 libraryPaths = /tmp
+compilerOpts = -I/tmp
