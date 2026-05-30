@@ -497,7 +497,16 @@ Bitwarden supports rotating the vault encryption key independently of the master
 
 ---
 
-### 4.23 iOS autofill (Credential Provider) ❌
+### 4.23 Account recovery codes ❌
+**Why**: No 2FA recovery mechanism. If user loses authenticator device, they're locked out permanently.
+
+**Implementation**: Generate 10 single-use recovery codes at 2FA enrollment. Store as SHA-256 hashes in DB. One-time use per code, invalidate after all used. Display codes once during setup.
+
+**Status**: ❌ Open.
+
+---
+
+### 4.24 iOS autofill (Credential Provider) ❌
 **Why**: No autofill capability on iOS. Users must manually copy/paste passwords.
 
 **Implementation**: iOS Credential Provider extension using KMP shared code for crypto operations.
@@ -506,7 +515,7 @@ Bitwarden supports rotating the vault encryption key independently of the master
 
 ---
 
-### 4.24 Staged deploys (blue/green or canary) ❌
+### 4.25 Staged deploys (blue/green or canary) ❌
 **Why**: Every push to main immediately deploys to production. No rollout control.
 
 **Implementation**: GitHub Actions deployment workflow with manual approval gate. Blue/green strategy for database-compatible changes.
@@ -1699,10 +1708,10 @@ Many `Result.Error(it.message ...)` paths surface backend error messages in mobi
 | Phase 1 — Critical hardening | 27 | 21 | 6 |
 | Phase 2 — Important hardening | 46 | 28 | 18 |
 | Phase 3 — Defense in depth | 33 | 23 | 10 |
-| Phase 4 — Product security | 24 | 0 | 24 |
+| Phase 4 — Product security | 25 | 0 | 25 |
 | Phase 5 — Infrastructure & Operations | 9 | 0 | 9 |
 | Phase 6 — Tech Debt | 19 | 0 | 19 |
-| **Total** | **167** | **81** | **86** |
+| **Total** | **168** | **81** | **87** |
 
 > **Note**: Item 3.15 (logout without auth) is listed in the Fixed Issues section but
 > remains ❌ Open. The counts above reflect actual status.
