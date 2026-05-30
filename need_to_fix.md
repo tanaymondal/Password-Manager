@@ -295,6 +295,127 @@ Bitwarden supports rotating the vault encryption key independently of the master
 
 **Status**: ❌ Open (future roadmap).
 
+---
+
+## Phase 4 — Product security (recommended improvements)
+
+### 4.1 Account fingerprint phrase ❌ 💡NEW
+**Why**: Users can't verify they're talking to the authentic server. A compromised server could swap wrapped vault keys silently. Derive a fingerprint phrase from the user's public key (e.g. "purple-elephant-sunset") and display during account setup + settings.
+
+**Implementation**: Add RSA key pair generation on registration. Derive fingerprint from public key hash. Display in account settings. Bitwarden and 1Password both have this.
+
+**Status**: ❌ Open.
+
+---
+
+### 4.2 Master password breach check on registration (mobile) ❌ 💡NEW
+**Why**: Client-side HIBP check exists on web but not on mobile. Users register with compromised passwords.
+
+**Implementation**: Add k-anonymity HIBP check to mobile registration flow. Block if password appears in known breaches.
+
+**Status**: ❌ Open.
+
+---
+
+### 4.3 WebAuthn / Passkey 2FA ❌ 💡NEW
+**Why**: TOTP is phishable. FIDO2 WebAuthn (YubiKey, platform passkeys) is phishing-resistant and increasingly required by enterprises.
+
+**Implementation**: Add FIDO2 WebAuthn as a 2FA method alongside TOTP. Store credential IDs per user. Verify with attestation.
+
+**Status**: ❌ Open.
+
+---
+
+### 4.4 Master password re-prompt for sensitive operations ❌ 💡NEW
+**Why**: Once vault is unlocked, all data is accessible until lock. An attacker with temporary physical access can export all passwords silently.
+
+**Implementation**: Re-prompt for master password before: viewing a password, exporting vault, changing settings. Requires caching the auth hash in memory (not the password).
+
+**Status**: ❌ Open.
+
+---
+
+### 4.5 Encrypted exports ❌ 💡NEW
+**Why**: Current export is plaintext JSON. Theft of export file leaks all passwords.
+
+**Implementation**: Add AES-256-GCM encrypted export with a one-time export password. Derive export key via Argon2id from export password.
+
+**Status**: ❌ Open.
+
+---
+
+### 4.6 Session management UI ❌ 💡NEW
+**Why**: No way to view active sessions or revoke specific devices. No "log out all other devices" feature. 30-day refresh tokens with no oversight.
+
+**Implementation**: List active sessions (device name, last used IP, created date) in account settings. Allow revoking individual sessions. Add "log out all other devices" button. Email notification on new device login.
+
+**Status**: ❌ Open.
+
+---
+
+### 4.7 Emergency access (account recovery) ❌ 💡NEW
+**Why**: No recovery mechanism if user forgets master password. Losing master password = permanent data loss.
+
+**Implementation**: Asymmetric encryption-based emergency access. User designates trusted contact who can request vault access after configurable wait period (24-72h). Uses RSA key wrapping (same model as Bitwarden).
+
+**Status**: ❌ Open.
+
+---
+
+### 4.8 Auto-lock timer ❌ 💡NEW
+**Why**: Vault stays unlocked indefinitely until tab close or manual logout. Forgotten sessions on shared devices are a risk.
+
+**Implementation**: Configurable vault timeout (immediately, 1min, 5min, 15min, 30min, on browser close, never). Lock clears sensitive keys from memory.
+
+**Status**: ❌ Open.
+
+---
+
+### 4.9 Login with device ❌ 💡NEW
+**Why**: Entering master password on every device is tedious and error-prone on mobile keyboards.
+
+**Implementation**: QR code-based device authorization. Already-authenticated device encrypts vault key with a temporary key and sends to new device. Uses short-lived asymmetric key pair per request.
+
+**Status**: ❌ Open.
+
+---
+
+### 4.10 Vault health reports ❌ 💡NEW
+**Why**: Users don't know which passwords are weak, reused, or breached.
+
+**Implementation**: Client-side checks (never send decrypted data to server): password strength estimation, reuse detection, HIBP k-anonymity check. Alert banners in vault UI.
+
+**Status**: ❌ Open.
+
+---
+
+### 4.11 Secure file attachments ❌ 💡NEW
+**Why**: Vault entries only support text fields. No way to attach documents, SSH keys, or images.
+
+**Implementation**: Encrypt files with vault key (AES-256-GCM), store on server or S3-compatible storage, stream-decrypt on download. Per-entry file limit (10MB).
+
+**Status**: ❌ Open.
+
+---
+
+### 4.12 Third-party security audit ❌ 💡NEW
+**Why**: No independent security audit. Customers and enterprises require this for trust.
+
+**Implementation**: Engage Cure53, Trail of Bits, or NCC Group for source code audit + penetration test. Publish results publicly. Repeat annually.
+
+**Status**: ❌ Open (target: post-MVP).
+
+---
+
+### 4.13 Post-quantum cryptography migration plan ❌ 💡NEW
+**Why**: RSA and ECDH used for key exchange/sharing are not quantum-safe. AES-256 is safe (Grover's → 128-bit effective, still sufficient).
+
+**Implementation**: Monitor NIST PQ standards. Plan for hybrid key exchange (X25519Kyber768 or similar). Not urgent (5-10 year timeline) but design should account for key size growth.
+
+**Status**: ❌ Open (long-term roadmap).
+
+---
+
 ### 3.30 TOTP rate limit throws wrong exception type ❌ 💡NEW
 [source: 2026-05-30 audit]
 
@@ -1223,7 +1344,8 @@ Many `Result.Error(it.message ...)` paths surface backend error messages in mobi
 | Phase 1 — Critical hardening | 27 | 21 | 6 |
 | Phase 2 — Important hardening | 46 | 28 | 18 |
 | Phase 3 — Defense in depth | 33 | 23 | 10 |
-| **Total** | **115** | **81** | **34** |
+| Phase 4 — Product security | 13 | 0 | 13 |
+| **Total** | **128** | **81** | **47** |
 
 > **Note**: Item 3.15 (logout without auth) is listed in the Fixed Issues section but
 > remains ❌ Open. The counts above reflect actual status.
