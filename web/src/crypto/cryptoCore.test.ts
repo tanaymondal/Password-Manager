@@ -9,7 +9,6 @@ import {
   wrapVaultKey,
   encryptEntry,
   decryptEntry,
-  encryptField,
   decryptField,
 } from './cryptoCore'
 
@@ -53,36 +52,36 @@ async function importKey(raw: Uint8Array): Promise<CryptoKey> {
 
 describe('AES-GCM golden vectors (cross-platform parity)', () => {
   for (const v of vectors.vectors) {
-    const name = v.name
-    const op = v.op
-    const inp = v.input
-    const exp = v.expected
+    const name = v.name!
+    const op = v.op!
+    const inp = v.input!
+    const exp = v.expected!
 
     if (op === 'wrap_vault_key') {
       it(`${name}: unwrap recovers vault key`, async () => {
-        const kek = await importKey(new Uint8Array(atob(inp.kek_raw_b64).split('').map(c => c.charCodeAt(0))))
-        const unwrapped = await unwrapVaultKey(kek, exp.wrapped_b64)
+        const kek = await importKey(new Uint8Array(atob(inp.kek_raw_b64!).split('').map(c => c.charCodeAt(0))))
+        const unwrapped = await unwrapVaultKey(kek, exp.wrapped_b64!)
         const raw = new Uint8Array(await crypto.subtle.exportKey('raw', unwrapped))
-        const expected = new Uint8Array(atob(inp.vault_key_raw_b64).split('').map(c => c.charCodeAt(0)))
+        const expected = new Uint8Array(atob(inp.vault_key_raw_b64!).split('').map(c => c.charCodeAt(0)))
         expect(raw).toEqual(expected)
       })
     }
 
     if (op === 'encrypt_entry') {
       it(`${name}: decrypt recovers plaintext`, async () => {
-        const vkRaw = new Uint8Array(atob(inp.vault_key_raw_b64).split('').map(c => c.charCodeAt(0)))
+        const vkRaw = new Uint8Array(atob(inp.vault_key_raw_b64!).split('').map(c => c.charCodeAt(0)))
         const vk = await importKey(vkRaw)
-        const decrypted = await decryptEntry(vk, exp.encrypted_data, exp.iv)
-        expect(decrypted).toBe(inp.plaintext_json)
+        const decrypted = await decryptEntry(vk, exp.encrypted_data!, exp.iv!)
+        expect(decrypted).toBe(inp.plaintext_json!)
       })
     }
 
     if (op === 'encrypt_field') {
       it(`${name}: decrypt field recovers plaintext`, async () => {
-        const vkRaw = new Uint8Array(atob(inp.vault_key_raw_b64).split('').map(c => c.charCodeAt(0)))
+        const vkRaw = new Uint8Array(atob(inp.vault_key_raw_b64!).split('').map(c => c.charCodeAt(0)))
         const vk = await importKey(vkRaw)
-        const decrypted = await decryptField(vk, exp.ciphertext)
-        expect(decrypted).toBe(inp.plaintext)
+        const decrypted = await decryptField(vk, exp.ciphertext!)
+        expect(decrypted).toBe(inp.plaintext!)
       })
     }
   }
