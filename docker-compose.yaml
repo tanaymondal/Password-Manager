@@ -42,6 +42,10 @@ services:
       - SERVER_ADDRESS=0.0.0.0
       - LOG_LEVEL=INFO
       - APP_PROXY_TRUSTED=true
+      # KDF defaults (optional — omit for current defaults: 3-98304-4)
+      # - KDF_ITERATIONS=3
+      # - KDF_MEMORY=98304
+      # - KDF_PARALLELISM=4
     depends_on:
       postgres:
         condition: service_healthy

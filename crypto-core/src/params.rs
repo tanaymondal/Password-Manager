@@ -6,7 +6,7 @@ pub struct KdfParams {
 }
 
 pub const DEFAULT_PARAMS: KdfParams = KdfParams {
-    iterations: 4,
-    memory_kib: 65536,
+    iterations: 3,
+    memory_kib: 98304,
     parallelism: 4,
 };

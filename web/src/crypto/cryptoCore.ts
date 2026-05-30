@@ -25,8 +25,8 @@ function unb64(s: string): Uint8Array {
   return Uint8Array.from(atob(s), c => c.charCodeAt(0))
 }
 
-export const DEFAULT_KDF_ITERATIONS = 4
-export const DEFAULT_KDF_MEMORY = 65536
+export const DEFAULT_KDF_ITERATIONS = 3
+export const DEFAULT_KDF_MEMORY = 98304
 export const DEFAULT_KDF_PARALLELISM = 4
 
 export async function derivePasswordHash(

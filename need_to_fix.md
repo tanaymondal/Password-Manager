@@ -988,7 +988,7 @@ Backend requires a code to disable 2FA, but web client sent no body. Users would
 ### 3.1 Argon2id parameter tuning ✅
 [source: need_to_fix 3.1]
 
-Bump to 96MB memory, store params per-user, background re-hash on next login.
+Bumped to 96MB memory, reduced iterations to 3. Defaults now configurable via env vars (KDF_ITERATIONS, KDF_MEMORY, KDF_PARALLELISM). Existing users upgraded on next unlock via background upgrade-kdf flow.
 
 **Status**: ✅ Fixed.
 
