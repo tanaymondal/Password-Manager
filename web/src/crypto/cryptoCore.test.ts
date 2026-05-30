@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import vectors from '../../../test-vectors/vectors.json'
 import {
   derivePasswordHash,
   deriveKek,
@@ -37,6 +38,41 @@ describe('golden vectors (cross-platform parity)', () => {
     const h2 = await derivePasswordHash('test', b64('saltsalt1234'), 3, 8192, 1)
     expect(h1).toBe(h2)
   })
+})
+
+// Cross-platform AES-GCM golden vector tests
+// Verifies that all platforms produce identical AES-256-GCM output
+
+async function importKey(raw: Uint8Array): Promise<CryptoKey> {
+  return crypto.subtle.importKey('raw', raw.buffer as ArrayBuffer, 'AES-GCM', true, ['encrypt', 'decrypt'])
+}
+
+describe('AES-GCM golden vectors (cross-platform parity)', () => {
+  for (const v of vectors.vectors) {
+    const name = v.name
+    const op = v.op
+    const inp = v.input
+    const exp = v.expected
+
+    if (op === 'wrap_vault_key') {
+      it(`${name}: unwrap recovers vault key`, async () => {
+        const kek = await importKey(new Uint8Array(atob(inp.kek_raw_b64).split('').map(c => c.charCodeAt(0))))
+        const unwrapped = await unwrapVaultKey(kek, exp.wrapped_b64)
+        const raw = new Uint8Array(await crypto.subtle.exportKey('raw', unwrapped))
+        const expected = new Uint8Array(atob(inp.vault_key_raw_b64).split('').map(c => c.charCodeAt(0)))
+        expect(raw).toEqual(expected)
+      })
+    }
+
+    if (op === 'encrypt_entry') {
+      it(`${name}: decrypt recovers plaintext`, async () => {
+        const vkRaw = new Uint8Array(atob(inp.vault_key_raw_b64).split('').map(c => c.charCodeAt(0)))
+        const vk = await importKey(vkRaw)
+        const decrypted = await decryptEntry(vk, exp.encrypted_data, exp.iv)
+        expect(decrypted).toBe(inp.plaintext_json)
+      })
+    }
+  }
 })
 
 describe('generateSalt', () => {

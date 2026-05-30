@@ -398,4 +398,17 @@ class CryptoEngineTest {
         val reUnwrapped = engine.unwrapVaultKeyWithKek(reWrappedWithNew, newKek)
         assertEquals("Must be able to unwrap with new KEK after password change", vaultKey, reUnwrapped)
     }
+
+    // ── Cross-platform AES-GCM golden vector tests ──
+
+    @Test
+    fun goldenVector_wrapVaultKey() {
+        val kekRaw = Base64.getDecoder().decode("504NmZdCQp2PNGAZA5gq3vh1rwcT/pVLXWHDcJlf18w=")
+        val wrappedB64 = "oKGio6Slpqeoqaqr5HHezchyg8dzWdJCk+XMGLZMk70asE0SqeA1rq/ZxqiOHm/fEXwfIT/y2n4NLFHN"
+        val expectedVk = Base64.getEncoder().encodeToString(
+            Base64.getDecoder().decode("AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=")
+        )
+        val unwrapped = engine.unwrapVaultKeyWithKek(wrappedB64, kekRaw)
+        assertEquals("Unwrapped vault key must match golden vector", expectedVk, unwrapped)
+    }
 }
