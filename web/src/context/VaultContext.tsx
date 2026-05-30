@@ -10,9 +10,6 @@ import {
 import {
   deriveKek,
   derivePasswordHash,
-  DEFAULT_KDF_ITERATIONS,
-  DEFAULT_KDF_MEMORY,
-  DEFAULT_KDF_PARALLELISM,
 } from '../crypto/argon2'
 import { unwrapVaultKey, wrapVaultKey } from '../crypto/vaultKey'
 import { encryptEntry, decryptEntry } from '../crypto/entries'
@@ -27,6 +24,7 @@ import {
 import { changePassword, checkBreach, upgradeKdf, requestSudo } from '../api/auth'
 import { setTokens } from '../api/client'
 import { getCryptoMaterial, setCryptoMaterial } from '../store/cryptoMaterial'
+import { getKdfConfig } from '../crypto/kdfConfig'
 
 const CROSS_TAB_CHANNEL = 'securevault-crypto'
 
@@ -125,24 +123,25 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       setIsUnlocked(true)
 
       // Background KDF parameter upgrade check
-      const currentMemory = material.kdfMemory || DEFAULT_KDF_MEMORY
-      if (currentMemory < DEFAULT_KDF_MEMORY) {
+      const cfg = await getKdfConfig()
+      const currentMemory = material.kdfMemory || cfg.kdfMemory
+      if (currentMemory < cfg.kdfMemory) {
         console.log('Background KDF parameter upgrade starting...')
         ;(async () => {
           try {
             const newAuthHash = await derivePasswordHash(
               password,
               material.authSalt,
-              DEFAULT_KDF_ITERATIONS,
-              DEFAULT_KDF_MEMORY,
-              DEFAULT_KDF_PARALLELISM
+              cfg.kdfIterations,
+              cfg.kdfMemory,
+              cfg.kdfParallelism
             )
             const newKek = await deriveKek(
               password,
               material.encryptionSalt,
-              DEFAULT_KDF_ITERATIONS,
-              DEFAULT_KDF_MEMORY,
-              DEFAULT_KDF_PARALLELISM
+              cfg.kdfIterations,
+              cfg.kdfMemory,
+              cfg.kdfParallelism
             )
             const newWrapped = await wrapVaultKey(newKek, vaultKeyDerived)
 
@@ -160,17 +159,17 @@ export function VaultProvider({ children }: { children: ReactNode }) {
             await upgradeKdf({
               authHash: newAuthHash,
               wrappedVaultKey: newWrapped,
-              kdfIterations: DEFAULT_KDF_ITERATIONS,
-              kdfMemory: DEFAULT_KDF_MEMORY,
-              kdfParallelism: DEFAULT_KDF_PARALLELISM,
+              kdfIterations: cfg.kdfIterations,
+              kdfMemory: cfg.kdfMemory,
+              kdfParallelism: cfg.kdfParallelism,
             }, sudo.sudoToken)
 
             // Update local material in store
             setCryptoMaterial({
               ...material,
-              kdfIterations: DEFAULT_KDF_ITERATIONS,
-              kdfMemory: DEFAULT_KDF_MEMORY,
-              kdfParallelism: DEFAULT_KDF_PARALLELISM,
+              kdfIterations: cfg.kdfIterations,
+              kdfMemory: cfg.kdfMemory,
+              kdfParallelism: cfg.kdfParallelism,
             })
             console.log('Background KDF parameter upgrade succeeded!')
           } catch (err) {

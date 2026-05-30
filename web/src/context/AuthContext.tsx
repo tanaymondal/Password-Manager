@@ -22,10 +22,8 @@ import {
   deriveKek,
   generateSalt,
   generateVaultKey,
-  DEFAULT_KDF_ITERATIONS,
-  DEFAULT_KDF_MEMORY,
-  DEFAULT_KDF_PARALLELISM,
 } from '../crypto/argon2'
+import { getKdfConfig } from '../crypto/kdfConfig'
 import { unwrapVaultKey, wrapVaultKey } from '../crypto/vaultKey'
 import {
   setCryptoMaterial,
@@ -208,6 +206,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const wrappedVaultKey = await wrapVaultKey(kek, vaultKey)
     setAutoUnlockVaultKey(vaultKey)
 
+    // Use the KDF params that were used for derivation (fetched from server)
+    const { kdfIterations, kdfMemory, kdfParallelism } = await getKdfConfig()
+
     const res = await apiRegister({
       email,
       authHash,
@@ -215,9 +216,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       encryptionSalt,
       wrappedVaultKey,
       encryptionVersion: 2,
-      kdfIterations: DEFAULT_KDF_ITERATIONS,
-      kdfMemory: DEFAULT_KDF_MEMORY,
-      kdfParallelism: DEFAULT_KDF_PARALLELISM,
+      kdfIterations,
+      kdfMemory,
+      kdfParallelism,
       deviceId: getDeviceId(),
     })
     setTokens(res.accessToken)

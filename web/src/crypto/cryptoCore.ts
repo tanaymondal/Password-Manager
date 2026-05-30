@@ -7,6 +7,7 @@ import init, {
   wasm_encrypt_entry,
   wasm_decrypt_entry,
 } from './wasm/securevault_crypto_core'
+import { getKdfConfig } from './kdfConfig'
 
 let initialized = false
 
@@ -25,32 +26,45 @@ function unb64(s: string): Uint8Array {
   return Uint8Array.from(atob(s), c => c.charCodeAt(0))
 }
 
+// Hardcoded fallbacks — used when server is unreachable
 export const DEFAULT_KDF_ITERATIONS = 3
 export const DEFAULT_KDF_MEMORY = 98304
 export const DEFAULT_KDF_PARALLELISM = 4
 
+async function resolveParams(
+  iterations?: number,
+  memorySize?: number,
+  parallelism?: number,
+): Promise<{ iterations: number; memorySize: number; parallelism: number }> {
+  if (iterations !== undefined) return { iterations, memorySize: memorySize!, parallelism: parallelism! }
+  const cfg = await getKdfConfig()
+  return { iterations: cfg.kdfIterations, memorySize: cfg.kdfMemory, parallelism: cfg.kdfParallelism }
+}
+
 export async function derivePasswordHash(
   password: string,
   salt: string,
-  iterations = DEFAULT_KDF_ITERATIONS,
-  memorySize = DEFAULT_KDF_MEMORY,
-  parallelism = DEFAULT_KDF_PARALLELISM,
+  iterations?: number,
+  memorySize?: number,
+  parallelism?: number,
 ): Promise<string> {
   await ensureInit()
-  const p = new WasmKdfParams(iterations, memorySize, parallelism)
-  return wasm_derive_auth_hash(password, salt, p)
+  const p = await resolveParams(iterations, memorySize, parallelism)
+  const wp = new WasmKdfParams(p.iterations, p.memorySize, p.parallelism)
+  return wasm_derive_auth_hash(password, salt, wp)
 }
 
 export async function deriveKek(
   password: string,
   saltBase64: string,
-  iterations = DEFAULT_KDF_ITERATIONS,
-  memorySize = DEFAULT_KDF_MEMORY,
-  parallelism = DEFAULT_KDF_PARALLELISM,
+  iterations?: number,
+  memorySize?: number,
+  parallelism?: number,
 ): Promise<CryptoKey> {
   await ensureInit()
-  const p = new WasmKdfParams(iterations, memorySize, parallelism)
-  const kekB64 = wasm_derive_kek(password, saltBase64, p)
+  const p = await resolveParams(iterations, memorySize, parallelism)
+  const wp = new WasmKdfParams(p.iterations, p.memorySize, p.parallelism)
+  const kekB64 = wasm_derive_kek(password, saltBase64, wp)
   return crypto.subtle.importKey('raw', unb64(kekB64).buffer as ArrayBuffer, 'AES-GCM', true, ['encrypt', 'decrypt'])
 }
 

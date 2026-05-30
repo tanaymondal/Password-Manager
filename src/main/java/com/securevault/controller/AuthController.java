@@ -60,6 +60,11 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
+    @GetMapping("/kdf-config")
+    public ResponseEntity<ApiResponse<KdfConfigResponse>> getKdfConfig() {
+        return ResponseEntity.ok(ApiResponse.success(new KdfConfigResponse()));
+    }
+
     @PostMapping("/register")
     public ResponseEntity<ApiResponse<AuthResponse>> register(
             @Valid @RequestBody RegisterRequest request,

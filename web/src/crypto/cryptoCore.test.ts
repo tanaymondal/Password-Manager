@@ -74,8 +74,8 @@ describe('golden vectors (cross-platform parity)', () => {
 
 describe('DEFAULT_KDF_*', () => {
   it('has correct default values', () => {
-    expect(DEFAULT_KDF_ITERATIONS).toBe(4)
-    expect(DEFAULT_KDF_MEMORY).toBe(65536)
+    expect(DEFAULT_KDF_ITERATIONS).toBe(3)
+    expect(DEFAULT_KDF_MEMORY).toBe(98304)
     expect(DEFAULT_KDF_PARALLELISM).toBe(4)
   })
 })
