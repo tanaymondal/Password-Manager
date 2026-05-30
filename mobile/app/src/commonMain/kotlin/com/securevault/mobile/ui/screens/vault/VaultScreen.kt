@@ -1,3 +1,4 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package com.securevault.mobile.ui.screens.vault
 
 import androidx.compose.foundation.clickable

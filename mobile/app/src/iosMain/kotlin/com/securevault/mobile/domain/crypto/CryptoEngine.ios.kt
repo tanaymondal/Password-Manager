@@ -5,6 +5,7 @@ import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.addressOf
 import kotlinx.cinterop.get
 import kotlinx.cinterop.reinterpret
+import kotlinx.cinterop.toKString
 import kotlinx.cinterop.usePinned
 import platform.CoreCrypto.CC_SHA1
 import platform.CoreCrypto.CC_SHA1_DIGEST_LENGTH
@@ -31,9 +32,9 @@ actual class CryptoEngine {
     ): String {
         val mkB64 = SecureVaultCryptoCore.securevault_derive_master_key(password, salt, iterations, memory, parallelism)
             ?: error("Rust deriveMasterKey returned null")
-        val result = SecureVaultCryptoCore.securevault_derive_auth_hash(mkB64 as String)
+        val result = SecureVaultCryptoCore.securevault_derive_auth_hash(mkB64.toKString())
             ?: error("Rust deriveAuthHash returned null")
-        return result as String
+        return result.toKString()
     }
 
     actual fun generateVaultKey(): String {
@@ -49,9 +50,9 @@ actual class CryptoEngine {
     ): ByteArray {
         val mkB64 = SecureVaultCryptoCore.securevault_derive_master_key(password, encryptionSalt, iterations, memory, parallelism)
             ?: error("Rust deriveMasterKey returned null")
-        val kekB64 = SecureVaultCryptoCore.securevault_derive_kek(mkB64 as String)
+        val kekB64 = SecureVaultCryptoCore.securevault_derive_kek(mkB64.toKString())
             ?: error("Rust deriveKek returned null")
-        val data = NSData.create(base64EncodedString = kekB64 as String, options = 0u) ?: return ByteArray(0)
+        val data = NSData.create(base64EncodedString = kekB64.toKString(), options = 0u) ?: return ByteArray(0)
         return ByteArray(data.length.toInt()).apply {
             val ptr = data.bytes!!.reinterpret<ByteVar>()
             var idx = 0; while (idx < size) { this.set(idx, ptr.get(idx)); idx++ }
@@ -64,7 +65,7 @@ actual class CryptoEngine {
         }
         val result = SecureVaultCryptoCore.securevault_wrap_vault_key(kekB64, vaultKey)
             ?: error("Rust wrapVaultKey returned null")
-        return result as String
+        return result.toKString()
     }
 
     actual fun unwrapVaultKey(wrappedVaultKey: String, kek: ByteArray): String {
@@ -73,7 +74,7 @@ actual class CryptoEngine {
         }
         val result = SecureVaultCryptoCore.securevault_unwrap_vault_key(kekB64, wrappedVaultKey)
             ?: error("Rust unwrapVaultKey returned null")
-        return result as String
+        return result.toKString()
     }
 
     actual fun sha1Hex(data: String): String {
@@ -90,6 +91,6 @@ actual class CryptoEngine {
     actual fun generateSecureDeviceId(): String {
         val bytes = ByteArray(16)
         bytes.usePinned { pinned -> SecRandomCopyBytes(null, 16uL, pinned.addressOf(0)) }
-        return bytes.joinToString("") { it.toString(16).padStart(2, '0') }
+        return bytes.joinToString("") { (it.toInt() and 0xFF).toString(16).padStart(2, '0') }
     }
 }

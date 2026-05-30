@@ -1,22 +1,9 @@
 package com.securevault.mobile
 
-import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.window.Application
-import androidx.compose.ui.window.WindowManager
-import platform.UIKit.UIScreen
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.window.ComposeUIViewController
 
-fun main() {
-    Application(
-        title = "SecureVault"
-    ) {
-        WindowManager(UIScreen.main.bounds)
-        ComposeView().apply {
-            setContent {
-                SecureVaultApp()
-            }
-        }
-    }
-}
+fun MainViewController() = ComposeUIViewController { SecureVaultApp() }
 
 @Composable
 fun SecureVaultApp() {

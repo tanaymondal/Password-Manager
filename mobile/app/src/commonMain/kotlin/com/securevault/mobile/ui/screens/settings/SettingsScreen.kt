@@ -1,3 +1,4 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package com.securevault.mobile.ui.screens.settings
 
 import androidx.compose.foundation.layout.*

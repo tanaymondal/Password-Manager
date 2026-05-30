@@ -10,6 +10,7 @@ import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.addressOf
 import kotlinx.cinterop.get
 import kotlinx.cinterop.reinterpret
+import kotlinx.cinterop.toKString
 import kotlinx.cinterop.usePinned
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
@@ -84,7 +85,7 @@ class IosEntryEncryptor : EntryEncryptor, VaultKeyManager {
         val plaintext = Json.encodeToString(VaultEntry.serializer(), entry)
         val result = SecureVaultCryptoCore.securevault_encrypt_entry(vkB64, plaintext)
             ?: error("Rust encrypt_entry returned null")
-        val json = result as String
+        val json = result.toKString()
         val parsed = Json.parseToJsonElement(json).jsonObject
         return VaultEntryRequest(
             id = if (entry.id > 0) entry.id.toString() else null,
@@ -97,7 +98,7 @@ class IosEntryEncryptor : EntryEncryptor, VaultKeyManager {
         val vkB64 = vaultKeyB64()
         val plaintext = SecureVaultCryptoCore.securevault_decrypt_entry(vkB64, response.encryptedData, response.iv)
             ?: error("Rust decrypt_entry returned null")
-        return Json.decodeFromString(VaultEntry.serializer(), plaintext as String)
+        return Json.decodeFromString(VaultEntry.serializer(), plaintext.toKString())
             .copy(id = response.id.hashCode().toLong())
     }
 
@@ -106,7 +107,7 @@ class IosEntryEncryptor : EntryEncryptor, VaultKeyManager {
         val vkB64 = vaultKeyB64()
         val result = SecureVaultCryptoCore.securevault_encrypt_field(vkB64, plaintext)
             ?: error("Rust encrypt_field returned null")
-        return result as String
+        return result.toKString()
     }
 
     override fun decryptField(ciphertext: String): String {
@@ -114,7 +115,7 @@ class IosEntryEncryptor : EntryEncryptor, VaultKeyManager {
         val vkB64 = vaultKeyB64()
         val result = SecureVaultCryptoCore.securevault_decrypt_field(vkB64, ciphertext)
             ?: error("Rust decrypt_field returned null")
-        return result as String
+        return result.toKString()
     }
 
     private fun vaultKeyB64(): String {
