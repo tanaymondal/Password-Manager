@@ -87,6 +87,9 @@ class AuthRepositoryImpl(
 
     override suspend fun login(email: String, password: String): Result<LoginResponse> {
         return try {
+            // Fetch fresh server KDF config for upgrade comparison after unlock
+            KdfConfigManager.getConfig(api)
+
             val preloginResult = api.prelogin(PreLoginRequest(email))
             val pre = preloginResult.getOrNull()
             val authSalt = pre?.authSalt ?: email
@@ -131,6 +134,8 @@ class AuthRepositoryImpl(
         password: String
     ): Result<AuthState> {
         return try {
+            // Refresh config for upgrade check after successful 2FA
+            KdfConfigManager.getConfig(api)
             val response = api.verifyTwoFactor(email, challengeId, code)
             response.fold(
                 onSuccess = { authResponse ->
@@ -238,7 +243,7 @@ class AuthRepositoryImpl(
                 return Result.Error("Vault key material not available. Please login again.")
             }
 
-            val cfg = KdfConfigManager.getCachedOrDefault()
+            val cfg = KdfConfigManager.getConfig(api)
             val currentMemory = SessionManager.getKdfMemory()
             val vaultKey = deriveVaultKey(password, encryptionSalt, wrappedVaultKey, cfg.kdfIterations, currentMemory, cfg.kdfParallelism)
             if (vaultKey != null) {
