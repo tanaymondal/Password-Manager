@@ -16,7 +16,7 @@
         "salt_b64": "YXV0aC1zYWx0LWZpeGVkLXN0cmluZw=="
       },
       "expected": {
-        "auth_hash_b64": "ZSf3t3yzg2URB1qOqj2n1c1dtSVRrb4g9vYYf8i/6kU="
+        "auth_hash_b64": "lFun01MhyiCHDwzv8rQf16SaJd4H/sVs4/DGZgQLsn0="
       }
     },
     {
@@ -32,19 +32,19 @@
         "salt_b64": "MDEyMzQ1Njc4OWFiY2RlZg=="
       },
       "expected": {
-        "kek_raw_b64": "4nmc45lrRHIQlCIdmNgHe4ulp9zQ0yvGSaPUmhaqVy4="
+        "kek_raw_b64": "z5Dul//cRyhNDmSjS8qVN9eqHIk78ZN917oFJj3L38A="
       }
     },
     {
       "name": "envelope_a/wrap_vault_key",
       "op": "wrap_vault_key",
       "input": {
-        "kek_raw_b64": "4nmc45lrRHIQlCIdmNgHe4ulp9zQ0yvGSaPUmhaqVy4=",
+        "kek_raw_b64": "z5Dul//cRyhNDmSjS8qVN9eqHIk78ZN917oFJj3L38A=",
         "vault_key_raw_b64": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
         "nonce_b64": "oKGio6Slpqeoqaqr"
       },
       "expected": {
-        "wrapped_b64": "oKGio6SlpqeoqaqriIBtMKZ+MZhgW2SQGcWUAt7xaPG6HW0tHQl4GKEaMjG77j5M5bsq1hk4ZIsmYhGG"
+        "wrapped_b64": "oKGio6SlpqeoqaqrOQ25xZyid6o7kO+gyNE2h7MLpQ4GBNLKwNiXkSs869hBCoCJQ3wGQ9+9Bk/0jJJe"
       }
     },
     {

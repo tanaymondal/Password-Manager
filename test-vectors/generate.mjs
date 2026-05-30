@@ -50,8 +50,8 @@ let masterKey, kek
 if (argon2id) {
   masterKey = await argon(PASSWORD, unb64(SALT_B64), PARAMS)
 
-  // Auth hash: HKDF-Expand(MasterKey, "securevault-auth")
-  const authHash = hkdfExpand(masterKey, 'securevault-auth')
+  // Auth hash: HKDF-Expand(MasterKey, "auth")
+  const authHash = hkdfExpand(masterKey, 'auth')
   cases.push({
     name: 'auth_hash/default-params',
     op: 'derive_auth_hash',
@@ -60,8 +60,8 @@ if (argon2id) {
     expected: { auth_hash_b64: b64(authHash) },
   })
 
-  // KEK: HKDF-Expand(MasterKey, "securevault-kek")
-  kek = hkdfExpand(masterKey, 'securevault-kek')
+  // KEK: HKDF-Expand(MasterKey, "kek")
+  kek = hkdfExpand(masterKey, 'kek')
   cases.push({
     name: 'kek/default-params',
     op: 'derive_kek',

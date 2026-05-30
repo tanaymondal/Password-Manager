@@ -25,8 +25,8 @@ use zeroize::Zeroize;
 const VERSION_PREFIX: &str = "v1:";
 const KEY_LEN: usize = 32;
 const SALT_LEN: usize = 16;
-const AUTH_HASH_TAG: &[u8] = b"securevault-auth";
-const KEK_TAG: &[u8] = b"securevault-kek";
+const AUTH_HASH_TAG: &[u8] = b"auth";
+const KEK_TAG: &[u8] = b"kek";
 
 fn b64e(b: &[u8]) -> String {
     STANDARD.encode(b)
