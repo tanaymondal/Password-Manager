@@ -27,8 +27,6 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import javax.crypto.Mac;
-import javax.crypto.SecretKeyFactory;
-import javax.crypto.spec.PBEKeySpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -53,9 +51,6 @@ public class AuthService {
     // Dummy salt/hash for timing-constant login — same length as real base64(32 bytes)
     private static final String DUMMY_SALT = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
     private static final String DUMMY_HASH = "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=";
-
-    @Value("${app.pbkdf2.iterations}")
-    private int pbkdf2Iterations;
 
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
@@ -201,19 +196,7 @@ public class AuthService {
 
         String storedHash = user != null ? user.getPasswordHash() : DUMMY_HASH;
 
-        boolean matches = passwordService.constantTimeEquals(computedHash, storedHash);
-        if (!matches && user != null) {
-            // Fall back to legacy PBKDF2 — migrate if match
-            String legacyHash = serverSideHashPbkdf2(request.getAuthHash(), user.getPasswordSalt());
-            if (passwordService.constantTimeEquals(legacyHash, storedHash)) {
-                // Upgrade to new HMAC
-                user.setPasswordHash(serverSideHash(request.getAuthHash(), user.getPasswordSalt()));
-                userRepository.save(user);
-                matches = true;
-            }
-        }
-
-        if (!matches) {
+        if (!passwordService.constantTimeEquals(computedHash, storedHash)) {
             loginRateLimiter.recordFailure(clientIp);
             loginRateLimiter.recordFailure(email);
             if (user != null) {
@@ -395,7 +378,7 @@ public class AuthService {
             throw new BadCredentialsException("Account is temporarily locked. Please try again later.");
         }
 
-        if (!verifyHash(currentAuthHash, user.getPasswordSalt(), user.getPasswordHash())) {
+        if (!passwordService.constantTimeEquals(serverSideHash(currentAuthHash, user.getPasswordSalt()), user.getPasswordHash())) {
             String failKey = "changepw:fail:" + userId;
             Long failCount = redisTemplate.opsForValue().increment(failKey);
             if (failCount != null && failCount == 1) {
@@ -451,7 +434,7 @@ public class AuthService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BadCredentialsException("Invalid credentials"));
 
-        if (!verifyHash(currentAuthHash, user.getPasswordSalt(), user.getPasswordHash())) {
+        if (!passwordService.constantTimeEquals(serverSideHash(currentAuthHash, user.getPasswordSalt()), user.getPasswordHash())) {
             throw new BadCredentialsException("Invalid credentials");
         }
 
@@ -509,11 +492,6 @@ public class AuthService {
             if (passwordService.constantTimeEquals(candidateHash, entry.getPasswordHash())) {
                 throw new IllegalArgumentException("Password has been used recently. Please choose a different password.");
             }
-            // Also check legacy PBKDF2 hash for migrated users
-            String legacyHash = serverSideHashPbkdf2(newAuthHash, entry.getPasswordSalt());
-            if (passwordService.constantTimeEquals(legacyHash, entry.getPasswordHash())) {
-                throw new IllegalArgumentException("Password has been used recently. Please choose a different password.");
-            }
         }
     }
 
@@ -547,14 +525,14 @@ public class AuthService {
             throw new BadCredentialsException("Account is temporarily locked. Please try again later.");
         }
 
-        if (!verifyHash(authHash, user.getPasswordSalt(), user.getPasswordHash())) {
+        if (!passwordService.constantTimeEquals(serverSideHash(currentAuthHash, user.getPasswordSalt()), user.getPasswordHash())) {
             throw new BadCredentialsException("Invalid password");
         }
     }
 
     private String serverSideHash(String clientAuthHash, String userSalt) {
         try {
-            // HMAC-SHA256 — fast, single pass, same security margin
+            // HMAC-SHA256 — fast, single pass
             String combinedSalt = serverHashSecret + ":" + userSalt;
             Mac mac = Mac.getInstance("HmacSHA256");
             mac.init(new SecretKeySpec(clientAuthHash.getBytes(java.nio.charset.StandardCharsets.UTF_8), "HmacSHA256"));
@@ -563,28 +541,6 @@ public class AuthService {
         } catch (Exception e) {
             throw new RuntimeException("Failed to compute server-side auth hash", e);
         }
-    }
-
-    // Legacy PBKDF2 — used only during migration to verify existing users
-    private String serverSideHashPbkdf2(String clientAuthHash, String userSalt) {
-        try {
-            String combinedSalt = serverHashSecret + ":" + userSalt;
-            byte[] salt = combinedSalt.getBytes(java.nio.charset.StandardCharsets.UTF_8);
-            KeySpec spec = new PBEKeySpec(clientAuthHash.toCharArray(), salt, pbkdf2Iterations, 256);
-            SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
-            byte[] hash = factory.generateSecret(spec).getEncoded();
-            return Base64.getEncoder().encodeToString(hash);
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to compute server-side auth hash", e);
-        }
-    }
-
-    private boolean verifyHash(String authHash, String userSalt, String storedHash) {
-        // Try new HMAC first, fall back to legacy PBKDF2
-        if (passwordService.constantTimeEquals(serverSideHash(authHash, userSalt), storedHash)) {
-            return true;
-        }
-        return passwordService.constantTimeEquals(serverSideHashPbkdf2(authHash, userSalt), storedHash);
     }
 
     private void handleFailedLogin(User user, String clientIp, String userAgent) {
