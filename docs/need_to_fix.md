@@ -416,6 +416,262 @@ Bitwarden supports rotating the vault encryption key independently of the master
 
 ---
 
+## Phase 5 — Infrastructure & Operations
+
+### 5.1 CI pipeline (GitHub Actions) ❌
+**Why**: No automated CI. Every push runs a manual build. No secret scanning, no dependency scanning.
+
+**Implementation**: GitHub Actions workflow: `mvn verify`, `npm run build && lint && test`, secret scanning (Gitleaks), dependency scanning (Dependabot).
+
+**Status**: ❌ Open.
+
+---
+
+### 5.2 Structured logging to stdout ❌
+**Why**: Currently writes to file `logs/securevault.log`. Container environments expect JSON to stdout for log aggregation.
+
+**Implementation**: Configure Logback to output structured JSON to stdout. Remove file appender in Docker.
+
+**Status**: ❌ Open.
+
+---
+
+### 5.3 Metrics (Micrometer + Prometheus) ❌
+**Why**: No metrics on request rates, latency, error rates, or active sessions.
+
+**Implementation**: Add Micrometer with Prometheus exporter. Expose `/actuator/prometheus`. Add Grafana dashboard.
+
+**Status**: ❌ Open.
+
+---
+
+### 5.4 Error tracking (Sentry) ❌
+**Why**: No visibility into production errors.
+
+**Implementation**: Integrate Sentry for backend (Spring Boot) and web (React). Capture unhandled exceptions with context.
+
+**Status**: ❌ Open.
+
+---
+
+### 5.5 Health check improvements ❌
+**Why**: `GET /health` returns static `{"status":"UP"}`. No visibility into Redis, DB, or migration status.
+
+**Implementation**: Add Spring Boot Actuator health checks for Redis connectivity, database connectivity, Flyway migration state.
+
+**Status**: ❌ Open.
+
+---
+
+### 5.6 Secrets management (external) ❌
+**Why**: Secrets in `.env` file or Dockploy env vars. Not suitable for production at scale.
+
+**Implementation**: Integrate external secrets (Docker secrets, AWS Secrets Manager, HashiCorp Vault).
+
+**Status**: ❌ Open.
+
+---
+
+### 5.7 Database backup strategy ❌
+**Why**: No automated backup procedure. DB loss = total data loss.
+
+**Implementation**: Automated PostgreSQL backups with point-in-time recovery. Test restore procedure.
+
+**Status**: ❌ Open.
+
+---
+
+### 5.8 Certificate pinning on mobile ❌
+**Why**: Mobile apps trust any CA-issued certificate. Compromised CA or MITM proxy can intercept traffic.
+
+**Implementation**: Pin backend TLS certificate in Android (network_security_config.xml) and iOS (SSLPinning on Ktor).
+
+**Status**: ❌ Open.
+
+---
+
+### 5.9 Kubernetes manifests ❌
+**Why**: No Kubernetes deployment configuration. Only Docker Compose is supported.
+
+**Implementation**: Helm chart or plain YAML manifests for production deployment on Kubernetes.
+
+**Status**: ❌ Open.
+
+---
+
+## Phase 6 — Tech Debt
+
+### 6.1 Encrypt TOTP secrets at rest ❌
+**Why**: `User.twoFactorSecret` stored as plaintext in DB. DB breach exposes all 2FA secrets.
+
+**Implementation**: Encrypt with AES-256-GCM using a server-side key (separate from ENCRYPTION_KEY). Decrypt on read, encrypt on write.
+
+**Status**: ❌ Open.
+
+---
+
+### 6.2 Stop storing master password in sessionStorage ❌
+**Why**: `autoUnlockPassword` in `sessionStorage` is readable by XSS or service worker. Derive and cache the vault key instead.
+
+**Implementation**: Derive vault key immediately on login, discard master password. Store vault key in `useRef()` only.
+
+**Status**: ❌ Open.
+
+---
+
+### 6.3 Move tokens out of localStorage ❌
+**Why**: JWT tokens in `localStorage` are XSS-readable. Use HttpOnly cookies for refresh tokens.
+
+**Implementation**: Switch to HttpOnly SameSite=Strict cookies for refresh tokens (already partially done). Keep access token in memory only.
+
+**Status**: ❌ Open.
+
+---
+
+### 6.4 Add `jti` claim to JWT tokens ❌
+**Why**: No token ID means no per-token revocation or blacklist. All tokens for a user must be revoked together.
+
+**Implementation**: Add `jti` (JWT ID) to access and refresh tokens. Store in Redis for revocation checks.
+
+**Status**: ❌ Open.
+
+---
+
+### 6.5 Reduce access token TTL to 15 minutes ❌
+**Why**: Currently 1 hour. Longer window for stolen token abuse.
+
+**Implementation**: Change `JWT_EXPIRATION` default from 3600000 to 900000. Ensure refresh flow works reliably.
+
+**Status**: ❌ Open.
+
+---
+
+### 6.6 Add `visibilitychange` to auto-lock ❌
+**Why**: `useAutoLock` doesn't listen for tab visibility changes. Vault key stays in memory when user switches tabs.
+
+**Implementation**: Add `visibilitychange` listener to `useAutoLock` — wipe vault key when tab becomes hidden.
+
+**Status**: ❌ Open.
+
+---
+
+### 6.7 Configure mobile cleartext traffic ❌
+**Why**: Android `network_security_config.xml` permits cleartext globally. iOS hardcodes `http://` URL.
+
+**Implementation**: Android: restrict cleartext to dev builds only. iOS: use `https://` for production.
+
+**Status**: ❌ Open.
+
+---
+
+### 6.8 Disable Android backup ❌
+**Why**: `android:allowBackup="true"` in AndroidManifest. Device backup can leak app data.
+
+**Implementation**: Set `android:allowBackup="false"` or implement custom backup rules excluding sensitive data.
+
+**Status**: ❌ Open.
+
+---
+
+### 6.9 Enable ProGuard/R8 ❌
+**Why**: Android release build has `isMinifyEnabled = false`. No obfuscation or dead code removal.
+
+**Implementation**: Enable R8 minification in release build. Add ProGuard rules for Ktor, Kotlin serialization.
+
+**Status**: ❌ Open.
+
+---
+
+### 6.10 `JwtAuthenticationFilter` continues filter chain after writing response ❌
+**Why**: The `return` at line 98 exits the `if` block, not the method. `chain.doFilter()` runs after response is committed, causing `IllegalStateException`.
+
+**Implementation**: Restructure to early-return after sending error response.
+
+**Status**: ❌ Open.
+
+---
+
+### 6.11 `Argon2AuthenticationProvider` is dead code ❌
+**Why**: Declared in `SecurityConfig` but `AuthController.login()` calls `AuthService.login()` directly, not through `AuthenticationManager`.
+
+**Implementation**: Remove dead bean, or refactor login to use AuthenticationManager.
+
+**Status**: ❌ Open.
+
+---
+
+### 6.12 `InputSanitizer` is unused ❌
+**Why**: All methods exist but are never called anywhere.
+
+**Implementation**: Either remove dead code or wire it into controllers.
+
+**Status**: ❌ Open.
+
+---
+
+### 6.13 JWT parsing duplicated ❌
+**Why**: `getUserIdFromToken`, `getEmailFromToken`, `getClaim`, `validateToken` each parse independently. Single parse + cache would reduce overhead.
+
+**Implementation**: Parse once per request, extract all claims.
+
+**Status**: ❌ Open.
+
+---
+
+### 6.14 Duplicate salt generation methods ❌
+**Why**: `generateSalt()`, `generateAuthSalt()`, `generateEncryptionSalt()` all do the same thing with minor length differences.
+
+**Implementation**: Consolidate into single method. Use one salt length (16 bytes) everywhere.
+
+**Status**: ❌ Open.
+
+---
+
+### 6.15 Custom base64 in web (`atob`/`btoa`) ❌
+**Why**: `atob`/`btoa` don't handle binary data reliably (throw on non-Latin1). Use `Uint8Array`-compatible base64.
+
+**Implementation**: Replace `atob`/`btoa` wrappers with proper Uint8Array base64 functions.
+
+**Status**: ❌ Open.
+
+---
+
+### 6.16 `application.properties` ≈ `application-prod.properties` ❌
+**Why**: Prod profile adds no value — files are near-identical. Confusing for deployment.
+
+**Implementation**: Remove `application-prod.properties`. Consolidate into single file with env-var overrides.
+
+**Status**: ❌ Open.
+
+---
+
+### 6.17 Mobile vault key cached as Base64 String ❌
+**Why**: Cannot be explicitly zeroed. Use `ByteArray` or `SecretKey` for secure zeroization.
+
+**Implementation**: Change vault key storage from Base64 String to `ByteArray`. Zeroize after use.
+
+**Status**: ❌ Open.
+
+---
+
+### 6.18 Android search icon uses wrong icon ❌
+**Why**: `VaultScreen.kt:90` uses `Icons.Default.Add` instead of search icon.
+
+**Implementation**: Replace with correct Material icon.
+
+**Status**: ❌ Open.
+
+---
+
+### 6.19 No error boundaries at route level ❌
+**Why**: `ErrorBoundary.tsx` exists but `App.tsx` doesn't wrap routes with it. Unhandled errors crash the page.
+
+**Implementation**: Wrap route `<Outlet>` with `ErrorBoundary`.
+
+**Status**: ❌ Open.
+
+---
+
 ### 3.30 TOTP rate limit throws wrong exception type ❌ 💡NEW
 [source: 2026-05-30 audit]
 
@@ -1345,7 +1601,9 @@ Many `Result.Error(it.message ...)` paths surface backend error messages in mobi
 | Phase 2 — Important hardening | 46 | 28 | 18 |
 | Phase 3 — Defense in depth | 33 | 23 | 10 |
 | Phase 4 — Product security | 13 | 0 | 13 |
-| **Total** | **128** | **81** | **47** |
+| Phase 5 — Infrastructure & Operations | 9 | 0 | 9 |
+| Phase 6 — Tech Debt | 19 | 0 | 19 |
+| **Total** | **156** | **81** | **75** |
 
 > **Note**: Item 3.15 (logout without auth) is listed in the Fixed Issues section but
 > remains ❌ Open. The counts above reflect actual status.
