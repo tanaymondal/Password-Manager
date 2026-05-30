@@ -5,6 +5,9 @@ import org.junit.Before
 import org.junit.BeforeClass
 import org.junit.Test
 import java.util.Base64
+import javax.crypto.Cipher
+import javax.crypto.spec.GCMParameterSpec
+import javax.crypto.spec.SecretKeySpec
 
 class CryptoEngineTest {
 
@@ -410,5 +413,17 @@ class CryptoEngineTest {
         )
         val unwrapped = engine.unwrapVaultKeyWithKek(wrappedB64, kekRaw)
         assertEquals("Unwrapped vault key must match golden vector", expectedVk, unwrapped)
+    }
+
+    @Test
+    fun goldenVector_entryEncryptDecrypt() {
+        val vkRaw = Base64.getDecoder().decode("AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=")
+        val secretKey = SecretKeySpec(vkRaw, "AES")
+        val encryptedData = "nToMTDa4ddAQAaXpJRK1sATJKyKwm2AY9XpK412RV0SqFyqPw0dxEX3pdqQrQKGRM282O1j/NRs5P2YuyBWr09vRp0MS0JeFhoyeders9pisZ8LHoOPk2ip89WpgBc3FF2Wrs3TNww=="
+        val iv = Base64.getDecoder().decode("oKGio6Slpqeoqaqr")
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.DECRYPT_MODE, secretKey, GCMParameterSpec(128, iv))
+        val plaintext = String(cipher.doFinal(Base64.getDecoder().decode(encryptedData)), Charsets.UTF_8)
+        assertEquals("{\"password\":\"hunter2\",\"title\":\"Example\",\"url\":\"https://example.com\",\"username\":\"alice\"}", plaintext)
     }
 }
