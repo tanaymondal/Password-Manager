@@ -71,9 +71,17 @@ class CryptoEngineTest {
     }
 
     @Test
+    fun rustCryptoCore_hasDeriveMasterKeyMethod() {
+        val method = Class.forName("com.securevault.mobile.domain.crypto.RustCryptoCore")
+            .getDeclaredMethod("deriveMasterKey", String::class.java, String::class.java, Int::class.java, Int::class.java, Int::class.java)
+        assertNotNull("RustCryptoCore.deriveMasterKey method must exist", method)
+        assertEquals("Return type must be ByteArray", ByteArray::class.java, method.returnType)
+    }
+
+    @Test
     fun rustCryptoCore_hasDeriveAuthHashMethod() {
         val method = Class.forName("com.securevault.mobile.domain.crypto.RustCryptoCore")
-            .getDeclaredMethod("deriveAuthHash", String::class.java, String::class.java, Int::class.java, Int::class.java, Int::class.java)
+            .getDeclaredMethod("deriveAuthHash", ByteArray::class.java)
         assertNotNull("RustCryptoCore.deriveAuthHash method must exist", method)
         assertEquals("Return type must be String", String::class.java, method.returnType)
     }
@@ -81,7 +89,7 @@ class CryptoEngineTest {
     @Test
     fun rustCryptoCore_hasDeriveKekMethod() {
         val method = Class.forName("com.securevault.mobile.domain.crypto.RustCryptoCore")
-            .getDeclaredMethod("deriveKek", String::class.java, String::class.java, Int::class.java, Int::class.java, Int::class.java)
+            .getDeclaredMethod("deriveKek", ByteArray::class.java)
         assertNotNull("RustCryptoCore.deriveKek method must exist", method)
         val returnType = method.returnType
         assertEquals("Return type must be ByteArray", ByteArray::class.java, returnType)
@@ -101,15 +109,11 @@ class CryptoEngineTest {
 
     @Test
     fun rustCryptoCore_ensureLoaded_viaTestHelper() {
-        // The NativeTestHelper should have loaded the library in @BeforeClass
-        // If the native lib is available, this should succeed without throwing
         try {
             val method = Class.forName("com.securevault.mobile.domain.crypto.RustCryptoCore")
-                .getDeclaredMethod("deriveAuthHash", String::class.java, String::class.java, Int::class.java, Int::class.java, Int::class.java)
-            // Method exists — no exception means the class loaded successfully
-            assertNotNull("deriveAuthHash method exists", method)
+                .getDeclaredMethod("deriveMasterKey", String::class.java, String::class.java, Int::class.java, Int::class.java, Int::class.java)
+            assertNotNull("deriveMasterKey method exists", method)
         } catch (e: Exception) {
-            // If we can't even find the class, that's a real failure
             fail("RustCryptoCore class should be accessible: ${e.message}")
         }
     }
@@ -128,6 +132,9 @@ class CryptoEngineTest {
         val mk = deriveMk(password, saltB64, iterations, memory, parallelism)
         return NativeBridge.nativeDeriveKek(mk)!!
     }
+
+    private fun b64(s: String): String =
+        java.util.Base64.getEncoder().encodeToString(s.toByteArray())
 
     private lateinit var engine: CryptoEngine
 
@@ -246,23 +253,23 @@ class CryptoEngineTest {
 
     @Test
     fun goldenVector_authHash_matchesRustAndWasm() {
-        val expected = "g8BLWUGxvI3XdtW2Ig4k2QL2brmIBvGTlLJGIhHbnJU="
-        val got = nativeAuthHash("correct horse battery staple", android.util.Base64.encodeToString("auth-salt-fixed-string".toByteArray(), android.util.Base64.NO_WRAP), 4, 65536, 4)
+        val expected = "8hkvgeWmVKTMnrbsvsrbtj/E5IiFKR7PJzdeijmmcig="
+        val got = nativeAuthHash("correct horse battery staple", b64("auth-salt-fixed-string"), 3, 98304, 4)
         assertEquals("Android JNI auth_hash must match Rust/WASM golden vector", expected, got)
     }
 
     @Test
     fun goldenVector_kek_matchesRustAndWasm() {
-        val expected = "504NmZdCQp2PNGAZA5gq3vh1rwcT/pVLXWHDcJlf18w="
-        val got = nativeKek("correct horse battery staple", "MDEyMzQ1Njc4OWFiY2RlZg==", 4, 65536, 4)
+        val expected = "z5Dul//cRyhNDmSjS8qVN9eqHIk78ZN917oFJj3L38A="
+        val got = nativeKek("correct horse battery staple", "MDEyMzQ1Njc4OWFiY2RlZg==", 3, 98304, 4)
         assertEquals("Android JNI kek must match Rust/WASM golden vector", expected, got)
     }
 
     @Test
     fun goldenVector_authHash_worksWithFastParams() {
-        val got = nativeAuthHash("correct horse battery staple", android.util.Base64.encodeToString("auth-salt-fixed-string".toByteArray(), android.util.Base64.NO_WRAP), 3, 8192, 1)
+        val got = nativeAuthHash("correct horse battery staple", b64("auth-salt-fixed-string"), 3, 8192, 1)
         assertNotNull("auth hash with fast params must not be null", got)
-        assertEquals("auth hash must be 44 chars (base64 of 32 bytes)", 44, got!!.length)
+        assertEquals("auth hash must be 44 chars (base64 of 32 bytes)", 44, got.length)
     }
 
     @Test

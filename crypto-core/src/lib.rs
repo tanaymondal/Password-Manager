@@ -6,7 +6,7 @@ mod params;
 #[cfg(target_arch = "wasm32")]
 pub mod wasm;
 
-#[cfg(target_os = "android")]
+#[cfg(any(target_os = "android", target_os = "macos"))]
 pub mod jni_bridge;
 
 #[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
