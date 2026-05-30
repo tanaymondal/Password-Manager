@@ -33,8 +33,8 @@ describe('golden vectors (cross-platform parity)', () => {
 
   it('all platforms produce same kek', async () => {
     const kek = await deriveKek('correct horse battery staple', b64('0123456789abcdef'), 3, 98304, 4)
-    expect(kek).toBeTruthy()
-    expect(kek.algorithm.name).toBe('AES-GCM')
+    const raw = new Uint8Array(await crypto.subtle.exportKey('raw', kek))
+    expect(btoa(String.fromCharCode(...raw))).toBe('z5Dul//cRyhNDmSjS8qVN9eqHIk78ZN917oFJj3L38A=')
   })
 
   it('generates deterministic auth hash', async () => {
