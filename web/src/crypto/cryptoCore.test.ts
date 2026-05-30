@@ -9,6 +9,8 @@ import {
   wrapVaultKey,
   encryptEntry,
   decryptEntry,
+  encryptField,
+  decryptField,
 } from './cryptoCore'
 
 function b64(s: string | Uint8Array): string {
@@ -70,6 +72,15 @@ describe('AES-GCM golden vectors (cross-platform parity)', () => {
         const vk = await importKey(vkRaw)
         const decrypted = await decryptEntry(vk, exp.encrypted_data, exp.iv)
         expect(decrypted).toBe(inp.plaintext_json)
+      })
+    }
+
+    if (op === 'encrypt_field') {
+      it(`${name}: decrypt field recovers plaintext`, async () => {
+        const vkRaw = new Uint8Array(atob(inp.vault_key_raw_b64).split('').map(c => c.charCodeAt(0)))
+        const vk = await importKey(vkRaw)
+        const decrypted = await decryptField(vk, exp.ciphertext)
+        expect(decrypted).toBe(inp.plaintext)
       })
     }
   }

@@ -426,4 +426,19 @@ class CryptoEngineTest {
         val plaintext = String(cipher.doFinal(Base64.getDecoder().decode(encryptedData)), Charsets.UTF_8)
         assertEquals("{\"password\":\"hunter2\",\"title\":\"Example\",\"url\":\"https://example.com\",\"username\":\"alice\"}", plaintext)
     }
+
+    @Test
+    fun goldenVector_fieldEncryptDecrypt() {
+        val vkRaw = Base64.getDecoder().decode("AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=")
+        val secretKey = SecretKeySpec(vkRaw, "AES")
+        // Field format: "v1:" + base64(nonce[12] || ciphertext || tag[16])
+        val ciphertext = "v1:oKGio6Slpqeoqaqrjm0SWSC5MCfL5aobdPsWtGz5Z/PKjqM="
+        val raw = Base64.getDecoder().decode(ciphertext.substring(3))
+        val iv = raw.copyOfRange(0, 12)
+        val ct = raw.copyOfRange(12, raw.size)
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.DECRYPT_MODE, secretKey, GCMParameterSpec(128, iv))
+        val plaintext = String(cipher.doFinal(ct), Charsets.UTF_8)
+        assertEquals("hunter2", plaintext)
+    }
 }

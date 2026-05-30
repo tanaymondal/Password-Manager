@@ -7,6 +7,8 @@ import init, {
   wasm_unwrap_vault_key,
   wasm_encrypt_entry,
   wasm_decrypt_entry,
+  wasm_encrypt_field,
+  wasm_decrypt_field,
 } from './wasm/securevault_crypto_core'
 import { getKdfConfig } from './kdfConfig'
 
@@ -132,4 +134,22 @@ export async function decryptEntry(
   await ensureInit()
   const vkB64 = b64(new Uint8Array(await crypto.subtle.exportKey('raw', vaultKey)))
   return wasm_decrypt_entry(vkB64, encryptedData, ivBase64)
+}
+
+export async function encryptField(
+  vaultKey: CryptoKey,
+  plaintext: string,
+): Promise<string> {
+  await ensureInit()
+  const vkB64 = b64(new Uint8Array(await crypto.subtle.exportKey('raw', vaultKey)))
+  return wasm_encrypt_field(vkB64, plaintext)
+}
+
+export async function decryptField(
+  vaultKey: CryptoKey,
+  ciphertext: string,
+): Promise<string> {
+  await ensureInit()
+  const vkB64 = b64(new Uint8Array(await crypto.subtle.exportKey('raw', vaultKey)))
+  return wasm_decrypt_field(vkB64, ciphertext)
 }
