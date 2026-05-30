@@ -28,22 +28,35 @@ fn decrypt_and_roundtrip_against_vectors() {
         match op {
             "wrap_vault_key" => {
                 let kek = dec(inp["kek_raw_b64"].as_str().unwrap());
-                let expected_vk = dec(inp["vault_key_raw_b64"].as_str().unwrap());
+                let vk = dec(inp["vault_key_raw_b64"].as_str().unwrap());
+                let nonce: [u8; 12] = dec(inp["nonce_b64"].as_str().unwrap()).try_into().unwrap();
                 let unwrapped = unwrap_vault_key(&kek, exp["wrapped_b64"].as_str().unwrap()).unwrap();
-                assert_eq!(unwrapped, expected_vk, "{name} unwrap");
+                assert_eq!(unwrapped, vk, "{name} unwrap");
+                // Verify Rust produces identical ciphertext when encrypting with same nonce
+                let encrypted = wrap_vault_key_with_nonce(&kek, &vk, &nonce).unwrap();
+                assert_eq!(encrypted, exp["wrapped_b64"].as_str().unwrap(), "{name} encrypt");
             }
             "encrypt_entry" => {
                 let vk = dec(inp["vault_key_raw_b64"].as_str().unwrap());
+                let nonce: [u8; 12] = dec(inp["nonce_b64"].as_str().unwrap()).try_into().unwrap();
                 let c = EntryCiphertext {
                     encrypted_data: exp["encrypted_data"].as_str().unwrap().to_string(),
                     iv: exp["iv"].as_str().unwrap().to_string(),
                 };
                 assert_eq!(decrypt_entry(&vk, &c).unwrap(), inp["plaintext_json"].as_str().unwrap(), "{name}");
+                // Verify Rust produces identical ciphertext when encrypting with same nonce
+                let encrypted = encrypt_entry_with_nonce(&vk, inp["plaintext_json"].as_str().unwrap(), &nonce).unwrap();
+                assert_eq!(encrypted.encrypted_data, exp["encrypted_data"].as_str().unwrap(), "{name} encrypt data");
+                assert_eq!(encrypted.iv, exp["iv"].as_str().unwrap(), "{name} encrypt iv");
             }
             "encrypt_field" => {
                 let vk = dec(inp["vault_key_raw_b64"].as_str().unwrap());
+                let nonce: [u8; 12] = dec(inp["nonce_b64"].as_str().unwrap()).try_into().unwrap();
                 let got = decrypt_field(&vk, exp["ciphertext"].as_str().unwrap()).unwrap();
                 assert_eq!(got, inp["plaintext"].as_str().unwrap(), "{name}");
+                // Verify Rust produces identical ciphertext when encrypting with same nonce
+                let encrypted = encrypt_field_with_nonce(&vk, inp["plaintext"].as_str().unwrap(), &nonce).unwrap();
+                assert_eq!(encrypted, exp["ciphertext"].as_str().unwrap(), "{name} encrypt");
             }
             _ => {}
         }

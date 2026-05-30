@@ -88,7 +88,7 @@ pub fn generate_salt() -> Result<String, CryptoError> {
 // Envelope A — wrapped vault key: base64( nonce || ct||tag )
 // ---------------------------------------------------------------------------
 
-pub(crate) fn wrap_vault_key_with_nonce(
+pub fn wrap_vault_key_with_nonce(
     kek: &[u8],
     vault_key: &[u8],
     nonce: &[u8; NONCE_LEN],
@@ -125,7 +125,7 @@ pub struct EntryCiphertext {
     pub iv: String,
 }
 
-pub(crate) fn encrypt_entry_with_nonce(
+pub fn encrypt_entry_with_nonce(
     vault_key: &[u8],
     plaintext_json: &str,
     nonce: &[u8; NONCE_LEN],
@@ -154,7 +154,7 @@ pub fn decrypt_entry(vault_key: &[u8], c: &EntryCiphertext) -> Result<String, Cr
 // Envelope C — local field (Android cache parity): "v1:"+b64( nonce || ct||tag )
 // ---------------------------------------------------------------------------
 
-pub(crate) fn encrypt_field_with_nonce(
+pub fn encrypt_field_with_nonce(
     vault_key: &[u8],
     plaintext: &str,
     nonce: &[u8; NONCE_LEN],
