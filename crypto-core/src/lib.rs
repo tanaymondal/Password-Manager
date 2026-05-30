@@ -17,13 +17,16 @@ pub use params::{KdfParams, DEFAULT_PARAMS};
 
 use aead::NONCE_LEN;
 use base64::{engine::general_purpose::STANDARD, Engine as _};
+use hmac::{Hmac, Mac};
 use serde::Serialize;
-use sha2::{Digest, Sha256};
+use sha2::Sha256;
 use zeroize::Zeroize;
 
 const VERSION_PREFIX: &str = "v1:";
 const KEY_LEN: usize = 32;
 const SALT_LEN: usize = 16;
+const AUTH_HASH_TAG: &[u8] = b"securevault-auth";
+const KEK_TAG: &[u8] = b"securevault-kek";
 
 fn b64e(b: &[u8]) -> String {
     STANDARD.encode(b)
@@ -48,20 +51,18 @@ pub fn derive_master_key(password: &str, salt: &[u8], p: &KdfParams) -> Result<[
     kdf::argon2id_raw(password.as_bytes(), salt, p)
 }
 
-/// Derive the auth hash from a master key (SHA256(master_key || b"auth")).
+/// Derive the auth hash from a master key (HMAC-SHA256(master_key, tag)).
 pub fn derive_auth_hash(master_key: &[u8]) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(master_key);
-    hasher.update(b"securevault-auth");
-    b64e(&hasher.finalize())
+    let mut mac = Hmac::<Sha256>::new_from_slice(master_key).expect("HMAC accepts 32-byte key");
+    mac.update(AUTH_HASH_TAG);
+    b64e(&mac.finalize().into_bytes())
 }
 
-/// Derive the KEK from a master key (SHA256(master_key || b"kek")).
+/// Derive the KEK from a master key (HMAC-SHA256(master_key, tag)).
 pub fn derive_kek(master_key: &[u8]) -> Vec<u8> {
-    let mut hasher = Sha256::new();
-    hasher.update(master_key);
-    hasher.update(b"securevault-kek");
-    hasher.finalize().to_vec()
+    let mut mac = Hmac::<Sha256>::new_from_slice(master_key).expect("HMAC accepts 32-byte key");
+    mac.update(KEK_TAG);
+    mac.finalize().into_bytes().to_vec()
 }
 
 // ---------------------------------------------------------------------------
