@@ -283,54 +283,17 @@ The refresh token cookie is set with `path="/api/v1/auth"`, sending it to all en
 
 ### Phase 3 — Defense in depth
 
-### 3.2 Optional "secret key" (1Password-style) ❌
-[source: need_to_fix 3.2]
+### 3.33 No encryption key rotation ❌ 💡NEW
+[source: 2026-05-30 audit]
 
-128-bit random value at signup, never sent to server. Combined with master password for KDF input.
+Bitwarden supports rotating the vault encryption key independently of the master password. This allows users to generate a new random vault key and re-encrypt all entries if they suspect compromise, without changing their password. SecureVault has no such feature — the vault key is set at registration and only changes during password change (re-wrapped, not rotated).
 
-**Status**: ❌ Open.
+**Implementation sketch**:
+1. Backend: `POST /auth/rotate-key` endpoint (requires sudo)
+2. Client: Generate new vault key, re-encrypt all entries with it, wrap with current KEK, send new wrapped key + re-encrypted batch to server
+3. UI: "Rotate encryption key" button in settings
 
----
-### 3.5 Device binding & session management ❌
-[source: need_to_fix 3.5]
-
-Wire up existing `Device` entity: register device fingerprint, list sessions, revoke per-device, email notification on new device.
-
-**Status**: ❌ Open.
-
----
-### 3.6 Encrypted database backups ❌
-[source: need_to_fix 3.6]
-
-`pg_dump` → encrypt with KMS key → store in S3 with object lock.
-
-**Status**: ❌ Open.
-
----
-### 3.7 Dependency & supply chain ❌
-[source: need_to_fix 3.7, claude H13, codex H13]
-
-Spring Boot `3.2.0`, Ktor `2.3.7`, `androidx.security:security-crypto:1.1.0-alpha06`, older mobile deps. No Dependabot/Renovate, no OWASP Dependency-Check in CI.
-
-**Status**: ❌ Open.
-
----
-### 3.11 No Play Integrity / App Attest / root detection ❌
-[source: claude L19]
-
-For an Android password manager, app + device integrity attestation is table stakes. Currently nothing.
-
-**Status**: ❌ Open.
-
----
-### 3.24 `Cache-Control: no-store` on all backend responses ❌
-[source: claude M3]
-
-Set in `SecurityHeadersFilter.java:39`. Verified no proxy chain override needed.
-
-**Status**: ❌ Verify in production.
-
----
+**Status**: ❌ Open (future roadmap).
 
 ### 3.30 TOTP rate limit throws wrong exception type ❌ 💡NEW
 [source: 2026-05-30 audit]
@@ -1259,8 +1222,8 @@ Many `Result.Error(it.message ...)` paths surface backend error messages in mobi
 | Phase 0 — Stop the bleeding | 9 | 9 | 0 |
 | Phase 1 — Critical hardening | 27 | 21 | 6 |
 | Phase 2 — Important hardening | 46 | 28 | 18 |
-| Phase 3 — Defense in depth | 32 | 23 | 9 |
-| **Total** | **114** | **81** | **33** |
+| Phase 3 — Defense in depth | 33 | 23 | 10 |
+| **Total** | **115** | **81** | **34** |
 
 > **Note**: Item 3.15 (logout without auth) is listed in the Fixed Issues section but
 > remains ❌ Open. The counts above reflect actual status.
