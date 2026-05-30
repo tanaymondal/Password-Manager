@@ -55,6 +55,28 @@ Ktor's default `HttpClient` has no SSL pinning. User-installed or compromised pu
 
 ---
 
+### 1.26 Refresh token leakage via User-Agent spoofing ❌ 💡NEW
+[source: 2026-05-30 audit]
+
+`AuthController.isMobileClient()` determines whether to strip the refresh token from the JSON body based on whether the User-Agent contains `"Mozilla"`. An attacker can omit or change the User-Agent header on any web request to `/register`, `/verify-2fa`, `/refresh`, or `/change-password` and receive the refresh token in the response body — completely bypassing HttpOnly+Secure+SameSite=Strict cookie protection. Any XSS that calls `fetch()` and reads `res.json()` can exfiltrate the refresh token.
+
+**Files**: `AuthController.java:256-258`
+
+**Status**: ❌ Open.
+
+---
+
+### 1.27 Login debug log leaks user existence ❌ 💡NEW
+[source: 2026-05-30 audit]
+
+`AuthService.java:176` logs `LOGIN_DEBUG: userExists={}`, explicitly revealing whether an email exists in the database. Despite timing-constant login responses, anyone with log access (monitoring tools, insiders, log aggregation) can enumerate all registered users.
+
+**File**: `AuthService.java:176`
+
+**Status**: ❌ Open.
+
+---
+
 ### Phase 2 — Important hardening
 
 ### 2.7 No 2FA enforcement on sensitive operations ✅
@@ -160,6 +182,105 @@ Blocks camera/mic/geo/payment but not `interest-cohort=()`, `browsing-topics=()`
 
 ---
 
+### 2.38 Sudo token accepted via URL query parameter ❌ 💡NEW
+[source: 2026-05-30 audit]
+
+`SudoAspect.java:35` falls back to `request.getParameter("sudo_token")` when the `X-Sudo-Token` header is absent. Sudo tokens in URLs are logged in access logs, stored in browser history, and leaked via Referer headers. This undermines the entire sudo re-authentication mechanism for dangerous operations (delete account, change password, disable 2FA).
+
+**File**: `SudoAspect.java:35`
+
+**Status**: ❌ Open.
+
+---
+
+### 2.39 No rate limiting on `/prelogin` endpoint ❌ 💡NEW
+[source: 2026-05-30 audit]
+
+The `prelogin` endpoint has zero rate limiting. An attacker can enumerate users through timing (DB lookup vs. random generation), DoS the database with `findByEmail` queries, and waste entropy via `new SecureRandom()` per unknown request.
+
+**File**: `AuthController.java:56-61`, `AuthService.java:147-155`
+
+**Status**: ❌ Open.
+
+---
+
+### 2.40 Error message sanitization too narrow ❌ 💡NEW
+[source: 2026-05-30 audit]
+
+`GlobalExceptionHandler` uses a whitelist of substrings to sanitize `IllegalArgumentException` messages, but many internal messages escape: `"An account with this email already exists"` (leaks email existence), `"Refresh token expired"`, `"Account is temporarily locked"`, `"Vault entry limit reached (10000 entries)"`, `"Password has been used recently"`, `"Current auth hash is incorrect"`. These reveal internal state and can be used for enumeration.
+
+**File**: `GlobalExceptionHandler.java:74-90`
+
+**Status**: ❌ Open.
+
+---
+
+### 2.41 No Tomcat-level request body size limit ❌ 💡NEW
+[source: 2026-05-30 audit]
+
+While individual DTOs have `@Size` constraints, there is no `server.tomcat.max-http-form-post-size` or `spring.servlet.multipart.max-request-size` configured. An attacker can send multi-megabyte payloads that Spring must parse before rejecting, enabling DoS via memory exhaustion.
+
+**Files**: `application.properties`, `application-prod.properties`
+
+**Status**: ❌ Open.
+
+---
+
+### 2.42 Password change resets KDF to defaults ❌ 💡NEW
+[source: 2026-05-30 audit]
+
+`AuthService.changePassword()` unconditionally sets `kdfIterations`, `kdfMemory`, and `kdfParallelism` to `EncryptionConstants.DEFAULT_*` values (4, 65536, 4). If a user previously upgraded their KDF parameters via `upgradeKdf`, changing their password silently downgrades them to weaker defaults.
+
+**File**: `AuthService.java:408-410`
+
+**Status**: ❌ Open.
+
+---
+
+### 2.43 `constantTimeEquals` leaks length on mismatch ❌ 💡NEW
+[source: 2026-05-30 audit]
+
+`PasswordService.constantTimeEquals()` returns `false` immediately when byte lengths differ. Safe for fixed-length PBKDF2 hashes but risky if used for variable-length inputs. Should be documented as hash-only or implement true constant-time comparison.
+
+**File**: `PasswordService.java:29-31`
+
+**Status**: ❌ Open.
+
+---
+
+### 2.44 New `SecureRandom` instance per unknown prelogin request ❌ 💡NEW
+[source: 2026-05-30 audit]
+
+`AuthService.prelogin()` creates a `new SecureRandom()` for every unknown email. Combined with no rate limiting on prelogin (2.39), this enables entropy exhaustion and performance degradation.
+
+**File**: `AuthService.java:148-149`
+
+**Status**: ❌ Open.
+
+---
+
+### 2.45 Redis as single point of failure for security features ❌ 💡NEW
+[source: 2026-05-30 audit]
+
+Token denylist, rate limiting, login challenges, sudo tokens, deleted user tracking, and TOTP rate limiting all depend on Redis. If Redis is unavailable: `hasKey()` returns `null` → denylist bypassed; `increment()` returns `null` → rate limiting disabled; deleted user tokens accepted. No circuit breaker or pessimistic fallback exists.
+
+**Files**: `JwtAuthenticationFilter.java`, `RateLimitingFilter.java`, `PendingLoginChallengeStore.java`, `SudoService.java`, `LoginRateLimiter.java`
+
+**Status**: ❌ Open.
+
+---
+
+### 2.46 Refresh token cookie path too broad ❌ 💡NEW
+[source: 2026-05-30 audit]
+
+The refresh token cookie is set with `path="/api/v1/auth"`, sending it to all endpoints under that path including `prelogin`, `register`, `login`, and `verify-2fa`. Only `/api/v1/auth/refresh` needs the cookie. Narrowing the path reduces the attack surface if any of those endpoints have vulnerabilities.
+
+**File**: `AuthController.java:238`
+
+**Status**: ❌ Open.
+
+---
+
 ### Phase 3 — Defense in depth
 
 ### 3.2 Optional "secret key" (1Password-style) ❌
@@ -208,6 +329,39 @@ For an Android password manager, app + device integrity attestation is table sta
 Set in `SecurityHeadersFilter.java:39`. Verified no proxy chain override needed.
 
 **Status**: ❌ Verify in production.
+
+---
+
+### 3.30 TOTP rate limit throws wrong exception type ❌ 💡NEW
+[source: 2026-05-30 audit]
+
+`TwoFactorAuthService.checkTOTPActionRateLimit()` throws `IllegalArgumentException` instead of `RateLimitExceededException`. This results in a 400 response instead of 429, preventing clients from distinguishing rate limits from validation errors.
+
+**File**: `TwoFactorAuthService.java:133`
+
+**Status**: ❌ Open.
+
+---
+
+### 3.31 `LoginRequest.deviceId` and `deviceName` have no size constraints ❌ 💡NEW
+[source: 2026-05-30 audit]
+
+While `RegisterRequest.deviceId` has `@Size(max=255)`, `LoginRequest.deviceId` and `LoginRequest.deviceName` have no `@Size` constraints. A 1MB+ deviceId could cause issues when stored in the pending challenge in Redis.
+
+**File**: `LoginRequest.java:19-20`
+
+**Status**: ❌ Open.
+
+---
+
+### 3.32 No scheduled cleanup of expired refresh tokens ❌ 💡NEW
+[source: 2026-05-30 audit]
+
+Expired refresh tokens accumulate in the database forever. While they expire naturally, no `@Scheduled` cleanup job removes them, leading to unbounded table growth over time.
+
+**File**: `RefreshToken` entity, `RefreshTokenRepository`
+
+**Status**: ❌ Open.
 
 ---
 
@@ -907,7 +1061,7 @@ Defined but never imported. Dead code creating false confidence.
 **Status**: ✅ Fixed.
 
 ---
-### 3.15 `Logout` accepts refresh tokens without auth ✅
+### 3.15 `Logout` accepts refresh tokens without auth ❌
 [source: claude L9, codex L8]
 
 Anyone with a stolen refresh token can spam logout to invalidate the victim's session (targeted session DoS).
@@ -1103,10 +1257,13 @@ Many `Result.Error(it.message ...)` paths surface backend error messages in mobi
 | Category | Total | ✅ Fixed | ❌ Remaining |
 |----------|-------|----------|-------------|
 | Phase 0 — Stop the bleeding | 9 | 9 | 0 |
-| Phase 1 — Critical hardening | 25 | 21 | 4 |
-| Phase 2 — Important hardening | 37 | 26 | 11 |
-| Phase 3 — Defense in depth | 29 | 23 | 6 |
-| **Total** | **100** | **79** | **21** |
+| Phase 1 — Critical hardening | 27 | 21 | 6 |
+| Phase 2 — Important hardening | 46 | 26 | 20 |
+| Phase 3 — Defense in depth | 32 | 23 | 9 |
+| **Total** | **114** | **79** | **35** |
+
+> **Note**: Item 3.15 (logout without auth) is listed in the Fixed Issues section but
+> remains ❌ Open. The counts above reflect actual status.
 
 ### Verification
 - Backend `mvn -q test`: passed (6/6)

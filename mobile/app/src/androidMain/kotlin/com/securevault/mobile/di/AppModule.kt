@@ -24,7 +24,6 @@ import com.securevault.mobile.ui.screens.settings.SettingsViewModel
 import com.securevault.mobile.ui.screens.vault.AddEditEntryViewModel
 import com.securevault.mobile.ui.screens.vault.VaultViewModel
 import org.koin.android.ext.koin.androidContext
-import org.koin.androidx.viewmodel.dsl.viewModel
 import org.koin.dsl.module
 
 val appModule = module {
@@ -74,10 +73,10 @@ val appModule = module {
     factory<GetTwoFactorStatusUseCase> { GetTwoFactorStatusUseCaseImpl(get()) }
 
     // ViewModels
-    viewModel { LoginViewModel(get(), get(), get()) }
-    viewModel { RegisterViewModel(get(), get()) }
-    viewModel { VaultViewModel(get(), get(), get()) }
-    viewModel { AddEditEntryViewModel(get(), get(), get()) }
-    viewModel { SettingsViewModel(get(), get(), get(), get()) }
-    viewModel { UnlockViewModel(get(), get()) }
+    single { LoginViewModel(get(), get(), get()) }
+    single { RegisterViewModel(get(), get()) }
+    single { VaultViewModel(get(), get(), get()) }
+    single { AddEditEntryViewModel(get(), get(), get()) }
+    single { SettingsViewModel(get(), get(), get(), get()) }
+    single { UnlockViewModel(get(), get()) }
 }

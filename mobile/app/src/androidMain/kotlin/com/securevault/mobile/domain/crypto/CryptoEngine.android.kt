@@ -1,7 +1,5 @@
 package com.securevault.mobile.domain.crypto
 
-import com.lambdapioneer.argon2kt.Argon2Kt
-import com.lambdapioneer.argon2kt.Argon2Mode
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.Base64
@@ -12,7 +10,6 @@ import javax.crypto.spec.SecretKeySpec
 actual class CryptoEngine {
 
     private val secureRandom = SecureRandom()
-    private val argon2Kt = Argon2Kt()
     private val keyLength = 32
 
     actual fun generateSalt(): String {
@@ -22,17 +19,7 @@ actual class CryptoEngine {
     }
 
     actual fun generateAuthHash(password: String, salt: String, iterations: Int, memory: Int, parallelism: Int): String {
-        val saltBytes = salt.toByteArray(Charsets.UTF_8)
-        val hash = argon2Kt.hash(
-            mode = Argon2Mode.ARGON2_ID,
-            password = password.toByteArray(Charsets.UTF_8),
-            salt = saltBytes,
-            tCostInIterations = iterations,
-            mCostInKibibyte = memory,
-            parallelism = parallelism,
-            hashLengthInBytes = keyLength
-        )
-        return Base64.getEncoder().encodeToString(hash.rawHashAsByteArray())
+        return RustCryptoCore.deriveAuthHash(password, salt, iterations, memory, parallelism)
     }
 
     actual fun generateVaultKey(): String {
@@ -42,17 +29,7 @@ actual class CryptoEngine {
     }
 
     actual fun deriveKek(password: String, encryptionSalt: String, iterations: Int, memory: Int, parallelism: Int): ByteArray {
-        val saltBytes = Base64.getDecoder().decode(encryptionSalt)
-        val hash = argon2Kt.hash(
-            mode = Argon2Mode.ARGON2_ID,
-            password = password.toByteArray(Charsets.UTF_8),
-            salt = saltBytes,
-            tCostInIterations = iterations,
-            mCostInKibibyte = memory,
-            parallelism = parallelism,
-            hashLengthInBytes = keyLength
-        )
-        return hash.rawHashAsByteArray()
+        return RustCryptoCore.deriveKek(password, encryptionSalt, iterations, memory, parallelism)
     }
 
     actual fun wrapVaultKey(vaultKey: String, kek: ByteArray): String {

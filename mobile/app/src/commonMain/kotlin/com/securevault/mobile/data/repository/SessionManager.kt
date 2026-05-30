@@ -1,150 +1,32 @@
 package com.securevault.mobile.data.repository
 
-import android.content.Context
-import android.content.SharedPreferences
-import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKey
-
 object SessionManager {
-    private const val PREFS_NAME = "secure_vault_session"
-    private const val PREFS_ENCRYPTED_NAME = "secure_vault_session_encrypted"
-    private const val KEY_ACCESS_TOKEN = "access_token"
-    private const val KEY_REFRESH_TOKEN = "refresh_token"
-    private const val KEY_ENCRYPTION_SALT = "encryption_salt"
-    private const val KEY_USER_ID = "user_id"
-    private const val KEY_USER_EMAIL = "user_email"
-    private const val KEY_ENCRYPTION_VERSION = "encryption_version"
-    private const val KEY_WRAPPED_VAULT_KEY = "wrapped_vault_key"
-    private const val KEY_DEVICE_ID = "device_id"
-    private const val KEY_BIOMETRIC_ENABLED = "biometric_enabled"
-    private const val KEY_KDF_ITERATIONS = "kdf_iterations"
-    private const val KEY_KDF_MEMORY = "kdf_memory"
-    private const val KEY_KDF_PARALLELISM = "kdf_parallelism"
+    val storage = PlatformStorage()
 
-    private var encryptedPrefs: SharedPreferences? = null
-    private var appContext: Context? = null
-
-    fun init(context: Context) {
-        appContext = context.applicationContext
-        if (encryptedPrefs == null) {
-            try {
-                val masterKey = MasterKey.Builder(context)
-                    .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-                    .build()
-                encryptedPrefs = EncryptedSharedPreferences.create(
-                    context,
-                    PREFS_ENCRYPTED_NAME,
-                    masterKey,
-                    EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                    EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-                )
-            } catch (e: Exception) {
-                context.getSharedPreferences(PREFS_ENCRYPTED_NAME, Context.MODE_PRIVATE)
-                    .edit()
-                    .clear()
-                    .apply()
-                context.deleteSharedPreferences(PREFS_ENCRYPTED_NAME)
-                val masterKey = MasterKey.Builder(context)
-                    .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-                    .build()
-                encryptedPrefs = EncryptedSharedPreferences.create(
-                    context,
-                    PREFS_ENCRYPTED_NAME,
-                    masterKey,
-                    EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                    EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-                )
-            }
-        }
-    }
-
-    fun getAccessToken(): String = encryptedPrefs?.getString(KEY_ACCESS_TOKEN, "") ?: ""
-
-    fun setAccessToken(value: String) {
-        encryptedPrefs?.edit()?.putString(KEY_ACCESS_TOKEN, value)?.apply()
-    }
-
-    fun getRefreshToken(): String = encryptedPrefs?.getString(KEY_REFRESH_TOKEN, "") ?: ""
-
-    fun setRefreshToken(value: String) {
-        encryptedPrefs?.edit()?.putString(KEY_REFRESH_TOKEN, value)?.apply()
-    }
-
-    fun getEncryptionSalt(): String = encryptedPrefs?.getString(KEY_ENCRYPTION_SALT, "") ?: ""
-
-    fun setEncryptionSalt(value: String) {
-        encryptedPrefs?.edit()?.putString(KEY_ENCRYPTION_SALT, value)?.apply()
-    }
-
-    fun getUserId(): String = encryptedPrefs?.getString(KEY_USER_ID, "") ?: ""
-
-    fun setUserId(value: String) {
-        encryptedPrefs?.edit()?.putString(KEY_USER_ID, value)?.apply()
-    }
-
-    fun getUserEmail(): String = encryptedPrefs?.getString(KEY_USER_EMAIL, "") ?: ""
-
-    fun setUserEmail(value: String) {
-        encryptedPrefs?.edit()?.putString(KEY_USER_EMAIL, value)?.apply()
-    }
-
-    fun getEncryptionVersion(): Int = encryptedPrefs?.getInt(KEY_ENCRYPTION_VERSION, 2) ?: 2
-
-    fun setEncryptionVersion(value: Int) {
-        encryptedPrefs?.edit()?.putInt(KEY_ENCRYPTION_VERSION, value)?.apply()
-    }
-
-    fun getWrappedVaultKey(): String = encryptedPrefs?.getString(KEY_WRAPPED_VAULT_KEY, "") ?: ""
-
-    fun setWrappedVaultKey(value: String) {
-        encryptedPrefs?.edit()?.putString(KEY_WRAPPED_VAULT_KEY, value)?.apply()
-    }
-
-    fun getDeviceId(): String = encryptedPrefs?.getString(KEY_DEVICE_ID, "") ?: ""
-
-    fun setDeviceId(value: String) {
-        encryptedPrefs?.edit()?.putString(KEY_DEVICE_ID, value)?.apply()
-    }
-
-    fun getBiometricEnabled(): Boolean = encryptedPrefs?.getBoolean(KEY_BIOMETRIC_ENABLED, false) ?: false
-
-    fun setBiometricEnabled(value: Boolean) {
-        encryptedPrefs?.edit()?.putBoolean(KEY_BIOMETRIC_ENABLED, value)?.apply()
-    }
-
-    fun getKdfIterations(): Int = encryptedPrefs?.getInt(KEY_KDF_ITERATIONS, 4) ?: 4
-
-    fun setKdfIterations(value: Int) {
-        encryptedPrefs?.edit()?.putInt(KEY_KDF_ITERATIONS, value)?.apply()
-    }
-
-    fun getKdfMemory(): Int = encryptedPrefs?.getInt(KEY_KDF_MEMORY, 65536) ?: 65536
-
-    fun setKdfMemory(value: Int) {
-        encryptedPrefs?.edit()?.putInt(KEY_KDF_MEMORY, value)?.apply()
-    }
-
-    fun getKdfParallelism(): Int = encryptedPrefs?.getInt(KEY_KDF_PARALLELISM, 4) ?: 4
-
-    fun setKdfParallelism(value: Int) {
-        encryptedPrefs?.edit()?.putInt(KEY_KDF_PARALLELISM, value)?.apply()
-    }
-
-    val isLoggedIn: Boolean
-        get() = getAccessToken().isNotEmpty()
-
-    fun clearSession() {
-        encryptedPrefs?.edit()?.clear()?.apply()
-        clearLocalDatabase()
-    }
-
-    private fun clearLocalDatabase() {
-        val context = appContext ?: return
-        context.deleteDatabase("secure_vault.db")
-        context.getSharedPreferences("secure_vault_db_prefs", Context.MODE_PRIVATE)
-            .edit()
-            .clear()
-            .apply()
-        context.deleteSharedPreferences("secure_vault_db_prefs")
-    }
+    fun getAccessToken(): String = storage.getString("sv_at", "")
+    fun setAccessToken(value: String) { storage.putString("sv_at", value) }
+    fun getRefreshToken(): String = storage.getString("sv_rt", "")
+    fun setRefreshToken(value: String) { storage.putString("sv_rt", value) }
+    fun getEncryptionSalt(): String = storage.getString("sv_es", "")
+    fun setEncryptionSalt(value: String) { storage.putString("sv_es", value) }
+    fun getUserId(): String = storage.getString("sv_uid", "")
+    fun setUserId(value: String) { storage.putString("sv_uid", value) }
+    fun getUserEmail(): String = storage.getString("sv_em", "")
+    fun setUserEmail(value: String) { storage.putString("sv_em", value) }
+    fun getEncryptionVersion(): Int = storage.getInt("sv_ev", 2)
+    fun setEncryptionVersion(value: Int) { storage.putInt("sv_ev", value) }
+    fun getWrappedVaultKey(): String = storage.getString("sv_wvk", "")
+    fun setWrappedVaultKey(value: String) { storage.putString("sv_wvk", value) }
+    fun getDeviceId(): String = storage.getString("sv_did", "")
+    fun setDeviceId(value: String) { storage.putString("sv_did", value) }
+    fun getBiometricEnabled(): Boolean = storage.getBoolean("sv_be", false)
+    fun setBiometricEnabled(value: Boolean) { storage.putBoolean("sv_be", value) }
+    fun getKdfIterations(): Int = storage.getInt("sv_ki", 4)
+    fun setKdfIterations(value: Int) { storage.putInt("sv_ki", value) }
+    fun getKdfMemory(): Int = storage.getInt("sv_km", 65536)
+    fun setKdfMemory(value: Int) { storage.putInt("sv_km", value) }
+    fun getKdfParallelism(): Int = storage.getInt("sv_kp", 4)
+    fun setKdfParallelism(value: Int) { storage.putInt("sv_kp", value) }
+    val isLoggedIn: Boolean get() = getAccessToken().isNotEmpty()
+    fun clearSession() { storage.clear() }
 }

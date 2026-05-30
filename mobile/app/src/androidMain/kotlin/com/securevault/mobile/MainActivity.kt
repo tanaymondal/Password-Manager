@@ -13,7 +13,6 @@ import com.securevault.mobile.di.appModule
 import com.securevault.mobile.ui.navigation.SecureVaultNavHost
 import com.securevault.mobile.ui.theme.SecureVaultTheme
 import org.koin.android.ext.koin.androidContext
-import org.koin.androidx.compose.KoinAndroidContext
 import org.koin.core.context.startKoin
 
 class MainActivity : FragmentActivity() {
@@ -25,7 +24,7 @@ class MainActivity : FragmentActivity() {
             WindowManager.LayoutParams.FLAG_SECURE
         )
 
-        SessionManager.init(this)
+        SessionManager.storage.init(this)
 
         if (org.koin.core.context.GlobalContext.getOrNull() == null) {
             startKoin {
@@ -35,14 +34,12 @@ class MainActivity : FragmentActivity() {
         }
 
         setContent {
-            KoinAndroidContext {
-                SecureVaultTheme {
-                    Surface(
-                        modifier = Modifier.fillMaxSize(),
-                        color = MaterialTheme.colorScheme.background
-                    ) {
-                        SecureVaultNavHost()
-                    }
+            SecureVaultTheme {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    SecureVaultNavHost()
                 }
             }
         }

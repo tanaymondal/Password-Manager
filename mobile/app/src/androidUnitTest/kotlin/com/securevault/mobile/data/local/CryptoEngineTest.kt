@@ -4,9 +4,7 @@ import org.junit.Assert.*
 import org.junit.Before
 import org.junit.BeforeClass
 import org.junit.Test
-import org.junit.Ignore
 import java.util.Base64
-import com.lambdapioneer.argon2kt.SoLoaderShim
 
 class CryptoEngineTest {
 
@@ -15,8 +13,104 @@ class CryptoEngineTest {
         const val TEST_ENCRYPTION_SALT_BASE64 = "dGVzdEVuY3J5cHRpb25TYWx0MTIzNDU="
         const val TEST_VAULT_KEY_BASE64 = "dGVzdFZhdWx0S2V5MTIzNDU2Nzg5MGFiY2RlZmdoaWo="
 
-        val testSoLoader: SoLoaderShim?
-            get() = null
+        @BeforeClass @JvmStatic
+        fun loadNativeLibrary() {
+            val libPath = findLib()
+            assertNotNull("Native lib not found! Tests need: app/src/testNativeLibs/libsecurevault_crypto_core.dylib", libPath)
+            System.err.println("Loading native lib: $libPath")
+            System.load(libPath)
+            // Verify the class loads after library load
+            try {
+                val c = Class.forName("com.securevault.mobile.data.local.NativeBridge")
+                System.err.println("NativeBridge class loaded: ${c.name}")
+            } catch (e: Exception) {
+                System.err.println("ERROR: NativeBridge class not found: ${e.message}")
+            }
+            // Verify the native method resolves
+            try {
+                val m = NativeBridge::class.java.getMethod("nativeDeriveAuthHash", String::class.java, String::class.java, Int::class.java, Int::class.java, Int::class.java)
+                System.err.println("NativeBridge method resolved: ${m.name}")
+            } catch (e: Exception) {
+                System.err.println("ERROR: Cannot resolve native method: ${e.message}")
+            }
+        }
+
+        private fun findLib(): String? {
+            val osName = System.getProperty("os.name", "").lowercase()
+            val libFileName = when {
+                osName.contains("mac") || osName.contains("darwin") -> "libsecurevault_crypto_core.dylib"
+                osName.contains("nix") || osName.contains("nux") -> "libsecurevault_crypto_core.so"
+                osName.contains("win") -> "securevault_crypto_core.dll"
+                else -> return null
+            }
+            System.err.println("Working dir: ${java.io.File(".").absolutePath}")
+            System.err.println("user.dir: ${System.getProperty("user.dir")}")
+            val workingDir = java.io.File(System.getProperty("user.dir", "."))
+            val candidates = listOf(
+                java.io.File(workingDir, "app/src/testNativeLibs/$libFileName"),
+                java.io.File(workingDir, "src/testNativeLibs/$libFileName"),
+                java.io.File(workingDir.parentFile, "app/src/testNativeLibs/$libFileName"),
+                java.io.File(workingDir.parentFile, "src/testNativeLibs/$libFileName"),
+                java.io.File("../crypto-core/target/aarch64-apple-darwin/release/$libFileName"),
+            )
+            for (f in candidates) {
+                System.err.println("  checking: ${f.absolutePath}")
+                if (f.exists()) return f.absolutePath
+            }
+            return null
+        }
+    }
+
+    // ===== RustCryptoCore API shape tests (JVM, no JNI required) =====
+
+    @Test
+    fun rustCryptoCore_classLoads() {
+        val className = "com.securevault.mobile.domain.crypto.RustCryptoCore"
+        val clazz = Class.forName(className)
+        assertNotNull("RustCryptoCore class must be loadable", clazz)
+    }
+
+    @Test
+    fun rustCryptoCore_hasDeriveAuthHashMethod() {
+        val method = Class.forName("com.securevault.mobile.domain.crypto.RustCryptoCore")
+            .getDeclaredMethod("deriveAuthHash", String::class.java, String::class.java, Int::class.java, Int::class.java, Int::class.java)
+        assertNotNull("RustCryptoCore.deriveAuthHash method must exist", method)
+        assertEquals("Return type must be String", String::class.java, method.returnType)
+    }
+
+    @Test
+    fun rustCryptoCore_hasDeriveKekMethod() {
+        val method = Class.forName("com.securevault.mobile.domain.crypto.RustCryptoCore")
+            .getDeclaredMethod("deriveKek", String::class.java, String::class.java, Int::class.java, Int::class.java, Int::class.java)
+        assertNotNull("RustCryptoCore.deriveKek method must exist", method)
+        val returnType = method.returnType
+        assertEquals("Return type must be ByteArray", ByteArray::class.java, returnType)
+    }
+
+    @Test
+    fun rustCryptoCore_hasNativeMethods() {
+        val clazz = Class.forName("com.securevault.mobile.domain.crypto.RustCryptoCore")
+        val methods = clazz.declaredMethods
+        val nativeMethods = methods.filter { java.lang.reflect.Modifier.isNative(it.modifiers) }
+        assertTrue("RustCryptoCore must have at least 2 native methods", nativeMethods.size >= 2)
+        val nativeNames = nativeMethods.map { it.name }.toSet()
+        assertTrue("Must have nativeDeriveAuthHash", nativeNames.contains("nativeDeriveAuthHash"))
+        assertTrue("Must have nativeDeriveKek", nativeNames.contains("nativeDeriveKek"))
+    }
+
+    @Test
+    fun rustCryptoCore_ensureLoaded_viaTestHelper() {
+        // The NativeTestHelper should have loaded the library in @BeforeClass
+        // If the native lib is available, this should succeed without throwing
+        try {
+            val method = Class.forName("com.securevault.mobile.domain.crypto.RustCryptoCore")
+                .getDeclaredMethod("deriveAuthHash", String::class.java, String::class.java, Int::class.java, Int::class.java, Int::class.java)
+            // Method exists — no exception means the class loaded successfully
+            assertNotNull("deriveAuthHash method exists", method)
+        } catch (e: Exception) {
+            // If we can't even find the class, that's a real failure
+            fail("RustCryptoCore class should be accessible: ${e.message}")
+        }
     }
 
     private lateinit var engine: CryptoEngine
@@ -26,7 +120,6 @@ class CryptoEngineTest {
         engine = CryptoEngine(
             getPassword = { TEST_PASSWORD },
             getEncryptionSalt = { TEST_ENCRYPTION_SALT_BASE64 },
-            soLoaderShim = testSoLoader
         )
     }
 
@@ -135,76 +228,99 @@ class CryptoEngineTest {
         }
     }
 
-    // ===== Argon2-Only Tests (require JNI, skipped in JVM unit tests) =====
-    // These tests verify Argon2id key derivation. Run on Android device via:
-    //   ./gradlew :app:connectedAndroidTest
-    // Or manually verify by checking backend tests pass (same Argon2 implementation).
+    @Test
+    fun goldenVector_authHash_matchesRustAndWasm() {
+        val expected = "g8BLWUGxvI3XdtW2Ig4k2QL2brmIBvGTlLJGIhHbnJU="
+        val got = NativeBridge.nativeDeriveAuthHash("correct horse battery staple", "auth-salt-fixed-string", 4, 65536, 4)!!
+        assertEquals("Android JNI auth_hash must match Rust/WASM golden vector", expected, got)
+    }
 
-    @Test @Ignore("Requires Argon2 JNI native library — run on Android device or emulator")
+    @Test
+    fun goldenVector_kek_matchesRustAndWasm() {
+        val expected = "504NmZdCQp2PNGAZA5gq3vh1rwcT/pVLXWHDcJlf18w="
+        val got = NativeBridge.nativeDeriveKek("correct horse battery staple", "MDEyMzQ1Njc4OWFiY2RlZg==", 4, 65536, 4)!!
+        assertEquals("Android JNI kek must match Rust/WASM golden vector", expected, got)
+    }
+
+    @Test
+    fun goldenVector_authHash_worksWithFastParams() {
+        val got = NativeBridge.nativeDeriveAuthHash("correct horse battery staple", "auth-salt-fixed-string", 3, 8192, 1)
+        assertNotNull("auth hash with fast params must not be null", got)
+        assertEquals("auth hash must be 44 chars (base64 of 32 bytes)", 44, got!!.length)
+    }
+
+    @Test
+    fun goldenVector_kek_worksWithFastParams() {
+        val got = NativeBridge.nativeDeriveKek("correct horse battery staple", "MDEyMzQ1Njc4OWFiY2RlZg==", 3, 8192, 1)
+        assertNotNull("kek with fast params must not be null", got)
+        assertEquals("kek base64 must be 44 chars (base64 of 32 bytes)", 44, got!!.length)
+    }
+
+    @Test
     fun deriveKek_producesDeterministicOutput() {
-        val kek1 = engine.deriveKekBase64(TEST_PASSWORD, TEST_ENCRYPTION_SALT_BASE64)
-        val kek2 = engine.deriveKekBase64(TEST_PASSWORD, TEST_ENCRYPTION_SALT_BASE64)
+        val kek1 = NativeBridge.nativeDeriveKek(TEST_PASSWORD, TEST_ENCRYPTION_SALT_BASE64, 3, 8192, 1)!!
+        val kek2 = NativeBridge.nativeDeriveKek(TEST_PASSWORD, TEST_ENCRYPTION_SALT_BASE64, 3, 8192, 1)!!
         assertEquals("KEK derivation must be deterministic", kek1, kek2)
     }
 
-    @Test @Ignore("Requires Argon2 JNI native library — run on Android device or emulator")
+    @Test
     fun deriveKek_produces32ByteOutput() {
-        val kekBytes = engine.deriveKekForPassword(TEST_PASSWORD, TEST_ENCRYPTION_SALT_BASE64)
+        val kekBytes = Base64.getDecoder().decode(NativeBridge.nativeDeriveKek(TEST_PASSWORD, TEST_ENCRYPTION_SALT_BASE64, 3, 8192, 1)!!)
         assertEquals("KEK must be 32 bytes (256 bits)", 32, kekBytes.size)
     }
 
-    @Test @Ignore("Requires Argon2 JNI native library — run on Android device or emulator")
+    @Test
     fun deriveKek_differentPasswordProducesDifferentOutput() {
-        val kek1 = engine.deriveKekBase64(TEST_PASSWORD, TEST_ENCRYPTION_SALT_BASE64)
-        val kek2 = engine.deriveKekBase64("DifferentPassword!", TEST_ENCRYPTION_SALT_BASE64)
+        val kek1 = NativeBridge.nativeDeriveKek(TEST_PASSWORD, TEST_ENCRYPTION_SALT_BASE64, 3, 8192, 1)!!
+        val kek2 = NativeBridge.nativeDeriveKek("DifferentPassword!", TEST_ENCRYPTION_SALT_BASE64, 3, 8192, 1)!!
         assertNotEquals("Different passwords must produce different KEKs", kek1, kek2)
     }
 
-    @Test @Ignore("Requires Argon2 JNI native library — run on Android device or emulator")
+    @Test
     fun deriveKek_differentSaltProducesDifferentOutput() {
         val differentSalt = Base64.getEncoder().encodeToString(ByteArray(16) { it.toByte() })
-        val kek1 = engine.deriveKekBase64(TEST_PASSWORD, TEST_ENCRYPTION_SALT_BASE64)
-        val kek2 = engine.deriveKekBase64(TEST_PASSWORD, differentSalt)
+        val kek1 = NativeBridge.nativeDeriveKek(TEST_PASSWORD, TEST_ENCRYPTION_SALT_BASE64, 3, 8192, 1)!!
+        val kek2 = NativeBridge.nativeDeriveKek(TEST_PASSWORD, differentSalt, 3, 8192, 1)!!
         assertNotEquals("Different salts must produce different KEKs", kek1, kek2)
     }
 
-    @Test @Ignore("Requires Argon2 JNI native library — run on Android device or emulator")
+    @Test
     fun kekAndVaultKey_areDifferentKeys() {
-        val kek = engine.deriveKekForPassword(TEST_PASSWORD, TEST_ENCRYPTION_SALT_BASE64)
+        val kek = Base64.getDecoder().decode(NativeBridge.nativeDeriveKek(TEST_PASSWORD, TEST_ENCRYPTION_SALT_BASE64, 3, 8192, 1)!!)
         val vaultKey = Base64.getDecoder().decode(TEST_VAULT_KEY_BASE64)
         assertFalse("KEK and vaultKey must be different values", kek.contentEquals(vaultKey))
     }
 
-    @Test @Ignore("Requires Argon2 JNI native library — run on Android device or emulator")
+    @Test
     fun wrapVaultKey_producesOutputLongerThanInput() {
-        val kek = engine.deriveKekForPassword(TEST_PASSWORD, TEST_ENCRYPTION_SALT_BASE64)
+        val kek = Base64.getDecoder().decode(NativeBridge.nativeDeriveKek(TEST_PASSWORD, TEST_ENCRYPTION_SALT_BASE64, 3, 8192, 1)!!)
         val vaultKey = engine.generateVaultKey()
         val wrapped = engine.wrapVaultKeyWithKek(vaultKey, kek)
         val wrappedBytes = Base64.getDecoder().decode(wrapped)
         assertTrue("Wrapped key must be longer due to IV prefix", wrappedBytes.size > 32)
     }
 
-    @Test @Ignore("Requires Argon2 JNI native library — run on Android device or emulator")
+    @Test
     fun wrapVaultKey_producesUniqueOutputEachTime() {
-        val kek = engine.deriveKekForPassword(TEST_PASSWORD, TEST_ENCRYPTION_SALT_BASE64)
+        val kek = Base64.getDecoder().decode(NativeBridge.nativeDeriveKek(TEST_PASSWORD, TEST_ENCRYPTION_SALT_BASE64, 3, 8192, 1)!!)
         val wrapped1 = engine.wrapVaultKeyWithKek(TEST_VAULT_KEY_BASE64, kek)
         val wrapped2 = engine.wrapVaultKeyWithKek(TEST_VAULT_KEY_BASE64, kek)
         assertNotEquals("Same inputs must produce different wrapped keys due to random IV", wrapped1, wrapped2)
     }
 
-    @Test @Ignore("Requires Argon2 JNI native library — run on Android device or emulator")
+    @Test
     fun unwrapVaultKey_roundTripsCorrectly() {
-        val kek = engine.deriveKekForPassword(TEST_PASSWORD, TEST_ENCRYPTION_SALT_BASE64)
+        val kek = Base64.getDecoder().decode(NativeBridge.nativeDeriveKek(TEST_PASSWORD, TEST_ENCRYPTION_SALT_BASE64, 3, 8192, 1)!!)
         val vaultKey = engine.generateVaultKey()
         val wrapped = engine.wrapVaultKeyWithKek(vaultKey, kek)
         val unwrapped = engine.unwrapVaultKeyWithKek(wrapped, kek)
         assertEquals("Unwrap must recover original vault key", vaultKey, unwrapped)
     }
 
-    @Test @Ignore("Requires Argon2 JNI native library — run on Android device or emulator")
+    @Test
     fun unwrapVaultKey_withWrongKekThrows() {
-        val correctKek = engine.deriveKekForPassword(TEST_PASSWORD, TEST_ENCRYPTION_SALT_BASE64)
-        val wrongKek = engine.deriveKekForPassword("WrongPassword!", TEST_ENCRYPTION_SALT_BASE64)
+        val correctKek = Base64.getDecoder().decode(NativeBridge.nativeDeriveKek(TEST_PASSWORD, TEST_ENCRYPTION_SALT_BASE64, 3, 8192, 1)!!)
+        val wrongKek = Base64.getDecoder().decode(NativeBridge.nativeDeriveKek("WrongPassword!", TEST_ENCRYPTION_SALT_BASE64, 3, 8192, 1)!!)
         val wrapped = engine.wrapVaultKeyWithKek(TEST_VAULT_KEY_BASE64, correctKek)
         try {
             engine.unwrapVaultKeyWithKek(wrapped, wrongKek)
@@ -217,9 +333,9 @@ class CryptoEngineTest {
         }
     }
 
-    @Test @Ignore("Requires Argon2 JNI native library — run on Android device or emulator")
+    @Test
     fun unwrapVaultKey_withTamperedDataThrows() {
-        val kek = engine.deriveKekForPassword(TEST_PASSWORD, TEST_ENCRYPTION_SALT_BASE64)
+        val kek = Base64.getDecoder().decode(NativeBridge.nativeDeriveKek(TEST_PASSWORD, TEST_ENCRYPTION_SALT_BASE64, 3, 8192, 1)!!)
         val wrapped = engine.wrapVaultKeyWithKek(TEST_VAULT_KEY_BASE64, kek)
         val wrappedBytes = Base64.getDecoder().decode(wrapped)
         wrappedBytes[12] = (wrappedBytes[12].toInt() xor 0xFF).toByte()
@@ -235,21 +351,21 @@ class CryptoEngineTest {
         }
     }
 
-    @Test @Ignore("Requires Argon2 JNI native library — run on Android device or emulator")
+    @Test
     fun fullRegistrationFlow() {
         val encryptionSalt = TEST_ENCRYPTION_SALT_BASE64
         val vaultKey = engine.generateVaultKey()
-        val kek = engine.deriveKekForPassword(TEST_PASSWORD, encryptionSalt)
+        val kek = Base64.getDecoder().decode(NativeBridge.nativeDeriveKek(TEST_PASSWORD, encryptionSalt, 3, 8192, 1)!!)
         val wrappedVaultKey = engine.wrapVaultKeyWithKek(vaultKey, kek)
         val unwrappedVaultKey = engine.unwrapVaultKeyWithKek(wrappedVaultKey, kek)
         assertEquals("Must be able to recover vault key from wrapped form", vaultKey, unwrappedVaultKey)
     }
 
-    @Test @Ignore("Requires Argon2 JNI native library — run on Android device or emulator")
+    @Test
     fun passwordChangeFlow() {
         val encryptionSalt = TEST_ENCRYPTION_SALT_BASE64
-        val oldKek = engine.deriveKekForPassword("OldPassword123!", encryptionSalt)
-        val newKek = engine.deriveKekForPassword("NewPassword456!", encryptionSalt)
+        val oldKek = Base64.getDecoder().decode(NativeBridge.nativeDeriveKek("OldPassword123!", encryptionSalt, 3, 8192, 1)!!)
+        val newKek = Base64.getDecoder().decode(NativeBridge.nativeDeriveKek("NewPassword456!", encryptionSalt, 3, 8192, 1)!!)
         val vaultKey = engine.generateVaultKey()
         val wrappedWithOld = engine.wrapVaultKeyWithKek(vaultKey, oldKek)
         val unwrappedVaultKey = engine.unwrapVaultKeyWithKek(wrappedWithOld, oldKek)

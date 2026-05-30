@@ -1,0 +1,24 @@
+namespace securevault_crypto_core {
+  string derive_auth_hash(string password, string salt_str, KdfParams params);
+  string derive_kek(string password, string salt_b64, KdfParams params);
+  string generate_vault_key();
+  string generate_salt();
+  string wrap_vault_key(string kek_b64, string vault_key_b64);
+  string unwrap_vault_key(string kek_b64, string wrapped_b64);
+  EncryptedEntry encrypt_entry(string vault_key_b64, string plaintext_json);
+  string decrypt_entry(string vault_key_b64, string encrypted_data, string iv);
+  string encrypt_field(string vault_key_b64, string plaintext);
+  string decrypt_field(string vault_key_b64, string ciphertext);
+  boolean validate_params(u32 iterations, u32 memory_kib, u32 parallelism);
+};
+
+dictionary KdfParams {
+  u32 iterations;
+  u32 memory_kib;
+  u32 parallelism;
+};
+
+dictionary EncryptedEntry {
+  string encrypted_data;
+  string iv;
+};

@@ -3,6 +3,8 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.serialization")
     id("org.jetbrains.kotlin.plugin.compose") version "2.0.0"
+    id("org.jetbrains.compose")
+
     id("com.google.devtools.ksp")
 }
 
@@ -16,45 +18,119 @@ kotlin {
         }
     }
 
-    iosX64 {}
-    iosArm64 {}
-    iosSimulatorArm64 {}
+    iosX64 {
+        compilations.getByName("main") {
+            cinterops {
+                val securevault_crypto_core by creating {
+                    defFile(project.file("src/iosMain/c_interop/securevault_crypto_core.def"))
+                    includeDirs(project.file("src/iosMain/c_interop"))
+                    
+                }
+            }
+        }
+        compilations.getByName("test") {
+            cinterops {
+                val securevault_crypto_core by creating {
+                    defFile(project.file("src/iosMain/c_interop/securevault_crypto_core.def"))
+                    includeDirs(project.file("src/iosMain/c_interop"))
+                    
+                }
+            }
+        }
+    }
+    iosArm64 {
+        compilations.getByName("main") {
+            cinterops {
+                val securevault_crypto_core by creating {
+                    defFile(project.file("src/iosMain/c_interop/securevault_crypto_core.def"))
+                    includeDirs(project.file("src/iosMain/c_interop"))
+                    
+                }
+            }
+        }
+        compilations.getByName("test") {
+            cinterops {
+                val securevault_crypto_core by creating {
+                    defFile(project.file("src/iosMain/c_interop/securevault_crypto_core.def"))
+                    includeDirs(project.file("src/iosMain/c_interop"))
+                    
+                }
+            }
+        }
+    }
+    iosSimulatorArm64 {
+        compilations.getByName("main") {
+            cinterops {
+                val securevault_crypto_core by creating {
+                    defFile(project.file("src/iosMain/c_interop/securevault_crypto_core.def"))
+                    includeDirs(project.file("src/iosMain/c_interop"))
+                    
+                }
+            }
+        }
+        compilations.getByName("test") {
+            cinterops {
+                val securevault_crypto_core by creating {
+                    defFile(project.file("src/iosMain/c_interop/securevault_crypto_core.def"))
+                    includeDirs(project.file("src/iosMain/c_interop"))
+                    
+                }
+            }
+        }
+    }
 }
 
 val commonMain by kotlin.sourceSets.getting
 val androidMain by kotlin.sourceSets.getting
 val commonTest by kotlin.sourceSets.getting
+val iosMain by kotlin.sourceSets.creating
+iosMain.dependsOn(commonMain)
+val iosTest by kotlin.sourceSets.creating
+iosTest.dependsOn(commonTest)
+
+kotlin.targets.matching { it.name.startsWith("ios") }.configureEach {
+    compilations.getByName("main").defaultSourceSet.dependsOn(iosMain)
+    compilations.getByName("test").defaultSourceSet.dependsOn(iosTest)
+}
 
 dependencies {
-    add("ksp", "androidx.room:room-compiler:2.6.1")
+    add("kspAndroid", "androidx.room:room-compiler:2.6.1")
 }
 
 commonMain.dependencies {
+    implementation("org.jetbrains.compose.runtime:runtime:1.6.11")
+    implementation("org.jetbrains.compose.foundation:foundation:1.6.11")
+    implementation("org.jetbrains.compose.material3:material3:1.6.11")
+    implementation("org.jetbrains.compose.material:material-icons-extended:1.6.11")
+    implementation("org.jetbrains.androidx.navigation:navigation-compose:2.8.0-alpha10")
+    implementation("org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-compose:2.8.0")
+    implementation("org.jetbrains.androidx.lifecycle:lifecycle-runtime-compose:2.8.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2")
     implementation("io.ktor:ktor-client-core:2.3.7")
     implementation("io.ktor:ktor-client-content-negotiation:2.3.7")
     implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.7")
-    implementation("com.russhwolf:multiplatform-settings:1.1.0")
+    implementation("io.insert-koin:koin-core:3.5.3")
+}
+
+iosMain.dependencies {
+    implementation("io.insert-koin:koin-core:3.5.3")
 }
 
 commonTest.dependencies {
     implementation("junit:junit:4.13.2")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
-    implementation("com.lambdapioneer.argon2kt:argon2kt:1.6.0")
+}
+
+iosTest.dependencies {
+    implementation("junit:junit:4.13.2")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
 }
 
 androidMain.dependencies {
     implementation("androidx.activity:activity-compose:1.8.2")
-    implementation(platform("androidx.compose:compose-bom:2024.02.00"))
-    implementation("androidx.compose.ui:ui")
-    implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
-    implementation("androidx.compose.material3:material3")
-    implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
-    implementation("androidx.navigation:navigation-compose:2.8.0")
     implementation("io.insert-koin:koin-androidx-compose:3.5.3")
     implementation("androidx.datastore:datastore-preferences:1.0.0")
 
@@ -66,9 +142,6 @@ androidMain.dependencies {
     implementation("androidx.room:room-ktx:2.6.1")
     implementation("net.zetetic:android-database-sqlcipher:4.5.4")
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
-
-    // Argon2 for key derivation (matches backend)
-    implementation("com.lambdapioneer.argon2kt:argon2kt:1.6.0")
 
     // Biometric authentication
     implementation("androidx.biometric:biometric:1.2.0-alpha05")
@@ -98,5 +171,9 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    testOptions {
+        unitTests.isReturnDefaultValues = true
     }
 }

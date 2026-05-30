@@ -97,7 +97,7 @@ public class AuthService {
         }
 
         if (userRepository.existsByEmail(request.getEmail())) {
-            throw new IllegalArgumentException("Registration failed");
+            throw new IllegalArgumentException("An account with this email already exists. Please log in instead.");
         }
 
         User user = new User();

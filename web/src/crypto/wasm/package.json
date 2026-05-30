@@ -1,0 +1,17 @@
+{
+  "name": "securevault-crypto-core",
+  "type": "module",
+  "description": "Single-source client vault crypto for SecureVault (v2 format). Compiles to wasm (web) and native (Android/iOS).",
+  "version": "0.1.0",
+  "license": "MIT",
+  "files": [
+    "securevault_crypto_core_bg.wasm",
+    "securevault_crypto_core.js",
+    "securevault_crypto_core.d.ts"
+  ],
+  "main": "securevault_crypto_core.js",
+  "types": "securevault_crypto_core.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

@@ -1,5 +1,5 @@
 # Build stage
-FROM maven:3-eclipse-temurin-17-alpine AS build
+FROM maven:3-eclipse-temurin-17 AS build
 WORKDIR /app
 ARG CACHEBUST=1
 COPY pom.xml .
@@ -7,11 +7,11 @@ COPY src ./src
 RUN mvn package -DskipTests -q
 
 # Runtime stage
-FROM eclipse-temurin:17-jre-alpine
+FROM eclipse-temurin:17-jre
 WORKDIR /app
 
-RUN addgroup -g 1000 -S securevault && \
-    adduser -u 1000 -S securevault -G securevault
+RUN groupadd -g 1001 securevault && \
+    useradd -u 1001 -g securevault -s /sbin/nologin -M securevault
 
 COPY --from=build /app/target/securevault-1.0.0.jar app.jar
 

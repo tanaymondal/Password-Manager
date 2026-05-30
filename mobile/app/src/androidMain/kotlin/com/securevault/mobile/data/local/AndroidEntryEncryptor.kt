@@ -3,9 +3,8 @@ package com.securevault.mobile.data.local
 import android.os.Handler
 import android.os.Looper
 import android.util.Base64
-import com.lambdapioneer.argon2kt.Argon2Kt
-import com.lambdapioneer.argon2kt.Argon2Mode
 import com.securevault.mobile.data.model.VaultEntryRequest
+import com.securevault.mobile.domain.crypto.RustCryptoCore
 import com.securevault.mobile.data.model.VaultEntryResponse
 import com.securevault.mobile.data.repository.EntryEncryptor
 import com.securevault.mobile.data.repository.SessionManager
@@ -44,22 +43,10 @@ class AndroidEntryEncryptor : EntryEncryptor, VaultKeyManager {
     private val argon2Parallelism: Int get() = SessionManager.getKdfParallelism()
 
     private fun deriveKek(password: String, saltBytes: ByteArray): ByteArray {
-        val argon2Kt = Argon2Kt()
         val passwordBytes = password.toByteArray(Charsets.UTF_8)
-
-        val result = argon2Kt.hash(
-            mode = Argon2Mode.ARGON2_ID,
-            password = passwordBytes,
-            salt = saltBytes,
-            tCostInIterations = argon2Iterations,
-            mCostInKibibyte = argon2MemoryKb,
-            parallelism = argon2Parallelism,
-            hashLengthInBytes = keyLength
-        )
-
+        val kek = RustCryptoCore.deriveKek(password, Base64.encodeToString(saltBytes, Base64.NO_WRAP), argon2Iterations, argon2MemoryKb, argon2Parallelism)
         passwordBytes.fill(0)
-
-        return result.rawHashAsByteArray()
+        return kek
     }
 
     override fun unlockVault(password: String, encryptionSalt: String, wrappedVaultKey: String) {

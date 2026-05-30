@@ -1,19 +1,17 @@
 package com.securevault.mobile.data.local
 
-import com.lambdapioneer.argon2kt.Argon2Kt
-import com.lambdapioneer.argon2kt.Argon2Mode
-import com.lambdapioneer.argon2kt.SoLoaderShim
+import com.securevault.mobile.domain.crypto.RustCryptoCore
 import java.util.Base64
 import javax.crypto.Cipher
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
 import java.security.SecureRandom
 
 class CryptoEngine(
     private val getPassword: () -> String,
     private val getEncryptionSalt: () -> String,
-    private val soLoaderShim: SoLoaderShim? = null
 ) {
     private val algorithm = "AES/GCM/NoPadding"
     private val gcmIvLength = 12
@@ -30,21 +28,7 @@ class CryptoEngine(
 
     fun deriveKekForPassword(password: String, encryptionSalt: String, iterations: Int = 4, memory: Int = 65536, parallelism: Int = 4): ByteArray {
         if (encryptionSalt.isEmpty()) throw IllegalStateException("Encryption salt not available")
-        val saltBytes = Base64.getDecoder().decode(encryptionSalt)
-        val loader = soLoaderShim ?: object : SoLoaderShim {
-            override fun loadLibrary(name: String) = System.loadLibrary(name)
-        }
-        val argon2Kt = Argon2Kt(loader)
-        val result = argon2Kt.hash(
-            mode = Argon2Mode.ARGON2_ID,
-            password = password.toByteArray(Charsets.UTF_8),
-            salt = saltBytes,
-            tCostInIterations = iterations,
-            mCostInKibibyte = memory,
-            parallelism = parallelism,
-            hashLengthInBytes = keyLength
-        )
-        return result.rawHashAsByteArray()
+        return RustCryptoCore.deriveKek(password, encryptionSalt, iterations, memory, parallelism)
     }
 
     fun deriveKekBase64(password: String, encryptionSalt: String): String {

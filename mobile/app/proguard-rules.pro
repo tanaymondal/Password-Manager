@@ -12,11 +12,13 @@
 -keep @androidx.room.Entity class *
 -dontwarn androidx.room.**
 
-# Argon2
--keep class com.lambdapioneer.argon2kt.** { *; }
-
 # SecureVault app
 -keep class com.securevault.mobile.** { *; }
+
+# JNI native methods (Rust crypto-core)
+-keepclasseswithmembernames class * {
+    native <methods>;
+}
 
 # Coroutines
 -dontwarn kotlinx.coroutines.**
