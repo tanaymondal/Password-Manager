@@ -253,7 +253,7 @@ class AuthRepositoryImpl(
             }
 
             // Background KDF parameter upgrade
-            if (currentMemory < cfg.kdfMemory) {
+            if (vaultKey != null && currentMemory < cfg.kdfMemory) {
                 try {
                     val authSalt = SessionManager.getAuthSalt()
                     val newAuthHash = cryptoEngine.generateAuthHash(
@@ -262,7 +262,7 @@ class AuthRepositoryImpl(
                     val newKek = cryptoEngine.deriveKek(
                         password, encryptionSalt, cfg.kdfIterations, cfg.kdfMemory, cfg.kdfParallelism
                     )
-                    val newWrapped = cryptoEngine.wrapVaultKey(vaultKey ?: return@let, newKek)
+                    val newWrapped = cryptoEngine.wrapVaultKey(vaultKey, newKek)
                     api.upgradeKdf(UpgradeKdfRequest(
                         authHash = newAuthHash,
                         wrappedVaultKey = newWrapped,
