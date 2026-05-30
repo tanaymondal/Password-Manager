@@ -525,7 +525,7 @@ public class AuthService {
             throw new BadCredentialsException("Account is temporarily locked. Please try again later.");
         }
 
-        if (!passwordService.constantTimeEquals(serverSideHash(currentAuthHash, user.getPasswordSalt()), user.getPasswordHash())) {
+        if (!passwordService.constantTimeEquals(serverSideHash(authHash, user.getPasswordSalt()), user.getPasswordHash())) {
             throw new BadCredentialsException("Invalid password");
         }
     }
