@@ -97,4 +97,36 @@ class CryptoEngineTest {
         assertNotNull(w2)
         assertTrue(w1 != w2, "Wrapped keys must differ (random IV)")
     }
+
+    // ── Cross-platform AES-GCM golden vector tests ──
+
+    @Test
+    fun goldenVector_wrapVaultKey() {
+        val kekB64 = "504NmZdCQp2PNGAZA5gq3vh1rwcT/pVLXWHDcJlf18w="
+        val wrappedB64 = "oKGio6Slpqeoqaqr5HHezchyg8dzWdJCk+XMGLZMk70asE0SqeA1rq/ZxqiOHm/fEXwfIT/y2n4NLFHN"
+        val expectedVk = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="
+        val got = SecureVaultCryptoCore.securevault_unwrap_vault_key(kekB64, wrappedB64)
+            ?: error("unwrapVaultKey returned null")
+        assertEquals(expectedVk, got.toKString(), "unwrapped vault key must match golden vector")
+    }
+
+    @Test
+    fun goldenVector_encryptEntry() {
+        val vkB64 = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="
+        val encryptedData = "v1:nToMTDa4ddAQAaXpJRK1sATJKyKwm2AY9XpK412RV0SqFyqPw0dxEX3pdqQrQKGRM282O1j/NRs5P2YuyBWr09vRp0MS0JeFhoyeders9pisZ8LHoOPk2ip89WpgBc3FF2Wrs3TNww=="
+        val iv = "oKGio6Slpqeoqaqr"
+        val got = SecureVaultCryptoCore.securevault_decrypt_entry(vkB64, encryptedData, iv)
+            ?: error("decryptEntry returned null")
+        assertEquals("{\"password\":\"hunter2\",\"title\":\"Example\",\"url\":\"https://example.com\",\"username\":\"alice\"}",
+            got.toKString(), "decrypted entry must match golden plaintext")
+    }
+
+    @Test
+    fun goldenVector_encryptField() {
+        val vkB64 = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="
+        val ciphertext = "v1:oKGio6Slpqeoqaqrjm0SWSC5MCfL5aobdPsWtGz5Z/PKjqM="
+        val got = SecureVaultCryptoCore.securevault_decrypt_field(vkB64, ciphertext)
+            ?: error("decryptField returned null")
+        assertEquals("hunter2", got.toKString(), "decrypted field must match golden plaintext")
+    }
 }
