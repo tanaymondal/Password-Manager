@@ -2,6 +2,7 @@ package com.securevault.mobile.ui.navigation
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -9,6 +10,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.securevault.mobile.domain.usecase.auth.AuthStateResult
 import com.securevault.mobile.domain.usecase.auth.GetAuthStateUseCase
+import com.securevault.mobile.domain.usecase.auth.LogoutUseCase
 import com.securevault.mobile.ui.screens.auth.LoginScreen
 import com.securevault.mobile.ui.screens.auth.RegisterScreen
 import com.securevault.mobile.ui.screens.auth.UnlockScreen
@@ -19,6 +21,7 @@ import com.securevault.mobile.ui.screens.vault.AddEditEntryViewModel
 import com.securevault.mobile.ui.screens.vault.VaultScreen
 import com.securevault.mobile.ui.screens.vault.VaultViewModel
 import com.securevault.mobile.di.koinInject
+import kotlinx.coroutines.launch
 
 sealed class Screen(val route: String) {
     data object Login : Screen("login")
@@ -67,6 +70,8 @@ fun SecureVaultNavHost() {
         }
 
         composable(Screen.Unlock.route) {
+            val scope = rememberCoroutineScope()
+            val logoutUseCase: LogoutUseCase = koinInject()
             UnlockScreen(
                 onUnlockSuccess = {
                     navController.navigate(Screen.Vault.route) {
@@ -74,6 +79,9 @@ fun SecureVaultNavHost() {
                     }
                 },
                 onLogout = {
+                    scope.launch {
+                        logoutUseCase()
+                    }
                     navController.navigate(Screen.Login.route) {
                         popUpTo(0) { inclusive = true }
                     }
