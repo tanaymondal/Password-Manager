@@ -24,18 +24,18 @@ public class RateLimitingFilter implements Filter {
     private static final int AUTH_LIMIT = 20;
     private static final int STRICT_LIMIT = 10;
 
-    private static final Map<String, Integer> ENDPOINT_LIMITS = Map.of(
-        "/api/v1/auth/login", AUTH_LIMIT,
-        "/api/v1/auth/register", STRICT_LIMIT,
-        "/api/v1/auth/prelogin", AUTH_LIMIT,
-        "/api/v1/auth/kdf-config", AUTH_LIMIT,
-        "/api/v1/auth/verify-2fa", AUTH_LIMIT,
-        "/api/v1/auth/refresh", AUTH_LIMIT,
-        "/api/v1/auth/sudo", STRICT_LIMIT,
-        "/api/v1/auth/logout", STRICT_LIMIT,
-        "/api/v1/auth/change-password", STRICT_LIMIT,
-        "/api/v1/auth/upgrade-kdf", STRICT_LIMIT,
-        "/api/v1/audit", AUTH_LIMIT
+    private static final Map<String, Integer> ENDPOINT_LIMITS = Map.ofEntries(
+        Map.entry("/api/v1/auth/login", AUTH_LIMIT),
+        Map.entry("/api/v1/auth/register", STRICT_LIMIT),
+        Map.entry("/api/v1/auth/prelogin", AUTH_LIMIT),
+        Map.entry("/api/v1/auth/kdf-config", AUTH_LIMIT),
+        Map.entry("/api/v1/auth/verify-2fa", AUTH_LIMIT),
+        Map.entry("/api/v1/auth/refresh", AUTH_LIMIT),
+        Map.entry("/api/v1/auth/sudo", STRICT_LIMIT),
+        Map.entry("/api/v1/auth/logout", STRICT_LIMIT),
+        Map.entry("/api/v1/auth/change-password", STRICT_LIMIT),
+        Map.entry("/api/v1/auth/upgrade-kdf", STRICT_LIMIT),
+        Map.entry("/api/v1/audit", AUTH_LIMIT)
     );
 
     private final StringRedisTemplate redisTemplate;
