@@ -2,9 +2,92 @@
 
 A structured record of an end-to-end review of the SecureVault Password Manager project: code analysis, security assessment, business strategy, market positioning, and learning value.
 
+> **⚠️ Read this first — most of the technical findings below are now historical.**
+> Sections 1–4 capture the project as it was at the time of the original review
+> (PBKDF2 client KDF, unenforced 2FA, plaintext refresh tokens, no web app, iOS
+> unimplemented). The project has since changed substantially. **See
+> [Section 0 — Status Update (2026-05-31)](#0-status-update-2026-05-31)** for what
+> is true *today*. The business/market/learning sections (5–16) remain broadly
+> valid.
+
+---
+
+## 0. Status Update (2026-05-31)
+
+Since this log was first written, the three Phase-0 showstoppers it identified
+have all been resolved, and the project has grown from a backend + Android
+scaffold into a multi-client product. This section supersedes the technical
+claims in Sections 1–4 wherever they conflict.
+
+### 0.1 What changed (architecture)
+
+- **Shared Rust `crypto-core`** is now the single source of crypto truth,
+  consumed by the **web app via WASM** and by **mobile via FFI/JNI**, with
+  cross-platform test vectors (`crypto-core/`, `test-vectors/`).
+- **Client KDF is now Argon2id** (`t=3, m=98304 KiB ≈ 96 MB, p=4`), replacing the
+  old PBKDF2-65k Android path. Parameters are stored **per-user** and are
+  upgradeable (`upgrade-kdf` flow).
+- **Key hierarchy:** one Argon2id call → master key → `HKDF-Expand` splits into a
+  server **auth hash** (`info="auth"`) and a **KEK** (`info="kek"`). The KEK
+  wraps a random 256-bit **vault key** (AES-256-GCM). The KEK never leaves the
+  client.
+- **Server-side pepper:** the client auth hash is re-hashed with
+  `HMAC-SHA256(serverSecret + per-user salt)` before storage — a DB-only breach
+  can't verify guesses.
+
+### 0.2 Original "critical issues" — now fixed
+
+| Past issue (Section 3.2) | Status today |
+|---|---|
+| Client PBKDF2 @ 65k iterations | ✅ **Fixed** — Argon2id 96 MB via shared Rust core |
+| 2FA not enforced (only logged) | ✅ **Fixed** — two-step `login → challenge → verify-2fa` flow actually gates token issuance |
+| `changePassword` rotated salt without re-encrypting vault | ✅ **Fixed** — generates a new vault key, re-encrypts all entries, re-wraps, revokes refresh tokens |
+
+Other resolved Section-3.3 items: refresh tokens are now **SHA-256 hashed at
+rest** with rotation + reuse-detection; rate limiting is **Redis-backed and
+per-endpoint**; **HIBP k-anonymity** breach check is implemented; access tokens
+carry a **`pwdUpdatedAt` claim** for instant invalidation plus a **Redis
+denylist** on logout; the 2FA TOTP secret is **AES-GCM encrypted at rest**; a
+**sudo step-up** gates change-password / delete-account / upgrade-kdf / delete-all.
+
+### 0.3 Clients now present
+
+- **Web app (React + Vite + TypeScript)** — full vault, search, password
+  generator, strength meter, settings, devices, 2FA; access token in memory +
+  `HttpOnly; Secure; SameSite=Strict` refresh cookie.
+- **Browser extension (Chrome, Manifest V3)** — autofill + popup (Firefox/Safari/
+  Edge not yet built).
+- **Android (KMP + Compose)** — functional: Keystore-bound biometric unlock
+  (CryptoObject, per-op auth), SQLCipher local cache, `allowBackup=false`,
+  `FLAG_SECURE`.
+- **iOS (KMP)** — builds and crypto works via the Rust core, but **at-rest
+  storage is currently broken** (vault key/tokens in plaintext `NSUserDefaults`;
+  Keychain code is a stub).
+
+### 0.4 Tests now exist
+
+The "~0% tests" claim is outdated: backend has `FullFlowTest`,
+`RefreshTokenHashTest`, and a `ClientSimulator`; crypto has Rust vectors
+(`crypto-core/tests/vectors.rs`) and a web `cryptoCore.test.ts`. Coverage is not
+yet at the 80% target, but it is no longer zero.
+
+### 0.5 Current open issues (see `docs/SECURITY_AUDIT.md`)
+
+A fresh full-stack security review (2026-05-31) found the core backend + crypto
+to be **strong**, with risk now concentrated at the edges:
+
+- 🔴 **iOS plaintext storage** (Keychain not implemented) — breaks zero-knowledge on iOS.
+- 🔴 **Browser-extension autofill** leaks credentials to untrusted pages; background trusts message-supplied URL with no `sender` validation.
+- 🟠 Web **auto-lock hook never wired up**; extension Argon2 params mismatch core; extension stores wrapping seed beside wrapped key; **no mobile cert pinning**; Android cache stores title/username/url in plaintext columns.
+- 🟡 User enumeration via `prelogin` random-salt timing; X-Forwarded-For spoofing under `APP_PROXY_TRUSTED=true`; CSP only at nginx layer.
+
+Full severity-ranked list and fixes: **`docs/SECURITY_AUDIT.md`**.
+
 ---
 
 ## Table of Contents
+
+0. [Status Update (2026-05-31)](#0-status-update-2026-05-31)
 
 1. [Project Overview](#1-project-overview)
 2. [Security Flow Deep Dive](#2-security-flow-deep-dive)
@@ -27,28 +110,57 @@ A structured record of an end-to-end review of the SecureVault Password Manager 
 
 ## 1. Project Overview
 
-**SecureVault** is a full-stack, security-focused password manager.
+> **Note:** updated to reflect the current codebase (2026-05-31). The original
+> version of this section described an earlier PBKDF2/Android-only state.
+
+**SecureVault** is a full-stack, zero-knowledge password manager spanning a
+Spring Boot backend, a shared Rust crypto-core, a React web app + browser
+extension, and a Kotlin Multiplatform mobile app.
+
+### Shared — Rust `crypto-core`
+- `crypto-core/` — Argon2id KDF, HKDF key splitting, AES-256-GCM AEAD, key
+  wrapping. Compiled to **WASM** (web) and a **native lib via C FFI / JNI**
+  (mobile), giving all clients identical, audited crypto. Test vectors in
+  `crypto-core/tests/` + `test-vectors/`.
 
 ### Backend — Spring Boot (Java 17)
 - **Layered architecture** under `src/main/java/com/securevault/`:
   - `controller/` — REST endpoints under `/api/v1/`: `Auth`, `Vault`, `Device`, `TwoFactor`, `Audit`, `Health`
-  - `service/` — Business logic: `AuthService`, `VaultService`, `PasswordService`, `TwoFactorAuthService`, etc.
+  - `service/` — Business logic: `AuthService`, `VaultService`, `PasswordService`, `TwoFactorAuthService`, `DeviceService`, `AuditService`
   - `entity/` — JPA: `User`, `VaultEntry`, `Device`, `RefreshToken`, `PasswordHistory`, `AuditLog`
-  - `config/` — `SecurityConfig`, `CorsConfig`, `RateLimitingFilter`, `OpenApiConfig`, `GlobalExceptionHandler`
-  - `security/`, `dto/`, `repository/`, `util/`
-- **Stack**: Spring Boot 3.2, PostgreSQL 16, JPA/Hibernate, JWT (jjwt), Argon2id via BouncyCastle, TOTP 2FA, SpringDoc OpenAPI
-- **Deployment**: Dockerized via `Dockerfile` + `docker-compose.yml`
+  - `config/` — `SecurityConfig`, `CorsConfig`, `RateLimitingFilter`, `SecurityHeadersFilter`, `TwoFactorSecretConverter`, `GlobalExceptionHandler`
+  - `security/` — `JwtTokenProvider`, `JwtAuthenticationFilter`, `SudoService`/`SudoAspect`, `LoginRateLimiter`, `PendingLoginChallengeStore`
+  - `dto/`, `repository/`, `util/`
+- **Stack**: Spring Boot 3.2, PostgreSQL 16 + Flyway migrations, **Redis** (rate limits, denylist, login challenges, sudo tokens), JPA/Hibernate, JWT (jjwt), Argon2id (BouncyCastle, server-side HMAC pepper), TOTP 2FA, SpringDoc (disabled by default)
+- **Deployment**: Dockerized (non-root) via `Dockerfile` + `docker-compose.yaml` / `docker-compose.prod.yaml`
+
+### Web — React + Vite (TypeScript)
+- `web/src/` — full vault UI (list, search, add/edit, settings, devices, 2FA),
+  client-side crypto via the Rust WASM core, password generator + strength meter,
+  cross-tab lock. Access token in memory; refresh token in an `HttpOnly; Secure;
+  SameSite=Strict` cookie.
+- `web/extension/` — **Chrome (Manifest V3)** browser extension with autofill +
+  popup. (Firefox/Safari/Edge not yet built.)
 
 ### Mobile — Kotlin Multiplatform
-- `mobile/app/src/` with `androidMain`, `commonMain`, `iosMain`
-- Android implementation: Jetpack Compose UI (auth, vault, settings screens), MVI pattern, Room DB, Koin DI, Ktor networking, AES-GCM encryption with PBKDF2 KDF, Android EncryptedSharedPreferences
-- iOS scaffolding present but not yet implemented
+- `mobile/app/src/` with `androidMain`, `commonMain`, `iosMain`; Jetpack Compose
+  UI, MVI, Koin DI, Ktor networking; crypto via the shared Rust core.
+- **Android**: functional — SQLCipher local cache, Keystore-bound biometric
+  unlock (CryptoObject + per-op auth), `allowBackup=false`, `FLAG_SECURE`.
+- **iOS**: builds and crypto works, but at-rest storage is **currently broken**
+  (Keychain stub → plaintext `NSUserDefaults`). See `docs/SECURITY_AUDIT.md`.
 
 ### Security Model (Zero-Knowledge)
-- Argon2id hash for authentication (per-user `auth_salt`)
-- Separate `encryption_salt` returned to client; client derives key via PBKDF2 (Android), encrypts with AES-256-GCM
-- **Server never sees plaintext vault data**
-- JWT access/refresh tokens, TOTP 2FA, account lockout, password reuse prevention, rate limiting, audit logging
+- Client derives a master key via **Argon2id** (96 MB / t=3 / p=4), then
+  `HKDF-Expand`s it into an **auth hash** (sent to server) and a **KEK** (stays
+  on client).
+- Server re-hashes the auth hash with an **HMAC-SHA256 pepper + per-user salt**
+  before storing — no plaintext password or usable hash at rest.
+- KEK wraps a random **vault key** (AES-256-GCM); vault entries are encrypted
+  client-side. **Server never sees plaintext vault data or the vault key.**
+- **2FA enforced** (two-step challenge flow), JWT access/refresh with instant
+  invalidation, refresh tokens hashed + rotated, account lockout, password reuse
+  prevention, Redis rate limiting, sudo step-up, audit logging.
 
 ---
 
@@ -80,7 +192,10 @@ Both derive from the master password but use **separate salts and separate hashe
 4. On failure → `handleFailedLogin`: increments counter; at 5 attempts → 15-min lockout
 5. On success → reset failed attempts, issue tokens + `encryptionSalt`
 
-> ⚠️ **Bug discovered**: 2FA check (`user.getTwoFactorEnabled()`) only logs — it does **not** gate token issuance. 2FA is not actually enforced.
+> ⚠️ **Bug discovered (since FIXED, see §0.2)**: at the time of review the 2FA
+> check only logged and did not gate token issuance. Login is now a two-step flow
+> (`login` → server-issued `challengeId` → `verify-2fa`) and 2FA is enforced
+> before any tokens are returned.
 
 ### 2.4 JWT-Protected Requests (`JwtAuthenticationFilter`)
 
@@ -93,14 +208,19 @@ Both derive from the master password but use **separate salts and separate hashe
 
 **Server side** (`VaultService`): stores `VaultEntry { userId, encryptedData, iv, version }`. Never decrypts. Per-request ownership check prevents IDOR.
 
-**Client side** (`AndroidEntryEncryptor`):
-1. Master password held in-memory in `SessionManager`
-2. `PBKDF2WithHmacSHA256(masterPassword, encryptionSalt, iter=65536, len=256bit)` → AES key
-3. `AES/GCM/NoPadding`, 12-byte IV, 128-bit auth tag
-4. Plaintext = `title|username|password|url|notes|folder` (joined with `|`)
-5. Sends `{encryptedData (Base64), iv (Base64)}` to server
+**Client side** — *historical (original review):* `AndroidEntryEncryptor` derived
+an AES key with `PBKDF2WithHmacSHA256(masterPassword, encryptionSalt, iter=65536)`
+and stored entries as `title|username|password|url|notes|folder` joined with `|`.
 
-> ⚠️ **Mismatch discovered**: Backend uses Argon2id and exposes a `deriveMasterKey` Argon2id method — but the Android client uses PBKDF2. The backend's `deriveMasterKey` appears to be dead code.
+**Client side — current:** all clients derive keys through the shared Rust
+`crypto-core` (**Argon2id 96 MB**, not PBKDF2), encrypt a structured **JSON**
+payload (not `|`-joined) with **AES-256-GCM** (12-byte random IV, 128-bit tag)
+under the random vault key, and send `{encryptedData, iv}` to the server.
+
+> ⚠️ **Mismatch discovered (since FIXED, see §0.1)**: the original Android client
+> used PBKDF2 while the backend exposed an unused Argon2id `deriveMasterKey`. Both
+> the client and the server-issued auth path now route through the unified Rust
+> Argon2id core, so the KDFs match.
 
 ### 2.6 Defense-in-Depth Layers
 
@@ -139,11 +259,14 @@ Both derive from the master password but use **separate salts and separate hashe
 
 ### 3.2 Critical Issues
 
-| # | Issue | Where |
-|---|---|---|
-| 1 | **Client KDF is PBKDF2 with 65k iterations** (OWASP minimum is 600k for PBKDF2) | `AndroidEntryEncryptor.kt:25` |
-| 2 | **2FA not actually enforced** at login — only logged | `AuthService.java:83` |
-| 3 | **`changePassword` rotates encryption salt without re-encrypting vault** → permanent data loss | `AuthService.java:147` |
+> **All three have since been fixed** — see [§0.2](#0-status-update-2026-05-31).
+> Retained here as the original finding.
+
+| # | Issue | Where | Status |
+|---|---|---|---|
+| 1 | **Client KDF is PBKDF2 with 65k iterations** (OWASP minimum is 600k for PBKDF2) | `AndroidEntryEncryptor.kt:25` | ✅ Fixed — Argon2id 96 MB via Rust core |
+| 2 | **2FA not actually enforced** at login — only logged | `AuthService.java:83` | ✅ Fixed — two-step challenge flow |
+| 3 | **`changePassword` rotates encryption salt without re-encrypting vault** → permanent data loss | `AuthService.java:147` | ✅ Fixed — new vault key + re-encryption + re-wrap |
 
 ### 3.3 Significant Issues
 
@@ -177,7 +300,9 @@ Both derive from the master password but use **separate salts and separate hashe
 
 ## 4. Production-Grade Security Fix Plan
 
-A 4-phase, ~10-week roadmap was produced as a standalone document → **`SECURITY_FIX_PLAN.md`**
+A 4-phase, ~10-week roadmap was produced as a standalone document (originally
+`SECURITY_FIX_PLAN.md`, now consolidated into **`docs/need_to_fix.md`**). The
+Phase-0 blocking items below are now **complete** — see [§0.2](#0-status-update-2026-05-31).
 
 ### Phase Summary
 
@@ -789,14 +914,21 @@ Together: **password manager + collaboration tool** = ~70% of what backend engin
 
 ## 16. Companion Documents Produced
 
-This conversation generated four standalone documents in the repo root:
+This conversation (and follow-ups) produced standalone documents, now living
+under `docs/`:
 
-| File | Purpose | Length |
-|---|---|---|
-| **`SECURITY_FIX_PLAN.md`** | 4-phase, 10-week engineering plan to bring crypto/auth to industry standard | Detailed implementation roadmap |
-| **`PRODUCT_ROADMAP.md`** | 10-year strategic vision for global developer-first competition with Bitwarden | Multi-year business plan |
-| **`INDIA_PLAYBOOK.md`** | India-first market entry strategy as alternative to global plan | 14-part regional playbook |
-| **`CONVERSATION_LOG.md`** | This document — full discussion archive | Comprehensive reference |
+| File | Purpose |
+|---|---|
+| **`docs/need_to_fix.md`** | Consolidated, phased fix/feature backlog (supersedes the original `SECURITY_FIX_PLAN.md`); tracks Fixed ✅ / Open ❌ items |
+| **`docs/SECURITY_AUDIT.md`** | Full-stack security assessment (2026-05-31) — severity-ranked findings + fixes across crypto-core, backend, web/extension, mobile |
+| **`docs/PRODUCT_ROADMAP.md`** | 10-year strategic vision for global developer-first competition with Bitwarden |
+| **`docs/FEATURES_ROADMAP.md`** | Feature-level roadmap |
+| **`docs/INDIA_PLAYBOOK.md`** | India-first market entry strategy as alternative to global plan |
+| **`docs/CONVERSATION_LOG.md`** | This document — full discussion archive |
+
+> The original `SECURITY_FIX_PLAN.md` referenced throughout Sections 4 and 9 was
+> consolidated into `docs/need_to_fix.md`; its Phase-0 items are now complete
+> (see §0.2).
 
 ### Suggested Next Documents
 
