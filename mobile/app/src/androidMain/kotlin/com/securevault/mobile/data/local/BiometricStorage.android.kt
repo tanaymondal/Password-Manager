@@ -193,11 +193,13 @@ actual class BiometricStorage actual constructor(context: PlatformContext) {
 
     private fun getEncryptionCipher(): Cipher? {
         return try {
-            val secretKey = getOrCreateKey() ?: return null
+            val secretKey = getOrCreateKey()
+            if (secretKey == null) { Log.w("BiometricStorage", "getOrCreateKey returned null"); return null }
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")
             cipher.init(Cipher.ENCRYPT_MODE, secretKey)
             cipher
         } catch (e: Exception) {
+            Log.w("BiometricStorage", "getEncryptionCipher failed: ${e.message}")
             null
         }
     }
@@ -205,7 +207,8 @@ actual class BiometricStorage actual constructor(context: PlatformContext) {
     private fun getDecryptionCipher(): Cipher? {
         return try {
             val ivString = prefs.getString(KEY_IV, null) ?: return null
-            val secretKey = getOrCreateKey() ?: return null
+            val secretKey = getOrCreateKey()
+            if (secretKey == null) { Log.w("BiometricStorage", "getOrCreateKey returned null"); return null }
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")
             val iv = Base64.decode(ivString, Base64.NO_WRAP)
             cipher.init(Cipher.DECRYPT_MODE, secretKey, GCMParameterSpec(128, iv))
