@@ -188,7 +188,10 @@ class AndroidEntryEncryptor : EntryEncryptor, VaultKeyManager {
         val plaintext = String(decryptedBytes, Charsets.UTF_8)
         decryptedBytes.fill(0)
 
-        return Json.decodeFromString(VaultEntry.serializer(), plaintext).copy(id = response.id.hashCode().toLong())
+        return Json.decodeFromString(VaultEntry.serializer(), plaintext).copy(
+            id = response.id.hashCode().toLong().let { if (it < 0) -it else it },
+            serverId = response.id
+        )
     }
 
     override fun encryptField(plaintext: String): String {

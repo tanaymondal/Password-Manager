@@ -13,12 +13,20 @@ class VaultRepositoryImpl(
     private val encryptor: EntryEncryptor
 ) : VaultRepository {
 
+    private val idToServerId = mutableMapOf<Long, String>()
+
+    private fun hashServerId(uuid: String): Long = uuid.hashCode().toLong().let { if (it < 0) -it else it }
+
     override suspend fun getEntries(): Result<List<VaultEntry>> {
         return try {
             val response = api.getVaultEntries()
             response.fold(
                 onSuccess = { entries ->
                     val decryptedEntries = entries.map { decryptEntry(it) }
+                    // Cache serverId mappings for later getEntry calls
+                    entries.forEach { entryResponse ->
+                        idToServerId[hashServerId(entryResponse.id)] = entryResponse.id
+                    }
                     Result.Success(decryptedEntries)
                 },
                 onFailure = { Result.Error(ErrorMapper.map(it.message, "Failed to fetch entries"), it) }
@@ -30,13 +38,18 @@ class VaultRepositoryImpl(
 
     override suspend fun getEntry(id: Long): Result<VaultEntry> {
         return try {
-            val response = api.getVaultEntry(id.toString())
-            response.fold(
-                onSuccess = { entry ->
-                    Result.Success(decryptEntry(entry))
-                },
-                onFailure = { Result.Error(ErrorMapper.map(it.message, "Failed to fetch entry"), it) }
-            )
+            val serverId = idToServerId[id]
+            if (serverId != null) {
+                val response = api.getVaultEntry(serverId)
+                response.fold(
+                    onSuccess = { entry ->
+                        Result.Success(decryptEntry(entry))
+                    },
+                    onFailure = { Result.Error(ErrorMapper.map(it.message, "Failed to fetch entry"), it) }
+                )
+            } else {
+                Result.Error("Entry not found in local cache")
+            }
         } catch (e: Exception) {
             Result.Error(ErrorMapper.map(e.message, "Failed to fetch entry"), e)
         }

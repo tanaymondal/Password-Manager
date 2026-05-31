@@ -99,7 +99,7 @@ class IosEntryEncryptor : EntryEncryptor, VaultKeyManager {
         val plaintext = SecureVaultCryptoCore.securevault_decrypt_entry(vkB64, response.encryptedData, response.iv)
             ?: error("Rust decrypt_entry returned null")
         return Json.decodeFromString(VaultEntry.serializer(), plaintext.toKString())
-            .copy(id = response.id.hashCode().toLong())
+            .copy(id = response.id.hashCode().toLong().let { if (it < 0) -it else it }, serverId = response.id)
     }
 
     override fun encryptField(plaintext: String): String {

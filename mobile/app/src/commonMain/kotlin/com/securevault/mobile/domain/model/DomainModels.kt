@@ -38,6 +38,8 @@ data class TwoFactorInfo(
 @Serializable
 data class VaultEntry(
     val id: Long = 0L,
+    @kotlinx.serialization.Transient
+    val serverId: String = "",
     @SerialName("name") val title: String,
     val username: String,
     val password: String,
