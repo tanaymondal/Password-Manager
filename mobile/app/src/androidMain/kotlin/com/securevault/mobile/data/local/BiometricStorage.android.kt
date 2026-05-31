@@ -172,7 +172,7 @@ actual class BiometricStorage actual constructor(context: PlatformContext) {
             .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
             .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
             .setUserAuthenticationRequired(true)
-            .setUserAuthenticationValidityDurationSeconds(-1)
+            .setUserAuthenticationValidityDurationSeconds(30)
             .setInvalidatedByBiometricEnrollment(true)
             .build()
         keyGenerator.init(spec)
