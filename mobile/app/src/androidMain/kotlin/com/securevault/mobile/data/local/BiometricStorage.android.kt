@@ -158,30 +158,37 @@ actual class BiometricStorage actual constructor(context: PlatformContext) {
         authorizedCipher = null
     }
 
-    private fun getOrCreateKey(): SecretKey {
-        if (keyStore.containsAlias(KEY_ALIAS)) {
-            return (keyStore.getEntry(KEY_ALIAS, null) as KeyStore.SecretKeyEntry).secretKey
+    private fun getOrCreateKey(): SecretKey? {
+        return try {
+            if (keyStore.containsAlias(KEY_ALIAS)) {
+                return (keyStore.getEntry(KEY_ALIAS, null) as KeyStore.SecretKeyEntry).secretKey
+            }
+            val keyGenerator = KeyGenerator.getInstance(
+                KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore"
+            )
+            val spec = KeyGenParameterSpec.Builder(
+                KEY_ALIAS,
+                KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
+            )
+                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                .setUserAuthenticationRequired(true)
+                .setInvalidatedByBiometricEnrollment(true)
+                .build()
+            keyGenerator.init(spec)
+            keyGenerator.generateKey()
+        } catch (e: Exception) {
+            android.util.Log.e("BiometricStorage", "Key creation failed", e)
+            null
+        } catch (e: java.lang.Error) {
+            android.util.Log.e("BiometricStorage", "Key creation error", e)
+            null
         }
-        val keyGenerator = KeyGenerator.getInstance(
-            KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore"
-        )
-        val spec = KeyGenParameterSpec.Builder(
-            KEY_ALIAS,
-            KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
-        )
-            .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-            .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-            .setUserAuthenticationRequired(true)
-            .setUserAuthenticationValidityDurationSeconds(30)
-            .setInvalidatedByBiometricEnrollment(true)
-            .build()
-        keyGenerator.init(spec)
-        return keyGenerator.generateKey()
     }
 
     private fun getEncryptionCipher(): Cipher? {
         return try {
-            val secretKey = getOrCreateKey()
+            val secretKey = getOrCreateKey() ?: return null
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")
             cipher.init(Cipher.ENCRYPT_MODE, secretKey)
             cipher
@@ -193,7 +200,7 @@ actual class BiometricStorage actual constructor(context: PlatformContext) {
     private fun getDecryptionCipher(): Cipher? {
         return try {
             val ivString = prefs.getString(KEY_IV, null) ?: return null
-            val secretKey = getOrCreateKey()
+            val secretKey = getOrCreateKey() ?: return null
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")
             val iv = Base64.decode(ivString, Base64.NO_WRAP)
             cipher.init(Cipher.DECRYPT_MODE, secretKey, GCMParameterSpec(128, iv))
