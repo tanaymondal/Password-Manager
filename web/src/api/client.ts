@@ -13,6 +13,12 @@ interface TokenStore {
 }
 
 let store: TokenStore = { accessToken: null }
+let lastSecurityVersion: string | null = null
+let onPasswordChanged: (() => void) | null = null
+
+export function setOnPasswordChanged(callback: () => void) {
+  onPasswordChanged = callback
+}
 
 export function getAccessToken() {
   return store.accessToken
@@ -24,6 +30,7 @@ export function setTokens(access: string) {
 
 export function clearTokens() {
   store = { accessToken: null }
+  lastSecurityVersion = null
 }
 
 export function loadTokens(): TokenStore {
@@ -112,6 +119,16 @@ export async function apiClient<T>(
   }
 
   if (res.status === 204) return undefined as T
+
+  // Check for password-changed-on-another-device via security version header
+  const securityVersion = res.headers.get('X-Security-Version')
+  if (securityVersion) {
+    if (lastSecurityVersion && lastSecurityVersion !== securityVersion) {
+      onPasswordChanged?.()
+      throw new Error('Password changed on another device. Please log in again.')
+    }
+    lastSecurityVersion = securityVersion
+  }
 
   const json: ApiResponse<T> = await res.json()
   return json.data

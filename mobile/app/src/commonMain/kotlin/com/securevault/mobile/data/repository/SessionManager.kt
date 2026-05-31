@@ -29,6 +29,8 @@ object SessionManager {
     fun setKdfMemory(value: Int) { storage.putInt("sv_km", value) }
     fun getKdfParallelism(): Int = storage.getInt("sv_kp", 4)
     fun setKdfParallelism(value: Int) { storage.putInt("sv_kp", value) }
+    fun getSecurityVersion(): String = storage.getString("sv_secv", "")
+    fun setSecurityVersion(value: String) { storage.putString("sv_secv", value) }
     val isLoggedIn: Boolean get() = getAccessToken().isNotEmpty()
     fun clearSession() { storage.clear() }
 }

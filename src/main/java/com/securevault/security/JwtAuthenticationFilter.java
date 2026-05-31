@@ -129,6 +129,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
 
                 SecurityContextHolder.getContext().setAuthentication(authentication);
+
+                if (dbPwdUpdatedAt != null && !response.isCommitted()) {
+                    response.setHeader("X-Security-Version",
+                        String.valueOf(dbPwdUpdatedAt.toEpochSecond(ZoneOffset.UTC)));
+                }
             }
         }
 

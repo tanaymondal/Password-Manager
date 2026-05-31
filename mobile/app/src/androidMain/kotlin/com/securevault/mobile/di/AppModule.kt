@@ -72,11 +72,11 @@ val appModule = module {
     factory<DisableTwoFactorUseCase> { DisableTwoFactorUseCaseImpl(get()) }
     factory<GetTwoFactorStatusUseCase> { GetTwoFactorStatusUseCaseImpl(get()) }
 
-    // ViewModels
-    single { LoginViewModel(get(), get(), get()) }
-    single { RegisterViewModel(get(), get()) }
-    single { VaultViewModel(get(), get(), get()) }
-    single { AddEditEntryViewModel(get(), get(), get()) }
-    single { SettingsViewModel(get(), get(), get(), get()) }
-    single { UnlockViewModel(get(), get()) }
+    // ViewModels (factory so each navigation gets a fresh instance)
+    factory { LoginViewModel(get(), get(), get()) }
+    factory { RegisterViewModel(get(), get()) }
+    factory { VaultViewModel(get(), get(), get()) }
+    factory { AddEditEntryViewModel(get(), get(), get()) }
+    factory { SettingsViewModel(get(), get(), get(), get()) }
+    factory { UnlockViewModel(get(), get()) }
 }

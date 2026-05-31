@@ -22,7 +22,7 @@ import {
   type VaultEntryResponse,
 } from '../api/vault'
 import { changePassword, checkBreach, upgradeKdf, requestSudo } from '../api/auth'
-import { setTokens } from '../api/client'
+import { setTokens, setOnPasswordChanged } from '../api/client'
 import { getCryptoMaterial, setCryptoMaterial } from '../store/cryptoMaterial'
 import { getKdfConfig } from '../crypto/kdfConfig'
 
@@ -83,7 +83,20 @@ export function VaultProvider({ children }: { children: ReactNode }) {
         setError('Your master password was changed in another session. Please log out and log back in.')
       }
     }
-    return () => channel.close()
+
+    setOnPasswordChanged(() => {
+      vaultKeyRef.current = null
+      setIsUnlocked(false)
+      setCrossTabLocked(true)
+      setEntries([])
+      setDecrypted({})
+      setError('Password changed on another device. Please log out and log back in.')
+    })
+
+    return () => {
+      channel.close()
+      setOnPasswordChanged(() => {})
+    }
   }, [])
 
   const lock = useCallback(() => {

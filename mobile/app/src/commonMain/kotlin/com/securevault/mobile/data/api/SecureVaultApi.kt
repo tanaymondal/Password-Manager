@@ -31,6 +31,15 @@ class SecureVaultApi(
         if (response.status == HttpStatusCode.Unauthorized || response.status == HttpStatusCode.Forbidden) {
             throw TokenExpiredException()
         }
+        val securityVersion = response.headers["X-Security-Version"]
+        if (securityVersion != null) {
+            val stored = SessionManager.getSecurityVersion()
+            if (stored.isNotEmpty() && stored != securityVersion) {
+                SessionManager.clearSession()
+                throw SessionExpiredException()
+            }
+            SessionManager.setSecurityVersion(securityVersion)
+        }
         return response
     }
 
