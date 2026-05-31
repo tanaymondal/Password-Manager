@@ -10,6 +10,8 @@ import platform.Foundation.NSFileManager
 import platform.Foundation.NSJSONSerialization
 import platform.Foundation.NSUserDomainMask
 import platform.Foundation.NSUTF8StringEncoding
+import platform.Foundation.NSFileProtectionComplete
+import platform.Foundation.NSFileProtectionKey
 import platform.Foundation.base64EncodedStringWithOptions
 import platform.Foundation.create
 import platform.Foundation.writeToFile
@@ -42,10 +44,15 @@ private fun getOrCreateDeviceKey(): String {
         NSData.create(bytes = pinned.addressOf(0), length = 32uL).base64EncodedStringWithOptions(0u)
     }
 
-    // Store to file
+    // Store to file with complete protection (unreadable when locked)
     val json = mapOf<String, String>("key" to keyB64)
     val outData = NSJSONSerialization.dataWithJSONObject(json, 0u, null) ?: error("Failed to serialize key")
     outData.writeToFile(path, atomically = true)
+    NSFileManager.defaultManager.setAttributes(
+        mapOf<Any?, Any?>(NSFileProtectionKey to NSFileProtectionComplete),
+        ofItemAtPath = path,
+        error = null
+    )
 
     cachedDeviceKey = keyB64
     return keyB64
