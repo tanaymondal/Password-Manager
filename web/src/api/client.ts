@@ -26,6 +26,7 @@ export function getAccessToken() {
 
 export function setTokens(access: string) {
   store = { accessToken: access }
+  lastSecurityVersion = null // reset so stale value doesn't trigger false mismatch after login
 }
 
 export function clearTokens() {

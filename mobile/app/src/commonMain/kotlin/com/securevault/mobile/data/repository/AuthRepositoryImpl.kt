@@ -358,6 +358,7 @@ class AuthRepositoryImpl(
         SessionManager.setKdfIterations(kdfIterations ?: KdfConfigManager.getCachedOrDefault().kdfIterations)
         SessionManager.setKdfMemory(kdfMemory ?: KdfConfigManager.getCachedOrDefault().kdfMemory)
         SessionManager.setKdfParallelism(kdfParallelism ?: KdfConfigManager.getCachedOrDefault().kdfParallelism)
+        SessionManager.setSecurityVersion("") // reset so stale X-Security-Version doesn't trigger false mismatch
         _authState.value = AuthState(
             user = User(userId.hashCode().toLong(), email),
             accessToken = accessToken,
