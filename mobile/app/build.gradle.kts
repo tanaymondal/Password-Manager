@@ -33,6 +33,10 @@ kotlin {
                     defFile(project.file("src/iosMain/c_interop/securevault_crypto_core.def"))
                     includeDirs(project.file("src/iosMain/c_interop"))
                 }
+                val keychain_helper by creating {
+                    defFile(project.file("src/iosMain/c_interop/keychain_helper.def"))
+                    includeDirs(project.file("src/iosMain/c_interop"))
+                }
             }
         }
         iosTarget.compilations.getByName("test") {

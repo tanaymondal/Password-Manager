@@ -1,60 +1,20 @@
+@file:OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
 package com.securevault.mobile.data.local
 
 import com.securevault.mobile.ui.PlatformContext
-import kotlinx.cinterop.BetaInteropApi
+import kotlinx.cinterop.toKString
 import kotlinx.cinterop.ExperimentalForeignApi
-import kotlinx.cinterop.addressOf
-import kotlinx.cinterop.usePinned
-import platform.Foundation.NSData
-import platform.Foundation.NSDocumentDirectory
-import platform.Foundation.NSFileManager
-import platform.Foundation.NSJSONSerialization
-import platform.Foundation.NSUserDomainMask
-import platform.Foundation.create
-import platform.Foundation.writeToFile
 import platform.LocalAuthentication.*
-import platform.Security.SecRandomCopyBytes
 
-@OptIn(ExperimentalForeignApi::class)
 actual class BiometricStorage actual constructor(context: PlatformContext) {
     companion object {
-        private const val BIO_FILE = ".securevault_biometric"
-        private const val KEY_VAULT_KEY = "vault_key"
-        private const val KEY_FAILURES = "failures"
+        private const val BIO_SERVICE = "com.securevault.biometric"
+        private const val BIO_KEY = "vault_key"
+        private const val PREFS_KEY_FAILURES = "sv_biometric_failure_count"
         private const val MAX_BIOMETRIC_FAILURES = 5
     }
 
-    private var cache: MutableMap<String, String>? = null
     private var authorizedVaultKey: String? = null
-
-    @OptIn(ExperimentalForeignApi::class)
-    private fun getStorePath(): String {
-        val documentDir = NSFileManager.defaultManager.URLForDirectory(
-            directory = NSDocumentDirectory,
-            inDomain = NSUserDomainMask,
-            appropriateForURL = null,
-            create = true,
-            error = null,
-        ) ?: error("Cannot access Documents directory")
-        return requireNotNull(documentDir.path) + "/$BIO_FILE"
-    }
-
-    @OptIn(ExperimentalForeignApi::class)
-    private fun ensureLoaded() {
-        if (cache != null) return
-        val data = NSData.create(contentsOfFile = getStorePath()) ?: run {
-            cache = mutableMapOf(); return
-        }
-        val obj = NSJSONSerialization.JSONObjectWithData(data, 0u, null) as? Map<*, *>
-        @Suppress("UNCHECKED_CAST")
-        cache = (obj as? Map<String, String>)?.toMutableMap() ?: mutableMapOf()
-    }
-
-    @OptIn(ExperimentalForeignApi::class)
-    private fun save() {
-        val data = NSJSONSerialization.dataWithJSONObject(cache ?: return, 0u, null) ?: return
-        data.writeToFile(getStorePath(), atomically = true)
-    }
 
     actual fun isAvailable(): Boolean {
         val ctx = LAContext()
@@ -62,26 +22,30 @@ actual class BiometricStorage actual constructor(context: PlatformContext) {
     }
 
     actual fun hasEncryptedVaultKey(): Boolean {
-        ensureLoaded()
-        return cache?.containsKey(KEY_VAULT_KEY) == true
+        val ptr = KeychainHelper.keychain_read(BIO_SERVICE, BIO_KEY)
+        if (ptr != null) {
+            KeychainHelper.keychain_free_string(ptr)
+            return true
+        }
+        return false
     }
 
     actual fun isLockedOut(): Boolean {
-        ensureLoaded()
-        return (cache?.get(KEY_FAILURES)?.toIntOrNull() ?: 0) >= MAX_BIOMETRIC_FAILURES
+        val ptr = KeychainHelper.keychain_read(BIO_SERVICE, "$BIO_KEY.failures")
+        val count = ptr?.toKString()?.toIntOrNull() ?: 0
+        if (ptr != null) KeychainHelper.keychain_free_string(ptr)
+        return count >= MAX_BIOMETRIC_FAILURES
     }
 
     actual fun recordFailure() {
-        ensureLoaded()
-        val count = (cache?.get(KEY_FAILURES)?.toIntOrNull() ?: 0) + 1
-        cache?.set(KEY_FAILURES, count.toString())
-        save()
+        val ptr = KeychainHelper.keychain_read(BIO_SERVICE, "$BIO_KEY.failures")
+        val count = (ptr?.toKString()?.toIntOrNull() ?: 0) + 1
+        if (ptr != null) KeychainHelper.keychain_free_string(ptr)
+        KeychainHelper.keychain_write(BIO_SERVICE, "$BIO_KEY.failures", count.toString())
     }
 
     actual fun resetFailureCount() {
-        ensureLoaded()
-        cache?.remove(KEY_FAILURES)
-        save()
+        KeychainHelper.keychain_delete(BIO_SERVICE, "$BIO_KEY.failures")
     }
 
     actual fun shouldShowBiometricPrompt(): Boolean {
@@ -100,7 +64,12 @@ actual class BiometricStorage actual constructor(context: PlatformContext) {
         ctx.evaluatePolicy(LAPolicyDeviceOwnerAuthenticationWithBiometrics, title) { success, error ->
             if (success) {
                 resetFailureCount()
-                authorizedVaultKey = readVaultKey()
+                // Read vault key with biometric context
+                val ptr = KeychainHelper.keychain_read_biometric(BIO_SERVICE, BIO_KEY, title)
+                if (ptr != null) {
+                    authorizedVaultKey = ptr.toKString()
+                    KeychainHelper.keychain_free_string(ptr)
+                }
                 onSuccess()
             } else {
                 val errorCode = error?.let { it.code.toLong() } ?: -1L
@@ -120,10 +89,8 @@ actual class BiometricStorage actual constructor(context: PlatformContext) {
     }
 
     actual fun storeVaultKey(vaultKey: String): Boolean {
-        ensureLoaded()
-        cache?.set(KEY_VAULT_KEY, vaultKey)
-        save()
-        return true
+        val status = KeychainHelper.keychain_write_biometric(BIO_SERVICE, BIO_KEY, vaultKey)
+        return status.toInt() == 0
     }
 
     actual fun retrieveVaultKey(): String? {
@@ -132,17 +99,18 @@ actual class BiometricStorage actual constructor(context: PlatformContext) {
             authorizedVaultKey = null
             return cached
         }
-        return readVaultKey()
+        val ptr = KeychainHelper.keychain_read_biometric(BIO_SERVICE, BIO_KEY, "Unlock SecureVault")
+        if (ptr != null) {
+            val result = ptr.toKString()
+            KeychainHelper.keychain_free_string(ptr)
+            return result
+        }
+        return null
     }
 
     actual fun clear() {
-        cache = mutableMapOf()
-        save()
+        KeychainHelper.keychain_delete(BIO_SERVICE, BIO_KEY)
+        KeychainHelper.keychain_delete(BIO_SERVICE, "$BIO_KEY.failures")
         authorizedVaultKey = null
-    }
-
-    private fun readVaultKey(): String? {
-        ensureLoaded()
-        return cache?.get(KEY_VAULT_KEY)
     }
 }

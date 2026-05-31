@@ -1,0 +1,6 @@
+package = KeychainHelper
+language = Objective-C
+headers = keychain_helper.h
+staticLibraries = libkeychain_helper.a
+libraryPaths = /tmp
+compilerOpts = -I/tmp
