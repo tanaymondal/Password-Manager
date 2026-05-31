@@ -18,62 +18,29 @@ kotlin {
         }
     }
 
-    iosX64 {
-        compilations.getByName("main") {
+    listOf(
+        iosX64(),
+        iosArm64(),
+        iosSimulatorArm64()
+    ).forEach { iosTarget ->
+        iosTarget.binaries.framework {
+            baseName = "SecureVault"
+            isStatic = true
+        }
+
+        iosTarget.compilations.getByName("main") {
             cinterops {
                 val securevault_crypto_core by creating {
                     defFile(project.file("src/iosMain/c_interop/securevault_crypto_core.def"))
                     includeDirs(project.file("src/iosMain/c_interop"))
-                    
                 }
             }
         }
-        compilations.getByName("test") {
+        iosTarget.compilations.getByName("test") {
             cinterops {
                 val securevault_crypto_core by creating {
                     defFile(project.file("src/iosMain/c_interop/securevault_crypto_core.def"))
                     includeDirs(project.file("src/iosMain/c_interop"))
-                    
-                }
-            }
-        }
-    }
-    iosArm64 {
-        compilations.getByName("main") {
-            cinterops {
-                val securevault_crypto_core by creating {
-                    defFile(project.file("src/iosMain/c_interop/securevault_crypto_core.def"))
-                    includeDirs(project.file("src/iosMain/c_interop"))
-                    
-                }
-            }
-        }
-        compilations.getByName("test") {
-            cinterops {
-                val securevault_crypto_core by creating {
-                    defFile(project.file("src/iosMain/c_interop/securevault_crypto_core.def"))
-                    includeDirs(project.file("src/iosMain/c_interop"))
-                    
-                }
-            }
-        }
-    }
-    iosSimulatorArm64 {
-        compilations.getByName("main") {
-            cinterops {
-                val securevault_crypto_core by creating {
-                    defFile(project.file("src/iosMain/c_interop/securevault_crypto_core.def"))
-                    includeDirs(project.file("src/iosMain/c_interop"))
-                    
-                }
-            }
-        }
-        compilations.getByName("test") {
-            cinterops {
-                val securevault_crypto_core by creating {
-                    defFile(project.file("src/iosMain/c_interop/securevault_crypto_core.def"))
-                    includeDirs(project.file("src/iosMain/c_interop"))
-                    
                 }
             }
         }
@@ -115,6 +82,7 @@ commonMain.dependencies {
 
 iosMain.dependencies {
     implementation("io.insert-koin:koin-core:3.5.3")
+    implementation("io.ktor:ktor-client-darwin:2.3.7")
 }
 
 commonTest.dependencies {
