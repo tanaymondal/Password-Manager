@@ -176,10 +176,10 @@ actual class BiometricStorage actual constructor(context: PlatformContext) {
     }
 
     private fun getOrCreateKey(): SecretKey? {
+        // Reuse existing key if present
         try {
-            // Delete existing key if present — ensures fresh params on each attempt
             if (keyStore.containsAlias(KEY_ALIAS)) {
-                keyStore.deleteEntry(KEY_ALIAS)
+                return (keyStore.getEntry(KEY_ALIAS, null) as KeyStore.SecretKeyEntry).secretKey
             }
         } catch (_: Exception) {}
 
@@ -202,9 +202,6 @@ actual class BiometricStorage actual constructor(context: PlatformContext) {
             Log.w("BiometricStorage", "Key creation failed (auth-required), trying without auth: ${e.message}")
             // Fallback: create key without auth requirement
             try {
-                if (keyStore.containsAlias(KEY_ALIAS)) {
-                    keyStore.deleteEntry(KEY_ALIAS)
-                }
                 val keyGenerator = KeyGenerator.getInstance(
                     KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore"
                 )
