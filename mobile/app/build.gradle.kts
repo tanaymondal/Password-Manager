@@ -2,7 +2,7 @@ plugins {
     kotlin("multiplatform")
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.serialization")
-    id("org.jetbrains.kotlin.plugin.compose") version "2.0.0"
+    id("org.jetbrains.kotlin.plugin.compose") version "2.1.21"
     id("org.jetbrains.compose")
 
     id("com.google.devtools.ksp")
@@ -65,10 +65,10 @@ dependencies {
 }
 
 commonMain.dependencies {
-    implementation("org.jetbrains.compose.runtime:runtime:1.6.11")
-    implementation("org.jetbrains.compose.foundation:foundation:1.6.11")
-    implementation("org.jetbrains.compose.material3:material3:1.6.11")
-    implementation("org.jetbrains.compose.material:material-icons-extended:1.6.11")
+    implementation("org.jetbrains.compose.runtime:runtime:1.7.3")
+    implementation("org.jetbrains.compose.foundation:foundation:1.7.3")
+    implementation("org.jetbrains.compose.material3:material3:1.7.3")
+    implementation("org.jetbrains.compose.material:material-icons-extended:1.7.3")
     implementation("org.jetbrains.androidx.navigation:navigation-compose:2.8.0-alpha10")
     implementation("org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-compose:2.8.0")
     implementation("org.jetbrains.androidx.lifecycle:lifecycle-runtime-compose:2.8.0")
