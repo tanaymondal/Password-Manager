@@ -38,6 +38,22 @@ int32_t bio_write(const char* key, const char* value) {
     return (int32_t)status;
 }
 
+int32_t bio_exists(const char* key) {
+    NSString* keyStr = [NSString stringWithUTF8String:key];
+    NSString* serviceStr = [NSString stringWithUTF8String:SERVICE];
+
+    CFTypeRef result = NULL;
+    OSStatus status = SecItemCopyMatching((__bridge CFDictionaryRef)@{
+        (__bridge id)kSecClass: (__bridge id)kSecClassGenericPassword,
+        (__bridge id)kSecAttrService: serviceStr,
+        (__bridge id)kSecAttrAccount: keyStr,
+        (__bridge id)kSecReturnData: @NO,
+        (__bridge id)kSecMatchLimit: (__bridge id)kSecMatchLimitOne,
+    }, &result);
+
+    return (status == errSecSuccess) ? 1 : 0;
+}
+
 char* bio_read(const char* key, const char* prompt_reason) {
     NSString* keyStr = [NSString stringWithUTF8String:key];
     NSString* reason = [NSString stringWithUTF8String:prompt_reason];
