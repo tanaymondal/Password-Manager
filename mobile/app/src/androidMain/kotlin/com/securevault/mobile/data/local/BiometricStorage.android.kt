@@ -89,12 +89,15 @@ actual class BiometricStorage actual constructor(context: PlatformContext) {
 
         val callback = object : BiometricPrompt.AuthenticationCallback() {
             override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                Log.d("BiometricStorage", "onAuthenticationSucceeded")
                 authorizedCipher = result.cryptoObject?.cipher ?: cipher
+                Log.d("BiometricStorage", "authorizedCipher set, calling onSuccess")
                 resetFailureCount()
                 onSuccess()
             }
 
             override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                Log.w("BiometricStorage", "onAuthenticationError: code=$errorCode msg=$errString")
                 if (errorCode == BiometricPrompt.ERROR_USER_CANCELED ||
                     errorCode == BiometricPrompt.ERROR_NEGATIVE_BUTTON
                 ) {
@@ -106,6 +109,7 @@ actual class BiometricStorage actual constructor(context: PlatformContext) {
             }
 
             override fun onAuthenticationFailed() {
+                Log.w("BiometricStorage", "onAuthenticationFailed")
                 recordFailure()
                 onError("Biometric authentication failed. Try again.")
             }
@@ -124,29 +128,36 @@ actual class BiometricStorage actual constructor(context: PlatformContext) {
 
     actual fun storeVaultKey(vaultKey: String): Boolean {
         return try {
-            val cipher = authorizedCipher ?: return false
+            val cipher = authorizedCipher
+            if (cipher == null) { Log.w("BiometricStorage", "storeVaultKey: authorizedCipher is null"); return false }
+            Log.d("BiometricStorage", "storeVaultKey: doFinal...")
             val encrypted = cipher.doFinal(vaultKey.toByteArray(Charsets.UTF_8))
             val iv = cipher.iv
             prefs.edit()
                 .putString(KEY_IV, Base64.encodeToString(iv, Base64.NO_WRAP))
                 .putString(KEY_ENCRYPTED_DATA, Base64.encodeToString(encrypted, Base64.NO_WRAP))
                 .apply()
+            Log.d("BiometricStorage", "storeVaultKey: success")
             authorizedCipher = null
             true
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
+            Log.w("BiometricStorage", "storeVaultKey failed: ${e.message}")
             false
         }
     }
 
     actual fun retrieveVaultKey(): String? {
         return try {
-            val cipher = authorizedCipher ?: return null
+            val cipher = authorizedCipher
+            if (cipher == null) { Log.w("BiometricStorage", "retrieveVaultKey: authorizedCipher is null"); return null }
             val encryptedData = prefs.getString(KEY_ENCRYPTED_DATA, null) ?: return null
+            Log.d("BiometricStorage", "retrieveVaultKey: doFinal...")
             val decrypted = cipher.doFinal(Base64.decode(encryptedData, Base64.NO_WRAP))
             resetFailureCount()
             authorizedCipher = null
             String(decrypted, Charsets.UTF_8)
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
+            Log.w("BiometricStorage", "retrieveVaultKey failed: ${e.message}")
             null
         }
     }
