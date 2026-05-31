@@ -79,18 +79,19 @@ actual class BiometricStorage actual constructor(context: PlatformContext) {
         val executor = ContextCompat.getMainExecutor(appContext)
 
         Log.d("BiometricStorage", "Getting cipher...")
-        val cipher = getDecryptionCipher() ?: getEncryptionCipher() ?: run {
+        // Create encryption cipher before auth to ensure key exists
+        if (getEncryptionCipher() == null) {
             Log.w("BiometricStorage", "Failed to create cipher")
             onError("Failed to prepare crypto")
             return
         }
-        authorizedCipher = cipher
-        Log.d("BiometricStorage", "Cipher created, showing biometric prompt...")
+        Log.d("BiometricStorage", "Key ready, showing biometric prompt...")
 
         val callback = object : BiometricPrompt.AuthenticationCallback() {
             override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
                 Log.d("BiometricStorage", "onAuthenticationSucceeded")
-                authorizedCipher = result.cryptoObject?.cipher ?: cipher
+                // Create a fresh cipher after auth — CryptoObject can corrupt GCM state
+                authorizedCipher = getEncryptionCipher()
                 Log.d("BiometricStorage", "authorizedCipher set, calling onSuccess")
                 resetFailureCount()
                 onSuccess()
@@ -123,7 +124,7 @@ actual class BiometricStorage actual constructor(context: PlatformContext) {
             .setNegativeButtonText("Cancel")
             .build()
 
-        prompt.authenticate(promptInfo, BiometricPrompt.CryptoObject(cipher))
+        prompt.authenticate(promptInfo)
     }
 
     actual fun storeVaultKey(vaultKey: String): Boolean {
