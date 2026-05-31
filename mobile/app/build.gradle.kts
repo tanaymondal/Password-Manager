@@ -60,10 +60,10 @@ kotlin.targets.matching { it.name.startsWith("ios") }.configureEach {
 }
 
 dependencies {
-    add("kspAndroid", "androidx.room:room-compiler:2.7.0-alpha11")
-    add("kspIosSimulatorArm64", "androidx.room:room-compiler:2.7.0-alpha11")
-    add("kspIosArm64", "androidx.room:room-compiler:2.7.0-alpha11")
-    add("kspIosX64", "androidx.room:room-compiler:2.7.0-alpha11")
+    add("kspAndroid", "androidx.room:room-compiler:2.7.2")
+    add("kspIosSimulatorArm64", "androidx.room:room-compiler:2.7.2")
+    add("kspIosArm64", "androidx.room:room-compiler:2.7.2")
+    add("kspIosX64", "androidx.room:room-compiler:2.7.2")
 }
 
 commonMain.dependencies {
@@ -80,7 +80,7 @@ commonMain.dependencies {
     implementation("io.ktor:ktor-client-content-negotiation:2.3.7")
     implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.7")
     implementation("io.insert-koin:koin-core:3.5.3")
-    implementation("androidx.room:room-runtime:2.7.0-alpha11")
+    implementation("androidx.room:room-runtime:2.7.2")
     implementation("androidx.sqlite:sqlite-bundled:2.5.0-SNAPSHOT")
 }
 
@@ -106,7 +106,7 @@ androidMain.dependencies {
     implementation("io.insert-koin:koin-androidx-compose:3.5.3")
     implementation("androidx.datastore:datastore-preferences:1.0.0")
     implementation("io.ktor:ktor-client-android:2.3.7")
-    implementation("androidx.room:room-runtime-android:2.7.0-alpha11")
+    implementation("androidx.room:room-runtime-android:2.7.2")
     implementation("net.zetetic:android-database-sqlcipher:4.5.4")
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
     implementation("androidx.biometric:biometric:1.2.0-alpha05")
