@@ -2,9 +2,8 @@ plugins {
     kotlin("multiplatform")
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.serialization")
-    id("org.jetbrains.kotlin.plugin.compose") version "2.1.21"
+    id("org.jetbrains.kotlin.plugin.compose") version "2.1.20"
     id("org.jetbrains.compose")
-
     id("com.google.devtools.ksp")
 }
 
@@ -61,7 +60,10 @@ kotlin.targets.matching { it.name.startsWith("ios") }.configureEach {
 }
 
 dependencies {
-    add("kspAndroid", "androidx.room:room-compiler:2.6.1")
+    add("kspAndroid", "androidx.room:room-compiler:2.7.0-alpha11")
+    add("kspIosSimulatorArm64", "androidx.room:room-compiler:2.7.0-alpha11")
+    add("kspIosArm64", "androidx.room:room-compiler:2.7.0-alpha11")
+    add("kspIosX64", "androidx.room:room-compiler:2.7.0-alpha11")
 }
 
 commonMain.dependencies {
@@ -78,6 +80,8 @@ commonMain.dependencies {
     implementation("io.ktor:ktor-client-content-negotiation:2.3.7")
     implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.7")
     implementation("io.insert-koin:koin-core:3.5.3")
+    implementation("androidx.room:room-runtime:2.7.0-alpha11")
+    implementation("androidx.sqlite:sqlite-bundled:2.5.0-SNAPSHOT")
 }
 
 iosMain.dependencies {
@@ -101,17 +105,10 @@ androidMain.dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
     implementation("io.insert-koin:koin-androidx-compose:3.5.3")
     implementation("androidx.datastore:datastore-preferences:1.0.0")
-
-    // Ktor Client for Android
     implementation("io.ktor:ktor-client-android:2.3.7")
-
-    // Room with SQLCipher for encrypted database
-    implementation("androidx.room:room-runtime:2.6.1")
-    implementation("androidx.room:room-ktx:2.6.1")
+    implementation("androidx.room:room-runtime-android:2.7.0-alpha11")
     implementation("net.zetetic:android-database-sqlcipher:4.5.4")
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
-
-    // Biometric authentication
     implementation("androidx.biometric:biometric:1.2.0-alpha05")
 }
 

@@ -2,6 +2,7 @@ package com.securevault.mobile.di
 
 import com.securevault.mobile.data.api.SecureVaultApi
 import com.securevault.mobile.data.local.IosEntryEncryptor
+import com.securevault.mobile.data.local.createSecureVaultDatabase
 import com.securevault.mobile.data.repository.*
 import com.securevault.mobile.domain.crypto.CryptoEngine
 import com.securevault.mobile.domain.repository.AuthRepository
@@ -34,7 +35,13 @@ val appModule = module {
     single<CryptoEngine> { CryptoEngine() }
 
     single<AuthRepository> { AuthRepositoryImpl(get(), get(), get(), get()) }
-    single<VaultRepository> { VaultRepositoryImpl(get(), get()) }
+    single<VaultRepository> {
+        CachedVaultRepository(
+            dbProvider = { createSecureVaultDatabase() },
+            apiRepository = VaultRepositoryImpl(get(), get()),
+            encryptor = get()
+        )
+    }
     single<DeviceRepository> { DeviceRepositoryImpl(get()) }
     single<TwoFactorRepository> { TwoFactorRepositoryImpl(get()) }
 

@@ -3,6 +3,7 @@ package com.securevault.mobile.di
 import android.content.Context
 import com.securevault.mobile.data.api.SecureVaultApi
 import com.securevault.mobile.data.local.AndroidEntryEncryptor
+import com.securevault.mobile.data.local.createSecureVaultDatabase
 import com.securevault.mobile.data.repository.*
 import com.securevault.mobile.domain.crypto.CryptoEngine
 import com.securevault.mobile.domain.repository.AuthRepository
@@ -40,7 +41,14 @@ val appModule = module {
 
     // Repositories
     single<AuthRepository> { AuthRepositoryImpl(get(), get(), get(), get()) }
-    single<VaultRepository> { CachedVaultRepository(androidContext(), VaultRepositoryImpl(get(), get()), get()) }
+    single<VaultRepository> {
+        val ctx = androidContext()
+        CachedVaultRepository(
+            dbProvider = { createSecureVaultDatabase(ctx) },
+            apiRepository = VaultRepositoryImpl(get(), get()),
+            encryptor = get()
+        )
+    }
     single<DeviceRepository> { DeviceRepositoryImpl(get()) }
     single<TwoFactorRepository> { TwoFactorRepositoryImpl(get()) }
 

@@ -13,7 +13,7 @@ data class VaultEntryEntity(
     val url: String?,
     val notes: String?,
     val folder: String?,
-    val createdAt: Long = System.currentTimeMillis(),
-    val updatedAt: Long = System.currentTimeMillis(),
+    val createdAt: Long? = null,
+    val updatedAt: Long? = null,
     val isSynced: Boolean = true
 )

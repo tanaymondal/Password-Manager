@@ -1,64 +1,38 @@
 package com.securevault.mobile.data.repository
 
-import android.content.Context
-import android.util.Log
-import com.securevault.mobile.data.local.DatabaseKeyManager
 import com.securevault.mobile.data.local.SecureVaultDatabase
 import com.securevault.mobile.data.local.VaultEntryDao
 import com.securevault.mobile.data.local.VaultEntryEntity
-import com.securevault.mobile.data.repository.EntryEncryptor
 import com.securevault.mobile.domain.model.Result
 import com.securevault.mobile.domain.model.VaultEntry
 import com.securevault.mobile.domain.repository.VaultRepository
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 class CachedVaultRepository(
-    private val context: Context,
+    private val dbProvider: () -> SecureVaultDatabase,
     private val apiRepository: VaultRepository,
     private val encryptor: EntryEncryptor
 ) : VaultRepository {
 
-    private val daoLock = Any()
+    private val daoMutex = Mutex()
+    @kotlin.concurrent.Volatile
     private var _dao: VaultEntryDao? = null
 
-    private fun getOrCreateDao(): VaultEntryDao {
+    private suspend fun getOrCreateDao(): VaultEntryDao {
         var dao = _dao
         if (dao == null) {
-            synchronized(daoLock) {
+            daoMutex.withLock {
                 dao = _dao
                 if (dao == null) {
-                    dao = createDao()
+                    val db = dbProvider()
+                    dao = db.vaultEntryDao()
                     _dao = dao
                 }
             }
         }
         return dao!!
-    }
-
-    private fun createDao(): VaultEntryDao {
-        val keyManager = DatabaseKeyManager(context)
-        val passphrase = keyManager.getOrCreatePassphrase()
-        return try {
-            val db = SecureVaultDatabase.getInstance(context, passphrase)
-            db.openHelper.writableDatabase
-            db.vaultEntryDao()
-        } catch (e: Exception) {
-            Log.w("CachedVaultRepo", "DB open failed, recreating: ${e.message}")
-            SecureVaultDatabase.clearInstance()
-            context.deleteDatabase(SecureVaultDatabase.DATABASE_NAME)
-            keyManager.clearPassphrase()
-            val newPassphrase = keyManager.getOrCreatePassphrase()
-            val db = SecureVaultDatabase.getInstance(context, newPassphrase)
-            db.openHelper.writableDatabase
-            db.vaultEntryDao()
-        }
-    }
-
-    private fun resetDao() {
-        synchronized(daoLock) {
-            SecureVaultDatabase.clearInstance()
-            _dao = null
-        }
     }
 
     private suspend fun <T> withDao(block: suspend (VaultEntryDao) -> T): T {
