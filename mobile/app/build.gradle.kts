@@ -76,9 +76,9 @@ commonMain.dependencies {
     implementation("org.jetbrains.androidx.lifecycle:lifecycle-runtime-compose:2.8.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2")
-    implementation("io.ktor:ktor-client-core:2.3.7")
-    implementation("io.ktor:ktor-client-content-negotiation:2.3.7")
-    implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.7")
+    implementation("io.ktor:ktor-client-core:3.5.0")
+    implementation("io.ktor:ktor-client-content-negotiation:3.5.0")
+    implementation("io.ktor:ktor-serialization-kotlinx-json:3.5.0")
     implementation("io.insert-koin:koin-core:3.5.3")
     implementation("androidx.room:room-runtime:2.7.2")
     implementation("androidx.sqlite:sqlite-bundled:2.5.0-SNAPSHOT")
@@ -87,7 +87,7 @@ commonMain.dependencies {
 
 iosMain.dependencies {
     implementation("io.insert-koin:koin-core:3.5.3")
-    implementation("io.ktor:ktor-client-darwin:2.3.7")
+    implementation("io.ktor:ktor-client-darwin:3.5.0")
 }
 
 commonTest.dependencies {
@@ -105,13 +105,13 @@ androidMain.dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
     implementation("io.insert-koin:koin-androidx-compose:3.5.3")
-    implementation("io.ktor:ktor-client-android:2.3.7")
+    implementation("io.ktor:ktor-client-android:3.5.0")
     implementation("androidx.biometric:biometric:1.2.0-alpha05")
 }
 
 iosMain.dependencies {
     implementation("io.insert-koin:koin-core:3.5.3")
-    implementation("io.ktor:ktor-client-darwin:2.3.7")
+    implementation("io.ktor:ktor-client-darwin:3.5.0")
 }
 
 commonTest.dependencies {
@@ -130,7 +130,7 @@ androidMain.dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
     implementation("io.insert-koin:koin-androidx-compose:3.5.3")
     implementation("androidx.datastore:datastore-preferences:1.0.0")
-    implementation("io.ktor:ktor-client-android:2.3.7")
+    implementation("io.ktor:ktor-client-android:3.5.0")
     implementation("androidx.room:room-runtime-android:2.7.2")
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
     implementation("androidx.biometric:biometric:1.2.0-alpha05")
