@@ -25,7 +25,7 @@ actual class BiometricStorage actual constructor(context: PlatformContext) {
         private const val MAX_BIOMETRIC_FAILURES = 5
     }
 
-    private val appContext = context.androidContext.applicationContext
+    private val appContext = context.androidContext
     private val prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     private val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
 
