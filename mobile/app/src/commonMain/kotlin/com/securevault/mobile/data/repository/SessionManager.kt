@@ -37,18 +37,23 @@ object SessionManager {
     private val KEY_BIO_VK = stringPreferencesKey("sv_bio_vk")
     private val KEY_BIO_FAIL = intPreferencesKey("sv_bio_fail")
 
-    fun getAccessToken(): String = read(KEY_AT, "")
-    fun setAccessToken(value: String) { write(KEY_AT, value) }
-    fun getRefreshToken(): String = read(KEY_RT, "")
-    fun setRefreshToken(value: String) { write(KEY_RT, value) }
+    // Encrypted values
+    fun getAccessToken(): String = readSecure(KEY_AT)
+    fun setAccessToken(value: String) { writeSecure(KEY_AT, value) }
+    fun getRefreshToken(): String = readSecure(KEY_RT)
+    fun setRefreshToken(value: String) { writeSecure(KEY_RT, value) }
+    fun getUserId(): String = readSecure(KEY_UID)
+    fun setUserId(value: String) { writeSecure(KEY_UID, value) }
+    fun getUserEmail(): String = readSecure(KEY_EM)
+    fun setUserEmail(value: String) { writeSecure(KEY_EM, value) }
+    fun getBiometricVaultKey(): String = readSecure(KEY_BIO_VK)
+    fun setBiometricVaultKey(value: String) { writeSecure(KEY_BIO_VK, value) }
+
+    // Plaintext values (salts, KDF params, etc.)
     fun getEncryptionSalt(): String = read(KEY_ES, "")
     fun setEncryptionSalt(value: String) { write(KEY_ES, value) }
     fun getAuthSalt(): String = read(KEY_AS, "")
     fun setAuthSalt(value: String) { write(KEY_AS, value) }
-    fun getUserId(): String = read(KEY_UID, "")
-    fun setUserId(value: String) { write(KEY_UID, value) }
-    fun getUserEmail(): String = read(KEY_EM, "")
-    fun setUserEmail(value: String) { write(KEY_EM, value) }
     fun getEncryptionVersion(): Int = read(KEY_EV, 2)
     fun setEncryptionVersion(value: Int) { write(KEY_EV, value) }
     fun getWrappedVaultKey(): String = read(KEY_WVK, "")
@@ -65,8 +70,6 @@ object SessionManager {
     fun setKdfParallelism(value: Int) { write(KEY_KP, value) }
     fun getSecurityVersion(): String = read(KEY_SECV, "")
     fun setSecurityVersion(value: String) { write(KEY_SECV, value) }
-    fun getBiometricVaultKey(): String = read(KEY_BIO_VK, "")
-    fun setBiometricVaultKey(value: String) { write(KEY_BIO_VK, value) }
     fun getBiometricFailureCount(): Int = read(KEY_BIO_FAIL, 0)
     fun setBiometricFailureCount(value: Int) { write(KEY_BIO_FAIL, value) }
 
@@ -76,6 +79,19 @@ object SessionManager {
         runBlocking { dataStore.edit { it.clear() } }
     }
 
+    // Encrypted read/write — encrypts at rest, decrypts on read
+    private fun readSecure(key: Preferences.Key<String>): String {
+        val encrypted = runBlocking { dataStore.data.first()[key] }
+        if (encrypted == null) return ""
+        return decryptForStorage(encrypted) ?: ""
+    }
+
+    private fun writeSecure(key: Preferences.Key<String>, value: String) {
+        val encrypted = if (value.isEmpty()) "" else encryptForStorage(value)
+        runBlocking { dataStore.edit { it[key] = encrypted } }
+    }
+
+    // Plaintext read/write
     private fun read(key: Preferences.Key<String>, default: String): String =
         runBlocking { dataStore.data.first()[key] ?: default }
 
