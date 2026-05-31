@@ -71,10 +71,12 @@ export function VaultProvider({ children }: { children: ReactNode }) {
   const [isLoadingEntries, setIsLoadingEntries] = useState(false)
   const [entryError, setEntryError] = useState<string | null>(null)
 
+  const passwordJustChanged = useRef(false)
+
   useEffect(() => {
     const channel = new BroadcastChannel(CROSS_TAB_CHANNEL)
     channel.onmessage = (e) => {
-      if (e.data === 'crypto-changed') {
+      if (e.data === 'crypto-changed' && !passwordJustChanged.current) {
         vaultKeyRef.current = null
         setIsUnlocked(false)
         setCrossTabLocked(true)
@@ -372,8 +374,11 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       setTokens(res.accessToken)
 
       try {
+        passwordJustChanged.current = true
         new BroadcastChannel(CROSS_TAB_CHANNEL).postMessage('crypto-changed')
+        setTimeout(() => { passwordJustChanged.current = false }, 0)
       } catch {
+        passwordJustChanged.current = false
       }
     },
     [],
