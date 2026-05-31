@@ -90,8 +90,8 @@ actual class BiometricStorage actual constructor(context: PlatformContext) {
         val callback = object : BiometricPrompt.AuthenticationCallback() {
             override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
                 Log.d("BiometricStorage", "onAuthenticationSucceeded")
-                // Create a fresh cipher after auth — CryptoObject can corrupt GCM state
-                authorizedCipher = getEncryptionCipher()
+                // Use DECRYPT mode if key exists (unlock), ENCRYPT mode if new (setup)
+                authorizedCipher = if (hasEncryptedVaultKey()) getDecryptionCipher() else getEncryptionCipher()
                 Log.d("BiometricStorage", "authorizedCipher set, calling onSuccess")
                 resetFailureCount()
                 onSuccess()
