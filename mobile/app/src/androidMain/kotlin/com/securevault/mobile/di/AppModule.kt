@@ -3,8 +3,10 @@ package com.securevault.mobile.di
 import android.content.Context
 import com.securevault.mobile.data.api.SecureVaultApi
 import com.securevault.mobile.data.local.AndroidEntryEncryptor
+import com.securevault.mobile.data.local.SecureVaultDatabase
 import com.securevault.mobile.data.local.createSecureVaultDatabase
 import com.securevault.mobile.data.repository.*
+import com.securevault.mobile.data.repository.SessionManager
 import com.securevault.mobile.domain.crypto.CryptoEngine
 import com.securevault.mobile.domain.repository.AuthRepository
 import com.securevault.mobile.domain.repository.DeviceRepository
@@ -28,6 +30,9 @@ import org.koin.android.ext.koin.androidContext
 import org.koin.dsl.module
 
 val appModule = module {
+    // Initialize session data store on module creation
+    SessionManager.dataStore = createPlatformDataStore(androidContext())
+
     // API
     single<SecureVaultApi> { SecureVaultApi.create("https://vault.tanay.pro") }
 

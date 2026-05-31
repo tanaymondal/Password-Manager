@@ -33,10 +33,6 @@ kotlin {
                     defFile(project.file("src/iosMain/c_interop/securevault_crypto_core.def"))
                     includeDirs(project.file("src/iosMain/c_interop"))
                 }
-                val keychain_helper by creating {
-                    defFile(project.file("src/iosMain/c_interop/keychain_helper.def"))
-                    includeDirs(project.file("src/iosMain/c_interop"))
-                }
             }
         }
         iosTarget.compilations.getByName("test") {
@@ -86,6 +82,31 @@ commonMain.dependencies {
     implementation("io.insert-koin:koin-core:3.5.3")
     implementation("androidx.room:room-runtime:2.7.2")
     implementation("androidx.sqlite:sqlite-bundled:2.5.0-SNAPSHOT")
+    implementation("androidx.datastore:datastore-preferences:1.1.1")
+}
+
+iosMain.dependencies {
+    implementation("io.insert-koin:koin-core:3.5.3")
+    implementation("io.ktor:ktor-client-darwin:2.3.7")
+}
+
+commonTest.dependencies {
+    implementation("junit:junit:4.13.2")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
+}
+
+iosTest.dependencies {
+    implementation("junit:junit:4.13.2")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
+}
+
+androidMain.dependencies {
+    implementation("androidx.activity:activity-compose:1.8.2")
+    implementation("androidx.compose.ui:ui-tooling-preview")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
+    implementation("io.insert-koin:koin-androidx-compose:3.5.3")
+    implementation("io.ktor:ktor-client-android:2.3.7")
+    implementation("androidx.biometric:biometric:1.2.0-alpha05")
 }
 
 iosMain.dependencies {

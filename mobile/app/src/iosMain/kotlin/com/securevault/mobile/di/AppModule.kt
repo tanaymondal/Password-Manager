@@ -26,6 +26,8 @@ import com.securevault.mobile.ui.screens.vault.VaultViewModel
 import org.koin.dsl.module
 
 val appModule = module {
+    SessionManager.dataStore = createPlatformDataStore()
+
     single<SecureVaultApi> { SecureVaultApi.create("https://vault.tanay.pro") }
 
     single<IosEntryEncryptor> { IosEntryEncryptor() }
