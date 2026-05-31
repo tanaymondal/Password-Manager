@@ -111,7 +111,6 @@ androidMain.dependencies {
     implementation("androidx.datastore:datastore-preferences:1.0.0")
     implementation("io.ktor:ktor-client-android:2.3.7")
     implementation("androidx.room:room-runtime-android:2.7.2")
-    implementation("net.zetetic:android-database-sqlcipher:4.5.4")
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
     implementation("androidx.biometric:biometric:1.2.0-alpha05")
 }
