@@ -40,6 +40,7 @@ interface VaultContextType {
   isUnlocked: boolean
   isLoading: boolean
   error: string | null
+  successMessage: string | null
   crossTabLocked: boolean
   unlock: (password: string, vaultKey?: CryptoKey) => Promise<void>
   lock: () => void
@@ -87,19 +88,27 @@ export function VaultProvider({ children }: { children: ReactNode }) {
     }
 
     setOnPasswordChanged(() => {
-      vaultKeyRef.current = null
-      setIsUnlocked(false)
-      setCrossTabLocked(true)
-      setEntries([])
-      setDecrypted({})
-      setError('Password changed on another device. Please log out and log back in.')
-    })
+  vaultKeyRef.current = null
+  setIsUnlocked(false)
+  setCrossTabLocked(true)
+  setEntries([])
+  setDecrypted({})
+  setError('Password changed on another device. Please log out and log back in.')
+})
 
     return () => {
       channel.close()
       setOnPasswordChanged(() => {})
     }
   }, [])
+
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!successMessage) return
+    const t = setTimeout(() => setSuccessMessage(null), 3000)
+    return () => clearTimeout(t)
+  }, [successMessage])
 
   const lock = useCallback(() => {
     vaultKeyRef.current = null
@@ -373,6 +382,11 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       })
       setTokens(res.accessToken)
 
+      // Reset any cross-tab lock state from stale async delivery
+      setCrossTabLocked(false)
+      setError(null)
+      setSuccessMessage('Password changed successfully')
+
       try {
         passwordJustChanged.current = true
         new BroadcastChannel(CROSS_TAB_CHANNEL).postMessage('crypto-changed')
@@ -390,6 +404,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
         isUnlocked,
         isLoading,
         error,
+        successMessage,
         crossTabLocked,
         unlock,
         lock,
