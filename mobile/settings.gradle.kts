@@ -5,7 +5,7 @@ pluginManagement {
         mavenCentral()
     }
     plugins {
-        id("com.google.devtools.ksp") version "2.1.20-1.0.31" apply false
+        id("com.google.devtools.ksp") version "2.3.9" apply false
     }
 }
 
