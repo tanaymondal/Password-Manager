@@ -30,9 +30,6 @@ import org.koin.android.ext.koin.androidContext
 import org.koin.dsl.module
 
 val appModule = module {
-    // Initialize session data store on module creation
-    SessionManager.dataStore = createPlatformDataStore(androidContext())
-
     // API
     single<SecureVaultApi> { SecureVaultApi.create("https://vault.tanay.pro") }
 

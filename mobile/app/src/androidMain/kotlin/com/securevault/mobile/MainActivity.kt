@@ -9,6 +9,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import com.securevault.mobile.data.repository.SessionManager
+import com.securevault.mobile.data.repository.createPlatformDataStore
 import com.securevault.mobile.di.appModule
 import com.securevault.mobile.ui.navigation.SecureVaultNavHost
 import com.securevault.mobile.ui.theme.SecureVaultTheme
@@ -24,7 +25,10 @@ class MainActivity : FragmentActivity() {
             WindowManager.LayoutParams.FLAG_SECURE
         )
 
-        SessionManager.storage.init(this)
+        // Initialize DataStore before Koin since it's needed for session
+        if (!SessionManager.isDataStoreReady) {
+            SessionManager.initDataStore(createPlatformDataStore(this))
+        }
 
         if (org.koin.core.context.GlobalContext.getOrNull() == null) {
             startKoin {

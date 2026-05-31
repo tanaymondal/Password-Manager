@@ -10,7 +10,15 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 
 object SessionManager {
-    lateinit var dataStore: DataStore<Preferences>
+    private var _dataStore: DataStore<Preferences>? = null
+    val dataStore: DataStore<Preferences> get() = _dataStore ?: error("DataStore not initialized")
+    private var _dataStoreReady = false
+    val isDataStoreReady: Boolean get() = _dataStoreReady
+
+    fun initDataStore(store: DataStore<Preferences>) {
+        _dataStore = store
+        _dataStoreReady = true
+    }
 
     private val KEY_AT = stringPreferencesKey("sv_at")
     private val KEY_RT = stringPreferencesKey("sv_rt")
