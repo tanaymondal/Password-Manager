@@ -33,6 +33,10 @@ kotlin {
                     defFile(project.file("src/iosMain/c_interop/securevault_crypto_core.def"))
                     includeDirs(project.file("src/iosMain/c_interop"))
                 }
+                val bio_keychain by creating {
+                    defFile(project.file("src/iosMain/c_interop/bio_keychain.def"))
+                    includeDirs(project.file("src/iosMain/c_interop"))
+                }
             }
         }
         iosTarget.compilations.getByName("test") {

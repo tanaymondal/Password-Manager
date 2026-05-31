@@ -3,15 +3,14 @@ package com.securevault.mobile.data.local
 
 import com.securevault.mobile.data.repository.SessionManager
 import com.securevault.mobile.ui.PlatformContext
+import kotlinx.cinterop.toKString
 import platform.LocalAuthentication.*
 
-actual class BiometricStorage actual constructor(context: PlatformContext) {
-    companion object {
-        private const val KEY_BIOMETRIC_VAULT = "sv_bio_vk"
-        private const val KEY_FAILURE_COUNT = "sv_bio_fail"
-        private const val MAX_BIOMETRIC_FAILURES = 5
-    }
+private const val BIO_KEYCHAIN_KEY = "vault_key"
+private const val KEY_FAILURE_COUNT = "sv_bio_fail"
+private const val MAX_BIOMETRIC_FAILURES = 5
 
+actual class BiometricStorage actual constructor(context: PlatformContext) {
     private var authorizedVaultKey: String? = null
 
     actual fun isAvailable(): Boolean {
@@ -20,6 +19,8 @@ actual class BiometricStorage actual constructor(context: PlatformContext) {
     }
 
     actual fun hasEncryptedVaultKey(): Boolean {
+        // Use DataStore as the source of truth (written alongside Keychain in storeVaultKey)
+        // Direct Keychain read would trigger biometric prompt, which we don't want here.
         return SessionManager.getBiometricVaultKey().isNotEmpty()
     }
 
@@ -50,7 +51,12 @@ actual class BiometricStorage actual constructor(context: PlatformContext) {
         ctx.evaluatePolicy(LAPolicyDeviceOwnerAuthenticationWithBiometrics, title) { success, error ->
             if (success) {
                 resetFailureCount()
-                authorizedVaultKey = SessionManager.getBiometricVaultKey().ifEmpty { null }
+                // Read vault key from Secure Enclave-protected Keychain
+                val ptr = BioKeychain.bio_read(BIO_KEYCHAIN_KEY, title)
+                if (ptr != null) {
+                    authorizedVaultKey = ptr.toKString()
+                    BioKeychain.bio_free(ptr)
+                }
                 onSuccess()
             } else {
                 val errorCode = error?.let { it.code.toLong() } ?: -1L
@@ -70,8 +76,14 @@ actual class BiometricStorage actual constructor(context: PlatformContext) {
     }
 
     actual fun storeVaultKey(vaultKey: String): Boolean {
-        SessionManager.setBiometricVaultKey(vaultKey)
-        return true
+        // Store in Secure Enclave-protected Keychain
+        val status = BioKeychain.bio_write(BIO_KEYCHAIN_KEY, vaultKey)
+        if (status.toInt() == 0) {
+            // Also store in DataStore (encrypted) as fallback for legacy migration
+            SessionManager.setBiometricVaultKey(vaultKey)
+            return true
+        }
+        return false
     }
 
     actual fun retrieveVaultKey(): String? {
@@ -80,10 +92,24 @@ actual class BiometricStorage actual constructor(context: PlatformContext) {
             authorizedVaultKey = null
             return cached
         }
-        return SessionManager.getBiometricVaultKey().ifEmpty { null }
+        // Read from Keychain — requires biometric via LAContext in authenticate()
+        // This method is called after successful authenticate(), which already
+        // cached the key. Direct read without biometric context won't work
+        // (Secure Enclave enforces biometric), so fall back to DataStore.
+        val ds = SessionManager.getBiometricVaultKey().ifEmpty { null }
+        if (ds != null) return ds
+        val ptr = BioKeychain.bio_read(BIO_KEYCHAIN_KEY, "Unlock SecureVault")
+        if (ptr != null) {
+            val result = ptr.toKString()
+            BioKeychain.bio_free(ptr)
+            return result
+        }
+        return null
     }
 
     actual fun clear() {
+        // Overwrite existing Keychain item with empty string (delete isn't exposed)
+        BioKeychain.bio_write(BIO_KEYCHAIN_KEY, "")
         SessionManager.setBiometricVaultKey("")
         SessionManager.setBiometricFailureCount(0)
         authorizedVaultKey = null

@@ -1,0 +1,6 @@
+package = BioKeychain
+language = Objective-C
+headers = bio_keychain.h
+staticLibraries = libbio_keychain.a
+libraryPaths = /tmp
+compilerOpts = -I/tmp
