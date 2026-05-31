@@ -4,6 +4,7 @@ import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import android.util.Log
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
@@ -69,18 +70,22 @@ actual class BiometricStorage actual constructor(context: PlatformContext) {
         onError: (String) -> Unit,
         onCancel: () -> Unit
     ) {
+        Log.d("BiometricStorage", "authenticate() called, appContext: ${appContext::class.simpleName}")
         val activity = appContext as? FragmentActivity ?: run {
+            Log.w("BiometricStorage", "appContext is not FragmentActivity: ${appContext::class.simpleName}")
             onError("Activity not available")
             return
         }
         val executor = ContextCompat.getMainExecutor(appContext)
 
-        // Try decryption first (existing vault key), fall back to encryption (new enroll)
+        Log.d("BiometricStorage", "Getting cipher...")
         val cipher = getDecryptionCipher() ?: getEncryptionCipher() ?: run {
+            Log.w("BiometricStorage", "Failed to create cipher")
             onError("Failed to prepare crypto")
             return
         }
         authorizedCipher = cipher
+        Log.d("BiometricStorage", "Cipher created, showing biometric prompt...")
 
         val callback = object : BiometricPrompt.AuthenticationCallback() {
             override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
