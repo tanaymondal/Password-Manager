@@ -117,24 +117,42 @@ class CachedVaultRepository(
 
     private fun VaultEntryEntity.toDomainModel() = VaultEntry(
         id = id,
-        title = title,
-        username = username,
-        password = if (password.startsWith("e1:")) encryptor.decryptField(password.removePrefix("e1:")) else password,
-        url = url,
-        notes = if (notes?.startsWith("e1:") == true) encryptor.decryptField(notes.removePrefix("e1:")) else notes,
-        folder = folder
+        title = decryptFieldNotNull(title),
+        username = decryptFieldNotNull(username),
+        password = decryptFieldNotNull(password),
+        url = decryptField(url),
+        notes = notes?.let { decryptField(it) },
+        folder = decryptField(folder)
     )
 
     private fun VaultEntry.toEntity(isSynced: Boolean) = VaultEntryEntity(
         id = id,
-        title = title,
-        username = username,
-        password = "e1:" + encryptor.encryptField(password),
-        url = url,
-        notes = notes?.let { "e1:" + encryptor.encryptField(it) },
-        folder = folder,
+        title = encryptFieldNotNull(title),
+        username = encryptFieldNotNull(username),
+        password = encryptFieldNotNull(password),
+        url = encryptField(url),
+        notes = notes?.let { encryptField(it) },
+        folder = encryptField(folder),
         isSynced = isSynced
     )
+
+    private fun decryptField(value: String?): String? {
+        if (value == null) return null
+        return if (value.startsWith("e1:")) encryptor.decryptField(value.removePrefix("e1:")) else value
+    }
+
+    private fun decryptFieldNotNull(value: String): String {
+        return if (value.startsWith("e1:")) encryptor.decryptField(value.removePrefix("e1:")) else value
+    }
+
+    private fun encryptField(value: String?): String? {
+        if (value == null) return null
+        return "e1:" + encryptor.encryptField(value)
+    }
+
+    private fun encryptFieldNotNull(value: String): String {
+        return "e1:" + encryptor.encryptField(value)
+    }
 
     private fun isAuthError(message: String?): Boolean {
         if (message == null) return false
