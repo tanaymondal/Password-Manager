@@ -330,9 +330,13 @@ class SecureVaultApi(
             }
             val body = response.bodyAsText()
             val apiResponse: AuthApiResponse = Json.decodeFromString(body)
-            val authData = apiResponse.data ?: return false
+            if (apiResponse.data == null || !apiResponse.success) {
+                SessionManager.clearSession()
+                return false
+            }
+            val authData = apiResponse.data
 
-            SessionManager.setAccessToken(authData.accessToken ?: return false)
+            SessionManager.setAccessToken(authData.accessToken ?: kotlin.run { SessionManager.clearSession(); return false })
             SessionManager.setRefreshToken(authData.refreshToken ?: currentRefreshToken)
             authData.encryptionSalt?.let { SessionManager.setEncryptionSalt(it) }
             authData.wrappedVaultKey?.let { SessionManager.setWrappedVaultKey(it) }
