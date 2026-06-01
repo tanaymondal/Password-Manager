@@ -14,7 +14,7 @@ import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
-import javax.crypto.spec.GCMParameterSpec
+import javax.crypto.spec.IvParameterSpec
 
 actual class BiometricStorage actual constructor(context: PlatformContext) {
     companion object {
@@ -79,19 +79,18 @@ actual class BiometricStorage actual constructor(context: PlatformContext) {
         val executor = ContextCompat.getMainExecutor(appContext)
 
         Log.d("BiometricStorage", "Getting cipher...")
-        // Create encryption cipher before auth to ensure key exists
-        if (getEncryptionCipher() == null) {
+        val cipher = getDecryptionCipher() ?: getEncryptionCipher() ?: run {
             Log.w("BiometricStorage", "Failed to create cipher")
             onError("Failed to prepare crypto")
             return
         }
-        Log.d("BiometricStorage", "Key ready, showing biometric prompt...")
+        authorizedCipher = cipher
+        Log.d("BiometricStorage", "Cipher created, showing biometric prompt...")
 
         val callback = object : BiometricPrompt.AuthenticationCallback() {
             override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
                 Log.d("BiometricStorage", "onAuthenticationSucceeded")
-                // Use DECRYPT mode if key exists (unlock), ENCRYPT mode if new (setup)
-                authorizedCipher = if (hasEncryptedVaultKey()) getDecryptionCipher() else getEncryptionCipher()
+                authorizedCipher = result.cryptoObject?.cipher ?: cipher
                 Log.d("BiometricStorage", "authorizedCipher set, calling onSuccess")
                 resetFailureCount()
                 onSuccess()
@@ -124,13 +123,12 @@ actual class BiometricStorage actual constructor(context: PlatformContext) {
             .setNegativeButtonText("Cancel")
             .build()
 
-        prompt.authenticate(promptInfo)
+        prompt.authenticate(promptInfo, BiometricPrompt.CryptoObject(cipher))
     }
 
     actual fun storeVaultKey(vaultKey: String): Boolean {
         return try {
-            val cipher = authorizedCipher
-            if (cipher == null) { Log.w("BiometricStorage", "storeVaultKey: authorizedCipher is null"); return false }
+            val cipher = authorizedCipher ?: return false
             Log.d("BiometricStorage", "storeVaultKey: doFinal...")
             val encrypted = cipher.doFinal(vaultKey.toByteArray(Charsets.UTF_8))
             val iv = cipher.iv
@@ -149,8 +147,7 @@ actual class BiometricStorage actual constructor(context: PlatformContext) {
 
     actual fun retrieveVaultKey(): String? {
         return try {
-            val cipher = authorizedCipher
-            if (cipher == null) { Log.w("BiometricStorage", "retrieveVaultKey: authorizedCipher is null"); return null }
+            val cipher = authorizedCipher ?: return null
             val encryptedData = prefs.getString(KEY_ENCRYPTED_DATA, null) ?: return null
             Log.d("BiometricStorage", "retrieveVaultKey: doFinal...")
             val decrypted = cipher.doFinal(Base64.decode(encryptedData, Base64.NO_WRAP))
@@ -176,7 +173,6 @@ actual class BiometricStorage actual constructor(context: PlatformContext) {
     }
 
     private fun getOrCreateKey(): SecretKey? {
-        // Reuse existing key if present
         try {
             if (keyStore.containsAlias(KEY_ALIAS)) {
                 return (keyStore.getEntry(KEY_ALIAS, null) as KeyStore.SecretKeyEntry).secretKey
@@ -191,17 +187,15 @@ actual class BiometricStorage actual constructor(context: PlatformContext) {
                 KEY_ALIAS,
                 KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
             )
-                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                .setBlockModes(KeyProperties.BLOCK_MODE_CBC)
+                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_PKCS7)
                 .setUserAuthenticationRequired(true)
-                .setUserAuthenticationValidityDurationSeconds(Integer.MAX_VALUE)
                 .setInvalidatedByBiometricEnrollment(true)
                 .build()
             keyGenerator.init(spec)
             keyGenerator.generateKey()
         } catch (e: Throwable) {
             Log.w("BiometricStorage", "Key creation failed (auth-required), trying without auth: ${e.message}")
-            // Fallback: create key without auth requirement
             try {
                 val keyGenerator = KeyGenerator.getInstance(
                     KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore"
@@ -210,8 +204,8 @@ actual class BiometricStorage actual constructor(context: PlatformContext) {
                     KEY_ALIAS,
                     KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
                 )
-                    .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-                    .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                    .setBlockModes(KeyProperties.BLOCK_MODE_CBC)
+                    .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_PKCS7)
                     .setUserAuthenticationRequired(false)
                     .build()
                 keyGenerator.init(spec)
@@ -226,7 +220,7 @@ actual class BiometricStorage actual constructor(context: PlatformContext) {
     private fun getEncryptionCipher(): Cipher? {
         return try {
             val secretKey = getOrCreateKey() ?: return null
-            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+            val cipher = Cipher.getInstance("AES/CBC/PKCS7Padding")
             cipher.init(Cipher.ENCRYPT_MODE, secretKey)
             cipher
         } catch (e: Throwable) {
@@ -239,9 +233,9 @@ actual class BiometricStorage actual constructor(context: PlatformContext) {
         return try {
             val ivString = prefs.getString(KEY_IV, null) ?: return null
             val secretKey = getOrCreateKey() ?: return null
-            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+            val cipher = Cipher.getInstance("AES/CBC/PKCS7Padding")
             val iv = Base64.decode(ivString, Base64.NO_WRAP)
-            cipher.init(Cipher.DECRYPT_MODE, secretKey, GCMParameterSpec(128, iv))
+            cipher.init(Cipher.DECRYPT_MODE, secretKey, IvParameterSpec(iv))
             cipher
         } catch (e: Throwable) {
             null
