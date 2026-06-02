@@ -71,7 +71,7 @@ dependencies {
 }
 
 commonMain.dependencies {
-    implementation("org.jetbrains.compose.runtime:runtime:1.7.3")
+    implementation("org.jetbrains.compose.runtime:runtime:1.11.1")
     implementation("org.jetbrains.compose.foundation:foundation:1.7.3")
     implementation("org.jetbrains.compose.material3:material3:1.7.3")
     implementation("org.jetbrains.compose.material:material-icons-extended:1.7.3")
