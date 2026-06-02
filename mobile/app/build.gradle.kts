@@ -110,7 +110,7 @@ androidMain.dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
     implementation("io.insert-koin:koin-androidx-compose:3.5.3")
     implementation("io.ktor:ktor-client-android:2.3.7")
-    implementation("androidx.biometric:biometric:1.2.0-alpha05")
+    implementation("androidx.biometric:biometric:1.4.0-alpha07")
 }
 
 iosMain.dependencies {
@@ -137,7 +137,7 @@ androidMain.dependencies {
     implementation("io.ktor:ktor-client-android:2.3.7")
     implementation("androidx.room:room-runtime-android:2.7.2")
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
-    implementation("androidx.biometric:biometric:1.2.0-alpha05")
+    implementation("androidx.biometric:biometric:1.4.0-alpha07")
 }
 
 android {
