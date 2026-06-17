@@ -83,14 +83,14 @@ commonMain.dependencies {
     implementation("io.ktor:ktor-client-core:2.3.7")
     implementation("io.ktor:ktor-client-content-negotiation:2.3.7")
     implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.7")
-    implementation("io.insert-koin:koin-core:3.5.3")
+    implementation("io.insert-koin:koin-core:4.2.1")
     implementation("androidx.room:room-runtime:2.7.2")
     implementation("androidx.sqlite:sqlite-bundled:2.5.0-SNAPSHOT")
     implementation("androidx.datastore:datastore-preferences:1.1.1")
 }
 
 iosMain.dependencies {
-    implementation("io.insert-koin:koin-core:3.5.3")
+    implementation("io.insert-koin:koin-core:4.2.1")
     implementation("io.ktor:ktor-client-darwin:2.3.7")
 }
 
@@ -108,13 +108,13 @@ androidMain.dependencies {
     implementation("androidx.activity:activity-compose:1.8.2")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
-    implementation("io.insert-koin:koin-androidx-compose:3.5.3")
+    implementation("io.insert-koin:koin-androidx-compose:4.2.1")
     implementation("io.ktor:ktor-client-android:2.3.7")
     implementation("androidx.biometric:biometric:1.2.0-alpha05")
 }
 
 iosMain.dependencies {
-    implementation("io.insert-koin:koin-core:3.5.3")
+    implementation("io.insert-koin:koin-core:4.2.1")
     implementation("io.ktor:ktor-client-darwin:2.3.7")
 }
 
@@ -132,7 +132,7 @@ androidMain.dependencies {
     implementation("androidx.activity:activity-compose:1.8.2")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
-    implementation("io.insert-koin:koin-androidx-compose:3.5.3")
+    implementation("io.insert-koin:koin-androidx-compose:4.2.1")
     implementation("androidx.datastore:datastore-preferences:1.0.0")
     implementation("io.ktor:ktor-client-android:2.3.7")
     implementation("androidx.room:room-runtime-android:2.7.2")
