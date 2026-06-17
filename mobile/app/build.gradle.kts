@@ -86,7 +86,7 @@ commonMain.dependencies {
     implementation("io.insert-koin:koin-core:3.5.3")
     implementation("androidx.room:room-runtime:2.7.2")
     implementation("androidx.sqlite:sqlite-bundled:2.5.0-SNAPSHOT")
-    implementation("androidx.datastore:datastore-preferences:1.1.1")
+    implementation("androidx.datastore:datastore-preferences:1.2.1")
 }
 
 iosMain.dependencies {
@@ -133,7 +133,7 @@ androidMain.dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
     implementation("io.insert-koin:koin-androidx-compose:3.5.3")
-    implementation("androidx.datastore:datastore-preferences:1.0.0")
+    implementation("androidx.datastore:datastore-preferences:1.2.1")
     implementation("io.ktor:ktor-client-android:2.3.7")
     implementation("androidx.room:room-runtime-android:2.7.2")
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
