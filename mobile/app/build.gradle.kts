@@ -105,7 +105,7 @@ iosTest.dependencies {
 }
 
 androidMain.dependencies {
-    implementation("androidx.activity:activity-compose:1.8.2")
+    implementation("androidx.activity:activity-compose:1.13.0")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
     implementation("io.insert-koin:koin-androidx-compose:3.5.3")
@@ -129,7 +129,7 @@ iosTest.dependencies {
 }
 
 androidMain.dependencies {
-    implementation("androidx.activity:activity-compose:1.8.2")
+    implementation("androidx.activity:activity-compose:1.13.0")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
     implementation("io.insert-koin:koin-androidx-compose:3.5.3")
